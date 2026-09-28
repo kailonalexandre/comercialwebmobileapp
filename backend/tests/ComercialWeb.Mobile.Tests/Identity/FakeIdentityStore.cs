@@ -1,6 +1,6 @@
 using ComercialWeb.Mobile.Identity.Application;
 
-namespace ComercialWeb.Mobile.Identity.Tests;
+namespace ComercialWeb.Mobile.Tests.Identity;
 
 internal sealed class ManualClock(DateTimeOffset start) : TimeProvider
 {

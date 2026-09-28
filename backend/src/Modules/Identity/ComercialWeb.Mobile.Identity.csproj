@@ -9,7 +9,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="ComercialWeb.Mobile.Identity.Tests" />
+    <InternalsVisibleTo Include="ComercialWeb.Mobile.Tests" />
   </ItemGroup>
 
 </Project>

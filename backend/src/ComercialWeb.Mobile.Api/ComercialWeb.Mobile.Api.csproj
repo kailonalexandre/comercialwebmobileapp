@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Modules\Identity\ComercialWeb.Mobile.Identity.csproj" />
+    <ProjectReference Include="..\Modules\Catalog\ComercialWeb.Mobile.Catalog.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -9,7 +10,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="ComercialWeb.Mobile.Identity.Tests" />
+    <InternalsVisibleTo Include="ComercialWeb.Mobile.Tests" />
   </ItemGroup>
 
 </Project>

@@ -1,37 +1,24 @@
 using ComercialWeb.Mobile.Identity.Application;
 using ComercialWeb.Mobile.Identity.Infrastructure;
-using Dapper;
-using MySqlConnector;
+using ComercialWeb.Mobile.Tests.Support;
 
-namespace ComercialWeb.Mobile.Identity.Tests;
+namespace ComercialWeb.Mobile.Tests.Identity;
 
-/// <summary>
-/// SQL real contra MySQL: isolamento entre tenants e regras de conta ativa.
-/// Requer MOBILE_TEST_MYSQL (ex.: "Server=127.0.0.1;Port=3317;User ID=root;Password=...").
-/// </summary>
+/// <summary>SQL real contra MySQL: isolamento entre tenants e regras de conta ativa.</summary>
 public sealed class MySqlIdentityStoreTests : IAsyncLifetime
 {
-    private static readonly string? Server = Environment.GetEnvironmentVariable("MOBILE_TEST_MYSQL");
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
     private static readonly DateTimeOffset Now = new(2026, 9, 28, 12, 0, 0, TimeSpan.Zero);
 
-    private readonly string _database = $"cw_mobile_test_{Guid.NewGuid():N}";
-    private MySqlDataSource? _db;
-    private MySqlIdentityStore Store => new(_db!);
+    private readonly TestDatabase _db = new();
+    private MySqlIdentityStore Store => new(_db.DataSource!);
 
     // Empresa A (10) e B (20). Ana: A ativa, B com vínculo inativo. Bruno: só B. Carla: desativada. Davi: excluído.
     public async ValueTask InitializeAsync()
     {
-        if (Server is null) return;
-        await using (var admin = new MySqlConnection(Server))
-            await admin.ExecuteAsync($"CREATE DATABASE {_database} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-
-        _db = new MySqlDataSource($"{Server};Database={_database};AllowUserVariables=true");
-        await using var conn = await _db.OpenConnectionAsync();
-        await conn.ExecuteAsync(await File.ReadAllTextAsync("Fixtures/laravel-schema.sql"));
-        foreach (var file in Directory.GetFiles("migrations", "*.sql").Order(StringComparer.Ordinal))
-            await conn.ExecuteAsync(await File.ReadAllTextAsync(file));
-        await conn.ExecuteAsync("""
+        await _db.InitializeAsync();
+        if (TestDatabase.Server is null) return;
+        await _db.ExecuteAsync("""
             INSERT INTO businesses (id, name, status) VALUES (10, 'Empresa A', 'active'), (20, 'Empresa B', 'active'), (30, 'Empresa C', 'suspended');
             INSERT INTO users (id, name, username, email, password, deactivated_at, deleted_at) VALUES
               (1, 'Ana', 'ana', 'ana@a.com', 'h', NULL, NULL),
@@ -44,15 +31,9 @@ public sealed class MySqlIdentityStoreTests : IAsyncLifetime
             """);
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        if (_db is null) return;
-        await _db.DisposeAsync();
-        await using var admin = new MySqlConnection(Server);
-        await admin.ExecuteAsync($"DROP DATABASE IF EXISTS {_database}");
-    }
+    public ValueTask DisposeAsync() => _db.DisposeAsync();
 
-    private static void RequireMySql() => Assert.SkipWhen(Server is null, "MOBILE_TEST_MYSQL não configurada.");
+    private static void RequireMySql() => TestDatabase.RequireMySql();
 
     private async Task<Guid> NewSession(long userId, long businessId)
     {
@@ -98,17 +79,15 @@ public sealed class MySqlIdentityStoreTests : IAsyncLifetime
     {
         RequireMySql();
         var ana = await NewSession(1, 10);
-        await using var conn = await _db!.OpenConnectionAsync(Ct);
-
-        await conn.ExecuteAsync("UPDATE business_user SET status = 'inactive' WHERE user_id = 1 AND business_id = 10");
+        await _db.ExecuteAsync("UPDATE business_user SET status = 'inactive' WHERE user_id = 1 AND business_id = 10");
         Assert.False(await Store.IsSessionActiveAsync(ana, 1, 10, Now, Ct));
 
-        await conn.ExecuteAsync("UPDATE business_user SET status = 'active' WHERE user_id = 1 AND business_id = 10");
-        await conn.ExecuteAsync("UPDATE businesses SET status = 'suspended' WHERE id = 10");
+        await _db.ExecuteAsync("UPDATE business_user SET status = 'active' WHERE user_id = 1 AND business_id = 10");
+        await _db.ExecuteAsync("UPDATE businesses SET status = 'suspended' WHERE id = 10");
         Assert.False(await Store.IsSessionActiveAsync(ana, 1, 10, Now, Ct));
 
-        await conn.ExecuteAsync("UPDATE businesses SET status = 'active' WHERE id = 10");
-        await conn.ExecuteAsync("UPDATE users SET deactivated_at = NOW() WHERE id = 1");
+        await _db.ExecuteAsync("UPDATE businesses SET status = 'active' WHERE id = 10");
+        await _db.ExecuteAsync("UPDATE users SET deactivated_at = NOW() WHERE id = 1");
         Assert.False(await Store.IsSessionActiveAsync(ana, 1, 10, Now, Ct));
     }
 
@@ -121,7 +100,7 @@ public sealed class MySqlIdentityStoreTests : IAsyncLifetime
         await Store.CreateSessionAsync(new NewSession(id, 1, 10, null, Now, Now.AddDays(90)), new NewRefreshToken(hash, id, Now, Now.AddDays(30)), Ct);
 
         var attempts = await Task.WhenAll(Enumerable.Range(0, 5).Select(_ =>
-            new MySqlIdentityStore(_db!).RotateRefreshTokenAsync(hash, new NewRefreshToken(TokenIssuer.NewRefreshToken().Hash, id, Now, Now.AddDays(30)), Now, Ct)));
+            new MySqlIdentityStore(_db.DataSource!).RotateRefreshTokenAsync(hash, new NewRefreshToken(TokenIssuer.NewRefreshToken().Hash, id, Now, Now.AddDays(30)), Now, Ct)));
 
         Assert.Single(attempts, ok => ok);
         Assert.NotNull((await Store.FindRefreshTokenAsync(hash, Ct))?.UsedAt);

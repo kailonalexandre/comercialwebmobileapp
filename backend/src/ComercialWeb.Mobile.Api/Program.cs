@@ -1,13 +1,14 @@
 using ComercialWeb.Mobile.Api;
+using ComercialWeb.Mobile.Catalog;
 using ComercialWeb.Mobile.Identity;
 using Microsoft.AspNetCore.HttpOverrides;
 using MySqlConnector;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var connectionString = builder.Configuration.GetConnectionString("ComercialWeb")
-    ?? throw new InvalidOperationException("ConnectionStrings:ComercialWeb não configurada.");
-builder.Services.AddSingleton(new MySqlDataSource(connectionString));
+builder.Services.AddSingleton(sp => new MySqlDataSource(
+    sp.GetRequiredService<IConfiguration>().GetConnectionString("ComercialWeb")
+    ?? throw new InvalidOperationException("ConnectionStrings:ComercialWeb não configurada.")));
 builder.Services.AddSingleton(TimeProvider.System);
 
 builder.Services.AddProblemDetails(o => o.CustomizeProblemDetails = ctx =>
@@ -21,6 +22,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(o =>
     o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto);
 
 builder.Services.AddIdentityModule(builder.Configuration, builder.Environment);
+builder.Services.AddCatalogModule();
 
 var app = builder.Build();
 
@@ -50,6 +52,7 @@ app.MapGet("/health", async (MySqlDataSource db, CancellationToken ct) =>
 });
 
 app.MapIdentityEndpoints();
+app.MapCatalogEndpoints();
 
 await app.RunAsync();
 
