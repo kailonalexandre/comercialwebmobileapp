@@ -1,9 +1,10 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/ComercialWeb.Mobile.Api/ComercialWeb.Mobile.Api.csproj" />
+    <Project Path="src/Modules/Catalog/ComercialWeb.Mobile.Catalog.csproj" />
     <Project Path="src/Modules/Identity/ComercialWeb.Mobile.Identity.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/ComercialWeb.Mobile.Identity.Tests/ComercialWeb.Mobile.Identity.Tests.csproj" />
+    <Project Path="tests/ComercialWeb.Mobile.Tests/ComercialWeb.Mobile.Tests.csproj" />
   </Folder>
 </Solution>

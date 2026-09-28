@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Claims;
 using ComercialWeb.Mobile.Identity.Application;
+using ComercialWeb.Mobile.Identity.Authorization;
 using ComercialWeb.Mobile.Identity.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
@@ -32,6 +33,7 @@ public static class IdentityModule
         services.AddSingleton<LoginThrottle>();
         services.AddScoped<IIdentityStore, MySqlIdentityStore>();
         services.AddScoped<AuthService>();
+        services.AddScoped<IPermissionChecker, MySqlPermissionChecker>();
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(o =>
         {

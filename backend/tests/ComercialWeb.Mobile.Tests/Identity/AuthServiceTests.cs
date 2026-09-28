@@ -4,7 +4,7 @@ using ComercialWeb.Mobile.Identity.Infrastructure;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 
-namespace ComercialWeb.Mobile.Identity.Tests;
+namespace ComercialWeb.Mobile.Tests.Identity;
 
 public sealed class AuthServiceTests
 {

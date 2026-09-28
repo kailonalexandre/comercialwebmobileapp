@@ -58,6 +58,18 @@ Risco principal: regras de tenancy, permissão, preço, estoque e venda já vive
 - Cada request autenticado revalida sessão, usuário e vínculo com a empresa (`IsSessionActiveAsync`): logout, desativação e remoção de vínculo valem na hora.
 - Endpoints: `POST /api/v1/auth/login|refresh|logout`, `GET /api/v1/me`, `GET /health`.
 
+### Permissões (todas as rotas de negócio)
+
+`RequirePermission("<permissão da web>")` replica o Gate do ComercialWeb: admin de plataforma recebe tudo **exceto** as alçadas discricionárias (`BusinessDiscretionPermissions`); os demais precisam da permissão spatie via papel (`model_has_roles`) ou direta (`model_has_permissions`) **no `business_id` da sessão**. Permissão em outra empresa não vale. Suporte de plataforma não tem janela de supervisão no app. Sem permissão: 403 genérico.
+
+### Módulo Catalog
+
+- `GET /api/v1/products?search=&includeInactive=&page=&pageSize=` e `GET /api/v1/products/{id}`, permissão `products.view`.
+- Só produtos da empresa da sessão, sem excluídos; inativos só com `includeInactive=true`. Produto de outra empresa: 404.
+- Busca igual à web (nome, SKU, código de barras + variantes UPC/EAN, `product_barcodes`, referência/código de variação, código exato), mas `%` e `_` são escapados.
+- `pageSize` 1–50, `page` 1–10000; fora disso 422. Preço em centavos (`salePriceCents`); custo e margens não são expostos.
+- Saldo de estoque ainda não exposto (depende de locais de estoque e variações; módulo Inventory).
+
 ## Autenticação
 
 - `POST /api/v1/auth/login` com e-mail/senha; senha verificada contra o hash bcrypt do Laravel (`users.password`).
