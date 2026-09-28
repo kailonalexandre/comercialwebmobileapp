@@ -55,3 +55,54 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# ---- Secrets (nunca versionar) ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p8
+*.p12
+*.pfx
+*.jks
+*.keystore
+!debug.keystore
+*.mobileprovision
+*.cer
+google-services.json
+GoogleService-Info.plist
+credentials.json
+secrets/
+
+# ---- Node / React Native / Expo ----
+node_modules/
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+.metro-health-check*
+*.tsbuildinfo
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+coverage/
+*.orig.*
+
+# Pastas nativas geradas (Continuous Native Generation)
+mobile/android/
+mobile/ios/
+.kotlin/
+.gradle/
+local.properties
+
+# ---- IDEs / SO ----
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+.DS_Store
+Thumbs.db
+
+# ---- Claude Code local ----
+.claude/settings.local.json
