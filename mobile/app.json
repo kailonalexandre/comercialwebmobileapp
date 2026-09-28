@@ -1,14 +1,14 @@
 {
   "expo": {
     "name": "Infinit Comercial",
-    "slug": "comercialweb-mobile",
+    "slug": "infinit-comercial",
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "br.com.comercialweb.mobile"
+      "bundleIdentifier": "br.com.infinitsolucoesweb.comercial"
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +18,7 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "br.com.comercialweb.mobile",
+      "package": "br.com.infinitsolucoesweb.comercial",
       "allowBackup": false
     },
     "web": {
@@ -28,7 +28,7 @@
       "expo-router",
       "expo-secure-store"
     ],
-    "scheme": "comercialweb",
+    "scheme": "infinitcomercial",
     "experiments": {
       "typedRoutes": true
     }

@@ -82,11 +82,11 @@ No app: tokens em `expo-secure-store` com `WHEN_UNLOCKED_THIS_DEVICE_ONLY`; `and
 | Preço/total adulterado | Servidor recalcula tudo que tem impacto financeiro, fiscal ou de estoque |
 | Vazamento em logs | Sem `console.log`; erros ao usuário genéricos com correlation ID (`X-Correlation-ID`) |
 | Força bruta no login | Rate limit por IP + conta no servidor |
-| Deep links maliciosos | Scheme `comercialweb` sem ações sensíveis; validar parâmetros quando surgirem rotas via link |
+| Deep links maliciosos | Scheme `infinitcomercial` sem ações sensíveis; validar parâmetros quando surgirem rotas via link |
 
 ## Pendências
 
 - Throttle de login em memória por instância: mover para Redis antes de rodar mais de uma instância permanente.
 - Chave JWT de produção (PEM EC P-256) via secret do ambiente em `Jwt:SigningKeyPath`; em desenvolvimento é efêmera.
-- Confirmar identificador definitivo do app (`br.com.comercialweb.mobile` é provisório; não muda após publicar na loja).
+- Identificador do app: `br.com.infinitsolucoesweb.comercial` (Android e iOS). Não muda após publicar na loja.
 - Backend .NET: aguardar .NET 11 GA ou aceitar RC (go-live) conscientemente.
