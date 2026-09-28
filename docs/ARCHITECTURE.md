@@ -47,7 +47,18 @@ Risco principal: regras de tenancy, permissão, preço, estoque e venda já vive
 3. **Permissões lidas das tabelas spatie** (`model_has_roles`, `role_has_permissions`, `model_has_permissions`) filtrando `team_id`.
 4. **Migrations:** o schema pertence ao Laravel. O .NET não roda migrations nas tabelas do ComercialWeb; tabelas próprias (`mobile_sessions`, `mobile_devices`) são criadas por migration Laravel ou schema separado — decidir antes do primeiro endpoint.
 
-## Autenticação (proposta)
+### Implementado (módulo Identity)
+
+- `backend/`: ASP.NET Core 11 (minimal APIs), Dapper + MySqlConnector. Projetos: `Api` (host), `Modules/Identity`, testes.
+- **Tabelas próprias** `mobile_sessions` e `mobile_refresh_tokens`, no mesmo banco do ComercialWeb, criadas por `db/migrations/*.sql` via `dotnet ComercialWeb.Mobile.Api.dll migrate` (pipeline, nunca na subida). FKs para `users`/`businesses` com `ON DELETE CASCADE` para não bloquear a web.
+- Tabelas do Laravel: **somente leitura**. Recomendado usuário MySQL próprio com `SELECT` nelas e escrita só em `mobile_*`.
+- Login replica `LoginRequest` + `AccountStatusService` + `LoginThrottle` do ComercialWeb: e-mail ou username; ignora `deactivated_at`/`deleted_at`; exige vínculo ativo em empresa ativa; 5 falhas/min e 20/h por login+IP; mesma resposta para qualquer motivo.
+- **Diferença deliberada:** contas de plataforma (superadmin/suporte) sem empresa não entram no app.
+- Empresa da sessão: preferência da web (`user_preferences.current_business_id`) se o vínculo estiver ativo; senão a primeira ativa. Fica na sessão mobile; a preferência da web não é alterada.
+- Cada request autenticado revalida sessão, usuário e vínculo com a empresa (`IsSessionActiveAsync`): logout, desativação e remoção de vínculo valem na hora.
+- Endpoints: `POST /api/v1/auth/login|refresh|logout`, `GET /api/v1/me`, `GET /health`.
+
+## Autenticação
 
 - `POST /api/v1/auth/login` com e-mail/senha; senha verificada contra o hash bcrypt do Laravel (`users.password`).
 - **Access token** JWT curto (10–15 min), assinado com chave assimétrica guardada só no servidor.
@@ -75,6 +86,7 @@ No app: tokens em `expo-secure-store` com `WHEN_UNLOCKED_THIS_DEVICE_ONLY`; `and
 
 ## Pendências
 
-- Definir onde nascem as tabelas `mobile_*` (migration Laravel vs schema separado).
+- Throttle de login em memória por instância: mover para Redis antes de rodar mais de uma instância permanente.
+- Chave JWT de produção (PEM EC P-256) via secret do ambiente em `Jwt:SigningKeyPath`; em desenvolvimento é efêmera.
 - Confirmar identificador definitivo do app (`br.com.comercialweb.mobile` é provisório; não muda após publicar na loja).
 - Backend .NET: aguardar .NET 11 GA ou aceitar RC (go-live) conscientemente.

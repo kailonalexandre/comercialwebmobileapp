@@ -3,8 +3,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useSession } from '@/features/auth/session-context';
-import { dashboardMock } from '@/features/dashboard/mock';
-import { AppHeader } from '@/shared/components/app-header';
+import { AppHeader } from '@/features/shell/app-header';
 import { Icon, type IconName } from '@/shared/components/icon';
 import { IconTile } from '@/shared/components/icon-tile';
 import { StateView } from '@/shared/components/state-view';
@@ -40,7 +39,7 @@ export function MenuScreen() {
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <AppHeader userName={dashboardMock.userName} unreadNotifications={dashboardMock.unreadNotifications} />
+        <AppHeader />
         <View style={styles.titleBlock}>
           <Text variant="title">Menu</Text>
           <Text color="textMuted">Acesse todos os módulos do sistema.</Text>

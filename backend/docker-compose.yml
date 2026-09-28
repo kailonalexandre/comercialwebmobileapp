@@ -1,0 +1,16 @@
+# MySQL descartável para testes de integração do backend (mesma versão do ComercialWeb: 8.4).
+# Uso: MYSQL_ROOT_PASSWORD=$(openssl rand -hex 16) docker compose up -d --wait
+# Não é o banco de desenvolvimento: dados reais ficam no MySQL do ComercialWeb.
+services:
+  mysql-test:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?defina MYSQL_ROOT_PASSWORD}
+    ports:
+      - "127.0.0.1:3317:3306"
+    tmpfs:
+      - /var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 3s
+      retries: 30

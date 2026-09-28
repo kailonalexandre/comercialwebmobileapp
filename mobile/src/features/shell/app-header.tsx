@@ -1,13 +1,16 @@
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 
+import { useSession } from '@/features/auth/session-context';
 import { Icon } from '@/shared/components/icon';
 import { Text } from '@/shared/components/text';
 import { colors, radius, spacing, touchTarget } from '@/shared/theme/tokens';
 
-type Props = { userName: string; unreadNotifications: number };
+// Mock até existir o módulo de notificações na API.
+const unreadNotifications = 4;
 
-// Cabeçalho das telas principais: marca, notificações e avatar.
-export function AppHeader({ userName, unreadNotifications }: Props) {
+// Cabeçalho das telas principais: marca, notificações e avatar do usuário da sessão.
+export function AppHeader() {
+  const userName = useSession().profile?.userName ?? '';
   const badge = unreadNotifications > 9 ? '9+' : String(unreadNotifications);
 
   return (
@@ -33,12 +36,12 @@ export function AppHeader({ userName, unreadNotifications }: Props) {
       </Pressable>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Perfil"
+        accessibilityLabel={userName ? `Perfil de ${userName}` : 'Perfil'}
         onPress={() => Alert.alert('Perfil', 'Em breve.')}
         style={styles.avatar}
       >
         <Text variant="heading" color="onPrimary">
-          {userName.charAt(0).toUpperCase()}
+          {userName.charAt(0).toUpperCase() || '·'}
         </Text>
       </Pressable>
     </View>

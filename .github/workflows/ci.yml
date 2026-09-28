@@ -36,3 +36,40 @@ jobs:
         run: npm audit --omit=dev --audit-level=high
       - name: Bundle Android (valida build JS)
         run: npx expo export --platform android --output-dir dist
+
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      # Container efêmero só para os testes de integração; não é banco real nem guarda dados.
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1"
+          --health-interval 5s
+          --health-retries 20
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+      MOBILE_TEST_MYSQL: Server=127.0.0.1;Port=3306;User ID=root
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: backend/global.json
+
+      - run: dotnet restore
+      - run: dotnet build --no-restore
+      - run: dotnet format --verify-no-changes --no-restore
+      - name: Pacotes vulneráveis (falha se houver)
+        run: |
+          dotnet package list --vulnerable --include-transitive | tee vulnerable.txt
+          ! grep -q "has the following vulnerable packages" vulnerable.txt
+      - run: dotnet test --no-build
