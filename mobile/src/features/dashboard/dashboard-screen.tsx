@@ -4,9 +4,10 @@ import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 
+import { useSession } from '@/features/auth/session-context';
 import { dashboardMock, type Kpi } from '@/features/dashboard/mock';
+import { AppHeader } from '@/features/shell/app-header';
 import { appEnvironment } from '@/infrastructure/config';
-import { AppHeader } from '@/shared/components/app-header';
 import { Icon, type IconName } from '@/shared/components/icon';
 import { IconTile } from '@/shared/components/icon-tile';
 import { Text } from '@/shared/components/text';
@@ -61,26 +62,27 @@ function SectionHeader({ title, action, onAction }: { title: string; action: str
 
 export function DashboardScreen() {
   const data = dashboardMock;
+  const { profile } = useSession();
   const envLabel = environmentLabel[appEnvironment];
 
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
       <ScrollView contentContainerStyle={styles.content}>
-        <AppHeader userName={data.userName} unreadNotifications={data.unreadNotifications} />
+        <AppHeader />
 
         <View style={styles.greeting}>
           <View style={styles.flex}>
             <Text variant="title" style={styles.hello}>
-              Olá, {data.userName}
+              {profile ? `Olá, ${profile.userName}` : 'Olá'}
             </Text>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`Empresa atual: ${data.company}. Trocar empresa`}
+              accessibilityLabel={`Empresa atual: ${profile?.businessName ?? ''}. Trocar empresa`}
               onPress={soon('Trocar empresa')}
               style={styles.company}
             >
               <Text color="textMuted" numberOfLines={1} style={styles.shrink}>
-                Empresa atual: <Text color="text">{data.company}</Text>
+                Empresa atual: <Text color="text">{profile?.businessName ?? '…'}</Text>
               </Text>
               <Icon name="chevron-down" size={16} color={colors.textMuted} />
             </Pressable>

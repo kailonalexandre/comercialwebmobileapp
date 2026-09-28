@@ -32,12 +32,18 @@ export type RequestOptions = {
   timeoutMs?: number;
   // Obrigatório em operações com efeito financeiro/estoque: o servidor deduplica pelo valor.
   idempotencyKey?: string;
+  // Rotas sem sessão (login, refresh): não envia token e 401 significa credencial inválida.
+  anonymous?: boolean;
 };
+
+// Resultado da renovação: 'network' não derruba a sessão (usuário pode estar só offline).
+export type RefreshOutcome = 'ok' | 'rejected' | 'network';
 
 type ClientDeps = {
   baseUrl: string;
   getAccessToken: () => Promise<string | null>;
   onUnauthorized: () => void;
+  refreshSession?: () => Promise<RefreshOutcome>;
   fetchImpl?: typeof fetch;
   newId?: () => string;
 };
@@ -75,6 +81,7 @@ export function createApiClient({
   baseUrl,
   getAccessToken,
   onUnauthorized,
+  refreshSession = async () => 'rejected',
   fetchImpl = fetch,
   newId = randomUUID,
 }: ClientDeps) {
@@ -87,7 +94,7 @@ export function createApiClient({
       Accept: 'application/json',
       'X-Correlation-ID': correlationId,
     };
-    const token = await getAccessToken();
+    const token = options.anonymous ? null : await getAccessToken();
     if (token) headers.Authorization = `Bearer ${token}`;
     if (options.body !== undefined) headers['Content-Type'] = 'application/json';
     if (options.idempotencyKey) headers['Idempotency-Key'] = options.idempotencyKey;
@@ -107,11 +114,7 @@ export function createApiClient({
       clearTimeout(timer);
     }
 
-    if (!response.ok) {
-      const error = new ApiError(kindFromStatus(response.status), response.status, correlationId);
-      if (error.kind === 'unauthorized') onUnauthorized();
-      throw error;
-    }
+    if (!response.ok) throw new ApiError(kindFromStatus(response.status), response.status, correlationId);
     if (response.status === 204) return undefined as T;
     return (await response.json()) as T;
   }
@@ -120,11 +123,25 @@ export function createApiClient({
     async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
       const method = options.method ?? 'GET';
       const correlationId = newId();
+      let refreshed = false;
       for (let n = 1; ; n++) {
         try {
           return await attempt<T>(path, options, correlationId);
         } catch (e) {
           const error = e instanceof ApiError ? e : new ApiError('unknown', undefined, correlationId);
+          // Access token expirado: renova uma vez e repete. Seguro mesmo em POST, pois o 401
+          // vem da autenticação, antes de o servidor executar a operação.
+          if (error.kind === 'unauthorized' && !options.anonymous) {
+            const outcome = refreshed ? 'rejected' : await refreshSession();
+            if (outcome === 'ok') {
+              refreshed = true;
+              n--;
+              continue;
+            }
+            if (outcome === 'network') throw new ApiError('network', undefined, correlationId);
+            onUnauthorized();
+            throw error;
+          }
           if (n >= MAX_ATTEMPTS || options.signal?.aborted || !shouldRetry(method, error, !!options.idempotencyKey)) {
             throw error;
           }

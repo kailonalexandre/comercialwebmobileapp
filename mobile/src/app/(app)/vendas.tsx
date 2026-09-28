@@ -1,4 +1,4 @@
-import { ComingSoonScreen } from '@/shared/components/coming-soon-screen';
+import { ComingSoonScreen } from '@/features/shell/coming-soon-screen';
 
 export default function VendasRoute() {
   return <ComingSoonScreen title="Vendas" />;

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Modules\Identity\ComercialWeb.Mobile.Identity.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\db\migrations\*.sql" LinkBase="migrations" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ComercialWeb.Mobile.Identity.Tests" />
+  </ItemGroup>
+
+</Project>
