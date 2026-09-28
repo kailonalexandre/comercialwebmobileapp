@@ -1,6 +1,7 @@
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 
 import { useSession } from '@/features/auth/session-context';
+import { BrandMark } from '@/shared/components/brand-mark';
 import { Icon } from '@/shared/components/icon';
 import { Text } from '@/shared/components/text';
 import { colors, radius, spacing, touchTarget } from '@/shared/theme/tokens';
@@ -16,9 +17,9 @@ export function AppHeader() {
   return (
     <View style={styles.row}>
       <View style={styles.brand}>
-        <Icon name="cube-outline" size={30} color={colors.primary} />
+        <BrandMark size={34} />
         <Text variant="heading" color="primary">
-          ComercialWeb
+          Infinit Comercial
         </Text>
       </View>
       <Pressable
