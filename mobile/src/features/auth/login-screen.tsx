@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LoginWave } from '@/features/auth/login-wave';
 import { useSession } from '@/features/auth/session-context';
 import { webBaseUrl } from '@/infrastructure/config';
+import { BrandMark } from '@/shared/components/brand-mark';
 import { Button } from '@/shared/components/button';
 import { Checkbox } from '@/shared/components/checkbox';
 import { Icon } from '@/shared/components/icon';
@@ -61,13 +62,15 @@ export function LoginScreen() {
             )}
 
             <LinearGradient colors={[colors.gradientStart, colors.gradientEnd]} style={styles.logo}>
-              <Icon name="cube-outline" size={40} color={colors.onPrimary} />
+              <BrandMark size={52} color={colors.onPrimary} />
             </LinearGradient>
             <View style={styles.titleBlock}>
-              <Text variant="title" style={styles.brand}>
-                ComercialWeb
+              <Text variant="title" style={[styles.brand, styles.center]}>
+                Infinit Comercial
               </Text>
-              <Text color="textMuted">Sua operação, mais simples.</Text>
+              <Text color="textMuted" style={styles.center}>
+                Sua operação, mais simples.
+              </Text>
             </View>
 
             <View style={styles.form}>
@@ -163,8 +166,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: spacing.xl,
+    alignSelf: 'center',
   },
-  titleBlock: { gap: spacing.xs },
+  titleBlock: { gap: spacing.xs, alignItems: 'center' },
+  center: { textAlign: 'center' },
   brand: { fontSize: 32, lineHeight: 40 },
   form: { gap: spacing.lg, marginTop: spacing.xl },
   eye: { width: touchTarget, height: touchTarget, alignItems: 'center', justifyContent: 'center', marginRight: -spacing.md },

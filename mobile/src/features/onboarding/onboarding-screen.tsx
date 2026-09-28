@@ -4,13 +4,14 @@ import { FlatList, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useOnboarding } from '@/features/onboarding/onboarding-context';
+import { BrandMark } from '@/shared/components/brand-mark';
 import { Button } from '@/shared/components/button';
 import { Icon, type IconName } from '@/shared/components/icon';
 import { Text } from '@/shared/components/text';
 import { colors, radius, spacing } from '@/shared/theme/tokens';
 
 type Slide = {
-  icon: IconName;
+  icon: IconName | 'brand';
   title: string;
   subtitle: string;
   features: { icon: IconName; text: string }[];
@@ -18,7 +19,7 @@ type Slide = {
 
 const slides: Slide[] = [
   {
-    icon: 'cube-outline',
+    icon: 'brand',
     title: 'Mantenha cada operação em um só lugar.',
     subtitle: 'Acompanhe vendas, estoque e atividade do cliente sem sair do ambiente.',
     features: [
@@ -79,7 +80,11 @@ export function OnboardingScreen() {
           renderItem={({ item }) => (
             <View style={[styles.slide, { width }]}>
               <View style={styles.logo}>
-                <Icon name={item.icon} size={40} color={colors.onPrimary} />
+                {item.icon === 'brand' ? (
+                  <BrandMark size={52} color={colors.onPrimary} />
+                ) : (
+                  <Icon name={item.icon} size={40} color={colors.onPrimary} />
+                )}
               </View>
               <Text variant="display" color="textInverse" style={styles.center}>
                 {item.title}

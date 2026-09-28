@@ -25,7 +25,7 @@ export function LoginWave() {
       </Svg>
       <View style={styles.caption}>
         <Text variant="caption" color="textInverseMuted">
-          ComercialWeb
+          Infinit Comercial
         </Text>
         <Text variant="caption" color="textInverseMuted">
           v{Constants.expoConfig?.version ?? '—'}
