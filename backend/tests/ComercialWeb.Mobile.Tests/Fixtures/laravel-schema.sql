@@ -94,3 +94,27 @@ CREATE TABLE product_variations (
     reference VARCHAR(80) NULL,
     barcode VARCHAR(80) NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE people (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    business_id BIGINT UNSIGNED NOT NULL,
+    code INT UNSIGNED NOT NULL,
+    person_kind VARCHAR(255) NOT NULL,
+    name VARCHAR(200) NOT NULL,
+    trade_name VARCHAR(200) NULL,
+    document VARCHAR(32) NULL,
+    phone VARCHAR(20) NULL,
+    mobile VARCHAR(20) NULL,
+    whatsapp VARCHAR(20) NULL,
+    email VARCHAR(255) NULL,
+    credit_limit DECIMAL(12,2) NULL,
+    restriction_alert TINYINT(1) NOT NULL DEFAULT 0,
+    restriction_block TINYINT(1) NOT NULL DEFAULT 0,
+    restriction_reason TEXT NULL,
+    main_address JSON NULL,
+    notes TEXT NULL,
+    is_client TINYINT(1) NOT NULL DEFAULT 0,
+    is_supplier TINYINT(1) NOT NULL DEFAULT 0,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    deleted_at TIMESTAMP NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
