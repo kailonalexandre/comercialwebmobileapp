@@ -1,5 +1,6 @@
 using ComercialWeb.Mobile.Api;
 using ComercialWeb.Mobile.Catalog;
+using ComercialWeb.Mobile.Customers;
 using ComercialWeb.Mobile.Identity;
 using Microsoft.AspNetCore.HttpOverrides;
 using MySqlConnector;
@@ -23,6 +24,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(o =>
 
 builder.Services.AddIdentityModule(builder.Configuration, builder.Environment);
 builder.Services.AddCatalogModule();
+builder.Services.AddCustomersModule();
 
 var app = builder.Build();
 
@@ -53,6 +55,7 @@ app.MapGet("/health", async (MySqlDataSource db, CancellationToken ct) =>
 
 app.MapIdentityEndpoints();
 app.MapCatalogEndpoints();
+app.MapCustomersEndpoints();
 
 await app.RunAsync();
 

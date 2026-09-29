@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using ComercialWeb.Mobile.Common;
 using Dapper;
 using MySqlConnector;
 
@@ -7,8 +8,6 @@ namespace ComercialWeb.Mobile.Catalog;
 public sealed record ProductListItem(long Id, long Code, string Name, string? Sku, string? Barcode, long SalePriceCents, bool IsActive);
 
 public sealed record ProductDetail(long Id, long Code, string Name, string? Sku, string? Barcode, long SalePriceCents, bool IsActive, string? Description);
-
-public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Page, int PageSize, long Total);
 
 /// <summary>
 /// Consulta de produtos da empresa da sessão (somente leitura nas tabelas do ComercialWeb).
@@ -33,19 +32,19 @@ public sealed partial class ProductQueries(MySqlDataSource db)
         )
         """;
 
-    public async Task<PagedResult<ProductListItem>> SearchAsync(long businessId, string? search, bool includeInactive, int page, int pageSize, CancellationToken ct)
+    public async Task<PagedResult<ProductListItem>> SearchAsync(long businessId, string? search, bool includeInactive, Paging paging, CancellationToken ct)
     {
-        var term = string.IsNullOrWhiteSpace(search) ? null : search.Trim();
+        var term = SqlText.NormalizeSearch(search);
         var args = new
         {
             businessId,
             includeInactive,
             term,
-            like = term is null ? null : $"%{EscapeLike(term)}%",
+            like = term is null ? null : SqlText.ContainsPattern(term),
             variants = term is null ? [""] : IdentifierVariants(term),
             code = term is not null && CodePattern().IsMatch(term) && long.TryParse(term, out var c) ? c : (long?)null,
-            offset = (page - 1) * pageSize,
-            pageSize,
+            offset = paging.Offset,
+            pageSize = paging.PageSize,
         };
         const string where = $"""
             FROM products p
@@ -57,7 +56,7 @@ public sealed partial class ProductQueries(MySqlDataSource db)
         var total = await conn.ExecuteScalarAsync<long>(new CommandDefinition($"SELECT COUNT(*) {where}", args, cancellationToken: ct));
         var items = total == 0 ? [] : (await conn.QueryAsync<ProductListItem>(new CommandDefinition(
             $"SELECT {Columns} {where} ORDER BY p.name, p.id LIMIT @pageSize OFFSET @offset", args, cancellationToken: ct))).AsList();
-        return new PagedResult<ProductListItem>(items, page, pageSize, total);
+        return new PagedResult<ProductListItem>(items, paging.Page, paging.PageSize, total);
     }
 
     /// <summary>Produto de outra empresa ou excluído retorna null (404), sem revelar que existe.</summary>
@@ -68,10 +67,6 @@ public sealed partial class ProductQueries(MySqlDataSource db)
             $"SELECT {Columns}, p.description AS Description FROM products p WHERE p.id = @id AND p.business_id = @businessId AND p.deleted_at IS NULL",
             new { id, businessId }, cancellationToken: ct));
     }
-
-    // A web não escapa: "%" ou "_" digitados viram curinga. Aqui são tratados como texto.
-    internal static string EscapeLike(string value) =>
-        value.Replace(@"\", @"\\", StringComparison.Ordinal).Replace("%", @"\%", StringComparison.Ordinal).Replace("_", @"\_", StringComparison.Ordinal);
 
     // Espelha ProductBarcodeRepository::identifierVariants: UPC-A (12 dígitos) e EAN-13 com zero à esquerda.
     internal static string[] IdentifierVariants(string term)

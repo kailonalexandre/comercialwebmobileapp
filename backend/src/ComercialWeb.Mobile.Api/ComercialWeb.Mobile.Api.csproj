@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Modules\Identity\ComercialWeb.Mobile.Identity.csproj" />
     <ProjectReference Include="..\Modules\Catalog\ComercialWeb.Mobile.Catalog.csproj" />
+    <ProjectReference Include="..\Modules\Customers\ComercialWeb.Mobile.Customers.csproj" />
   </ItemGroup>
 
   <ItemGroup>

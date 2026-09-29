@@ -70,6 +70,15 @@ Risco principal: regras de tenancy, permissão, preço, estoque e venda já vive
 - `pageSize` 1–50, `page` 1–10000; fora disso 422. Preço em centavos (`salePriceCents`); custo e margens não são expostos.
 - Saldo de estoque ainda não exposto (depende de locais de estoque e variações; módulo Inventory).
 
+### Módulo Customers
+
+- `GET /api/v1/customers?search=&includeInactive=&page=&pageSize=` e `GET /api/v1/customers/{id}`, permissão `people.view` (a mesma da web).
+- Cliente = `people.is_client = 1`, empresa da sessão, sem excluídos; fornecedor puro, excluído ou de outra empresa: 404.
+- Busca igual à web (nome, fantasia, código, documento, telefone, celular); documento e telefones comparados só pelos dígitos, então CPF/telefone com máscara também acham.
+- Minimização (LGPD): o app recebe identificação, contato, endereço principal e as flags `restrictionAlert`/`restrictionBlock`. Limite de crédito, motivo da restrição, observações e dados de renda não são expostos.
+
+Paginação, `PagedResult` e escape de LIKE ficam em `src/Common` (compartilhado pelos módulos).
+
 ## Autenticação
 
 - `POST /api/v1/auth/login` com e-mail/senha; senha verificada contra o hash bcrypt do Laravel (`users.password`).

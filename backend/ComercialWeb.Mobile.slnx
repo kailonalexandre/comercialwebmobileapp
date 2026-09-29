@@ -2,6 +2,8 @@
   <Folder Name="/src/">
     <Project Path="src/ComercialWeb.Mobile.Api/ComercialWeb.Mobile.Api.csproj" />
     <Project Path="src/Modules/Catalog/ComercialWeb.Mobile.Catalog.csproj" />
+    <Project Path="src/Modules/Customers/ComercialWeb.Mobile.Customers.csproj" />
+    <Project Path="src/Common/ComercialWeb.Mobile.Common.csproj" />
     <Project Path="src/Modules/Identity/ComercialWeb.Mobile.Identity.csproj" />
   </Folder>
   <Folder Name="/tests/">
