@@ -65,6 +65,7 @@ app.MapCustomersEndpoints();
 app.MapSalesEndpoints();
 app.MapDashboardEndpoints();
 app.MapNotificationsEndpoints();
+app.MapPermissionsEndpoint();
 
 await app.RunAsync();
 
