@@ -76,22 +76,22 @@ public sealed class NotificationQueries(MySqlDataSource db)
     }
 
     /// <summary>Idempotente: lida continua com o horário original. False = não existe ou é de outro usuário (404).</summary>
-    public async Task<bool> MarkReadAsync(long userId, long id, DateTime localNow, CancellationToken ct)
+    public async Task<bool> MarkReadAsync(long userId, long businessId, long id, DateTime localNow, CancellationToken ct)
     {
         // Atribuições do UPDATE avaliam da esquerda para a direita: updated_at antes de read_at.
         await using var conn = await db.OpenConnectionAsync(ct);
         return await conn.ExecuteAsync(new CommandDefinition(
-            "UPDATE notifications SET updated_at = IF(read_at IS NULL, @now, updated_at), read_at = COALESCE(read_at, @now) WHERE id = @id AND user_id = @userId",
-            new { userId, id, now = localNow }, cancellationToken: ct)) > 0;
+            $"UPDATE notifications n SET n.updated_at = IF(n.read_at IS NULL, @now, n.updated_at), n.read_at = COALESCE(n.read_at, @now) WHERE n.id = @id AND {Scope}",
+            new { userId, businessId, id, now = localNow }, cancellationToken: ct)) > 0;
     }
 
     /// <summary>Arquivar também marca como lida (NotificationRepository::archive).</summary>
-    public async Task<bool> ArchiveAsync(long userId, long id, DateTime localNow, CancellationToken ct)
+    public async Task<bool> ArchiveAsync(long userId, long businessId, long id, DateTime localNow, CancellationToken ct)
     {
         await using var conn = await db.OpenConnectionAsync(ct);
         return await conn.ExecuteAsync(new CommandDefinition(
-            "UPDATE notifications SET updated_at = @now, archived_at = @now, read_at = COALESCE(read_at, @now) WHERE id = @id AND user_id = @userId",
-            new { userId, id, now = localNow }, cancellationToken: ct)) > 0;
+            $"UPDATE notifications n SET n.updated_at = @now, n.archived_at = @now, n.read_at = COALESCE(n.read_at, @now) WHERE n.id = @id AND {Scope}",
+            new { userId, businessId, id, now = localNow }, cancellationToken: ct)) > 0;
     }
 
     /// <summary>Mesmo escopo da listagem: aviso de outra empresa nunca é marcado sem o usuário ter visto.</summary>

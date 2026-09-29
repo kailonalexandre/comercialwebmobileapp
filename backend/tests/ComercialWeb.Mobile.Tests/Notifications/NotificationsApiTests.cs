@@ -152,7 +152,7 @@ public sealed class NotificationsApiTests(NotificationsFixture api) : IClassFixt
     }
 
     [Fact]
-    public async Task Aviso_de_outro_usuario_ou_inexistente_e_404_e_nao_e_alterado()
+    public async Task Aviso_de_outro_usuario_outra_empresa_ou_inexistente_e_404_e_nao_e_alterado()
     {
         TestDatabase.RequireMySql();
         var ana = await api.SignedInAsync("ana");
@@ -161,6 +161,9 @@ public sealed class NotificationsApiTests(NotificationsFixture api) : IClassFixt
         Assert.Equal(HttpStatusCode.NotFound, (await ana.PostAsync("/api/v1/notifications/7/archive", null, Ct)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await ana.PostAsync("/api/v1/notifications/999/read", null, Ct)).StatusCode);
         Assert.Equal((null, null, null), await Row(7));
+        // Aviso da própria Ana, mas de outra empresa (fora do que a sessão lista): também 404.
+        Assert.Equal(HttpStatusCode.NotFound, (await ana.PostAsync("/api/v1/notifications/4/archive", null, Ct)).StatusCode);
+        Assert.Null((await Row(4)).Read);
     }
 
     [Fact]

@@ -43,12 +43,12 @@ public static class NotificationsModule
         });
 
         group.MapPost("/{id:long}/read", async (long id, ClaimsPrincipal user, NotificationQueries queries, IConfiguration config, TimeProvider clock, CancellationToken ct) =>
-            await queries.MarkReadAsync(SessionIds.From(user)!.UserId, id, LocalTime.Now(config, clock), ct)
+            await queries.MarkReadAsync(SessionIds.From(user)!.UserId, SessionIds.From(user)!.BusinessId, id, LocalTime.Now(config, clock), ct)
                 ? Results.NoContent()
                 : Results.Problem(statusCode: StatusCodes.Status404NotFound));
 
         group.MapPost("/{id:long}/archive", async (long id, ClaimsPrincipal user, NotificationQueries queries, IConfiguration config, TimeProvider clock, CancellationToken ct) =>
-            await queries.ArchiveAsync(SessionIds.From(user)!.UserId, id, LocalTime.Now(config, clock), ct)
+            await queries.ArchiveAsync(SessionIds.From(user)!.UserId, SessionIds.From(user)!.BusinessId, id, LocalTime.Now(config, clock), ct)
                 ? Results.NoContent()
                 : Results.Problem(statusCode: StatusCodes.Status404NotFound));
 
