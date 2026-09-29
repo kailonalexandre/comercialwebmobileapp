@@ -16,7 +16,9 @@ export function resolveEnvironment(raw: string | undefined, isDev: boolean): App
   return isDev ? 'local' : 'producao';
 }
 
-export const apiBaseUrl = resolveBaseUrl(process.env.EXPO_PUBLIC_API_URL, __DEV__);
+// EXPO_PUBLIC_ALLOW_HTTP=1 só em APK de teste em rede local (JS embutido, sem __DEV__). Build de produção nunca define.
+const allowHttp = __DEV__ || process.env.EXPO_PUBLIC_ALLOW_HTTP === '1';
+export const apiBaseUrl = resolveBaseUrl(process.env.EXPO_PUBLIC_API_URL, allowHttp);
 // Páginas web do ComercialWeb (cadastro, recuperação de senha), abertas no navegador do sistema.
 export const webBaseUrl = resolveBaseUrl(process.env.EXPO_PUBLIC_WEB_URL, __DEV__);
 export const appEnvironment = resolveEnvironment(process.env.EXPO_PUBLIC_APP_ENV, __DEV__);
