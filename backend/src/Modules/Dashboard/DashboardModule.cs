@@ -20,6 +20,11 @@ public sealed record DashboardResponse(
 
 public static class DashboardModule
 {
+    // Mesmas permissões que a web exige para os cards correspondentes.
+    public const string ViewSales = "sales.view";
+    public const string ViewReceivables = "financial.receivables.view";
+    public const string ViewInventory = "inventory.view";
+
     public static IServiceCollection AddDashboardModule(this IServiceCollection services) =>
         services.AddScoped<DashboardQueries>();
 
@@ -31,9 +36,9 @@ public static class DashboardModule
             var ids = SessionIds.From(user)!;
             Task<bool> Can(string permission) => permissions.HasAsync(ids.UserId, ids.BusinessId, permission, ct);
 
-            var sales = await Can("sales.view");
-            var receivables = await Can("financial.receivables.view");
-            var inventory = await Can("inventory.view");
+            var sales = await Can(ViewSales);
+            var receivables = await Can(ViewReceivables);
+            var inventory = await Can(ViewInventory);
 
             // "Hoje" da empresa (APP_TIMEZONE da web), não do servidor da API.
             var today = DateOnly.FromDateTime(LocalTime.Now(config, clock));

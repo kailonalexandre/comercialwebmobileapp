@@ -112,6 +112,11 @@ Paginação, `PagedResult` e escape de LIKE ficam em `src/Common` (compartilhado
 - Estoque baixo: saldo negativo, ou mínimo > 0 (do produto; senão soma das variações) com saldo ≤ mínimo; só produtos ativos.
 - Emissão e validação do JWT usam o mesmo `TimeProvider` injetável (expiração 10 min, tolerância 30 s, testada ponta a ponta).
 
+### Permissões do usuário para o app
+
+- `GET /api/v1/me/permissions` devolve, entre as permissões que o app usa (`products.view`, `people.view`, `sales.view`, `sales.create`, `financial.receivables.view`, `inventory.view`), as que o usuário tem **na empresa da sessão**, com a mesma decisão das rotas (`IPermissionChecker`). A lista vem das constantes que as próprias rotas exigem.
+- Serve para o app esconder o que o usuário não pode usar. **Não é autorização**: cada rota confere no servidor.
+
 ### Módulo Notifications
 
 - `GET /api/v1/notifications?status=active|archived&read=read|unread&domain=&severity=&search=&page=&pageSize=`, `GET /api/v1/notifications/unread-count`, `POST /api/v1/notifications/{id}/read`, `POST /api/v1/notifications/{id}/archive`, `POST /api/v1/notifications/read-all`. Só exige login (como na web); o recorte é sempre o usuário da sessão.
