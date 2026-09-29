@@ -51,7 +51,7 @@ public sealed class PermissionsEndpointTests(PermissionsFixture api) : IClassFix
     {
         TestDatabase.RequireMySql();
         Assert.Equal(
-            ["products.view", "people.view", "sales.view", "sales.create", "financial.receivables.view", "inventory.view"],
+            ["products.view", "people.view", "sales.view", "sales.create", "pdv.access", "financial.receivables.view", "inventory.view"],
             await For("root"));
     }
 }
