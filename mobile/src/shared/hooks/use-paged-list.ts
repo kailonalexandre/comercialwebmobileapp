@@ -4,52 +4,68 @@ export type Paged<T> = { items: T[]; page: number; pageSize: number; total: numb
 
 export type PageFetcher<T> = (page: number, search: string) => Promise<Paged<T>>;
 
-type State<T> = { items: T[]; page: number; total: number; status: 'loading' | 'ready' | 'error'; loadingMore: boolean };
+type Loaded<T> = { items: T[]; total: number; pageSize: number };
+type Cursor = { search: string; page: number };
 
 const SEARCH_DEBOUNCE_MS = 300;
 
 /**
- * Lista paginada com busca. `fetchPage` deve ter identidade estável (função de módulo ou useCallback).
- * A busca espera o usuário parar de digitar; ao mudar, mantém os itens antigos até chegarem os novos.
- * ponytail: se a busca mudar durante um "carregar mais", a página antiga ainda é anexada; cancelar com AbortSignal se incomodar.
+ * Lista com paginação numerada e busca. `fetchPage` deve ter identidade estável (função de módulo ou useCallback).
+ * Mudar a busca volta à página 1 (esperando o usuário parar de digitar); trocar de página mantém os itens
+ * atuais na tela até a nova página chegar.
  */
 export function usePagedList<T>(fetchPage: PageFetcher<T>, search: string) {
-  const [state, setState] = useState<State<T>>({ items: [], page: 0, total: 0, status: 'loading', loadingMore: false });
+  const [loaded, setLoaded] = useState<Loaded<T> | null>(null);
+  const [failed, setFailed] = useState(false);
+  // A página pertence a uma busca: outra busca é, por definição, página 1.
+  const [cursor, setCursor] = useState<Cursor>({ search, page: 1 });
   const [attempt, setAttempt] = useState(0);
+  const page = cursor.search === search ? cursor.page : 1;
 
   useEffect(() => {
     let active = true;
     const timer = setTimeout(
       () => {
-        fetchPage(1, search)
-          .then((r) => active && setState({ items: r.items, page: 1, total: r.total, status: 'ready', loadingMore: false }))
-          .catch(() => active && setState((s) => ({ ...s, status: 'error', loadingMore: false })));
+        fetchPage(page, search)
+          .then((r) => {
+            if (!active) return;
+            setLoaded({ items: r.items, total: r.total, pageSize: r.pageSize });
+            setFailed(false);
+          })
+          .catch(() => active && setFailed(true));
       },
-      search === '' ? 0 : SEARCH_DEBOUNCE_MS,
+      search === '' || page > 1 ? 0 : SEARCH_DEBOUNCE_MS,
     );
     return () => {
       active = false;
       clearTimeout(timer);
     };
-  }, [fetchPage, search, attempt]);
+  }, [fetchPage, search, page, attempt]);
+
+  const goTo = useCallback((next: number) => setCursor({ search, page: next }), [search]);
 
   const reload = useCallback(() => {
-    setState((s) => ({ ...s, status: 'loading' }));
+    setFailed(false);
     setAttempt((n) => n + 1);
   }, []);
 
-  const loadMore = useCallback(() => {
-    if (state.status !== 'ready' || state.loadingMore || state.items.length >= state.total) return;
-    setState((s) => ({ ...s, loadingMore: true }));
-    fetchPage(state.page + 1, search)
-      .then((r) =>
-        setState((s) => ({ items: [...s.items, ...r.items], page: r.page, total: r.total, status: 'ready', loadingMore: false })),
-      )
-      .catch(() => setState((s) => ({ ...s, loadingMore: false })));
-  }, [fetchPage, search, state]);
-
   // Altera itens já carregados (ex.: marcar como lido) sem nova ida ao servidor.
-  const patch = useCallback((change: (items: T[]) => T[]) => setState((s) => ({ ...s, items: change(s.items) })), []);
+  const patch = useCallback(
+    (change: (items: T[]) => T[]) => setLoaded((l) => (l ? { ...l, items: change(l.items) } : l)),
+    [],
+  );
 
-  return { ...state, reload, loadMore, patch };
+  const total = loaded?.total ?? 0;
+  const pageSize = loaded?.pageSize ?? 1;
+  return {
+    items: loaded?.items ?? [],
+    status: loaded ? ('ready' as const) : failed ? ('error' as const) : ('loading' as const),
+    failed,
+    page,
+    total,
+    totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    goTo,
+    reload,
+    patch,
+  };
 }
