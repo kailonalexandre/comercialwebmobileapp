@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { StyleSheet, View } from 'react-native';
 
 import { fetchSales } from '@/features/sales/sales-api';
 import { statusLabel, statusTone, type SaleListItem } from '@/features/sales/sales-model';
@@ -8,6 +9,7 @@ import { ListScreen } from '@/features/shell/list-screen';
 import { ListRow } from '@/shared/components/list-row';
 import { StatusPill } from '@/shared/components/status-pill';
 import { Text } from '@/shared/components/text';
+import { spacing } from '@/shared/theme/tokens';
 import { formatCents } from '@/shared/utils/format';
 
 function SaleRow({ sale }: { sale: SaleListItem }) {
@@ -17,10 +19,10 @@ function SaleRow({ sale }: { sale: SaleListItem }) {
       lines={[formatLocal(sale.createdAt), ...(sale.sellerName ? [`Vendedor: ${sale.sellerName}`] : [])]}
       onPress={() => router.push({ pathname: '/venda/[id]', params: { id: String(sale.id) } })}
       trailing={
-        <>
-          <StatusPill label={statusLabel(sale.status)} tone={statusTone(sale.status)} />
+        <View style={styles.trailing}>
           <Text variant="label">{formatCents(sale.totalCents)}</Text>
-        </>
+          <StatusPill label={statusLabel(sale.status)} tone={statusTone(sale.status)} />
+        </View>
       }
     />
   );
@@ -40,3 +42,5 @@ export function SalesScreen() {
     />
   );
 }
+
+const styles = StyleSheet.create({ trailing: { alignItems: 'flex-end', gap: spacing.xs } });
