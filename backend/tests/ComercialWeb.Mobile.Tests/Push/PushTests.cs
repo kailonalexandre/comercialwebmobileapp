@@ -252,7 +252,7 @@ public sealed class ExpoPushSenderTests
     {
         var stub = new Stub((_, body) =>
         {
-            var count = JsonDocument.Parse(body).RootElement.GetArrayLength();
+            var count = JsonElement.Parse(body).GetArrayLength();
             return Json(HttpStatusCode.OK, $$"""{"data":[{{string.Join(",", Enumerable.Repeat("""{"status":"ok","id":"x"}""", count))}}]}""");
         });
 
@@ -260,9 +260,9 @@ public sealed class ExpoPushSenderTests
 
         Assert.Equal(150, results.Count);
         Assert.All(results, r => Assert.Equal(PushOutcome.Ok, r));
-        Assert.Equal([100, 50], stub.Calls.Select(c => JsonDocument.Parse(c.Body).RootElement.GetArrayLength()));
+        Assert.Equal([100, 50], stub.Calls.Select(c => JsonElement.Parse(c.Body).GetArrayLength()));
         Assert.All(stub.Calls, c => Assert.Equal(ExpoPushSender.Endpoint, c.Request.RequestUri!.ToString()));
-        var first = JsonDocument.Parse(stub.Calls[0].Body).RootElement[0];
+        var first = JsonElement.Parse(stub.Calls[0].Body)[0];
         Assert.Equal("default", first.GetProperty("sound").GetString());
         Assert.Equal("high", first.GetProperty("priority").GetString());
         Assert.Equal("default", first.GetProperty("channelId").GetString());

@@ -8,7 +8,7 @@ namespace ComercialWeb.Mobile.Push;
 /// Varre `notifications` e envia push por Expo aos dispositivos com sessão ativa. Polling (não é tempo real).
 /// ponytail: instância única; com várias instâncias da API cada uma enviaria (duplicado), então precisaria de lock (ex.: GET_LOCK).
 /// </summary>
-public sealed class PushDispatcher(PushStore store, IPushSender sender, TimeProvider clock, IConfiguration config, ILogger<PushDispatcher> log) : BackgroundService
+public sealed partial class PushDispatcher(PushStore store, IPushSender sender, TimeProvider clock, IConfiguration config, ILogger<PushDispatcher> log) : BackgroundService
 {
     public const int PerCycleCap = 50;
 
@@ -21,7 +21,7 @@ public sealed class PushDispatcher(PushStore store, IPushSender sender, TimeProv
         {
             try { await RunOnceAsync(stoppingToken); }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { return; }
-            catch (Exception ex) { log.LogWarning("Ciclo de push falhou ({Error}); nova tentativa no próximo ciclo.", ex.GetType().Name); }
+            catch (Exception ex) { LogCycleFailed(ex.GetType().Name); }
         } while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 
@@ -48,7 +48,7 @@ public sealed class PushDispatcher(PushStore store, IPushSender sender, TimeProv
                 }
                 if (results[i] == PushOutcome.Error)
                 {
-                    log.LogWarning("Expo recusou a notificação {NotificationId}; tentará de novo.", pending[i].Id);
+                    LogRejected(pending[i].Id);
                     break;
                 }
                 lastOk = pending[i].Id;
@@ -56,4 +56,10 @@ public sealed class PushDispatcher(PushStore store, IPushSender sender, TimeProv
             if (lastOk is { } id) await store.AdvanceAsync(token.SessionId, id, ct);
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Ciclo de push falhou ({Error}); nova tentativa no próximo ciclo.")]
+    private partial void LogCycleFailed(string error);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Expo recusou a notificação {NotificationId}; tentará de novo.")]
+    private partial void LogRejected(long notificationId);
 }
