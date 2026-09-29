@@ -3,6 +3,7 @@
     <Project Path="src/ComercialWeb.Mobile.Api/ComercialWeb.Mobile.Api.csproj" />
     <Project Path="src/Modules/Catalog/ComercialWeb.Mobile.Catalog.csproj" />
     <Project Path="src/Modules/Customers/ComercialWeb.Mobile.Customers.csproj" />
+    <Project Path="src/Modules/Dashboard/ComercialWeb.Mobile.Dashboard.csproj" />
     <Project Path="src/Common/ComercialWeb.Mobile.Common.csproj" />
     <Project Path="src/Modules/Identity/ComercialWeb.Mobile.Identity.csproj" />
     <Project Path="src/Modules/Sales/ComercialWeb.Mobile.Sales.csproj" />
