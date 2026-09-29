@@ -104,3 +104,11 @@ test('POST sem idempotency key nunca é repetido', async () => {
   await expect(client.request('/v1/sales', { method: 'POST', body: {} })).rejects.toMatchObject({ kind: 'server' });
   expect(fetchImpl).toHaveBeenCalledTimes(1);
 });
+
+test('422 traz a mensagem de regra de negócio do servidor', async () => {
+  const { client } = setup({ ok: false, status: 422, json: async () => ({ message: 'Cliente bloqueado.' }) });
+  await expect(client.request('/v1/pre-sales', { method: 'POST', body: {} })).rejects.toMatchObject({
+    kind: 'validation',
+    serverMessage: 'Cliente bloqueado.',
+  });
+});

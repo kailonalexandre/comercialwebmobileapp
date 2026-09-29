@@ -1,7 +1,9 @@
 import { Stack } from 'expo-router';
+import type { ReactNode } from 'react';
 import { StatusBar } from 'expo-status-bar';
 
 import { SessionProvider, useSession } from '@/features/auth/session-context';
+import { DraftProvider } from '@/features/presale/draft-context';
 import { OnboardingProvider, useOnboarding } from '@/features/onboarding/onboarding-context';
 import { StateView } from '@/shared/components/state-view';
 
@@ -23,6 +25,9 @@ function RootNavigator() {
           <Stack.Screen name="produtos" />
           <Stack.Screen name="clientes" />
           <Stack.Screen name="notificacoes" />
+          <Stack.Screen name="nova-venda" />
+          <Stack.Screen name="selecionar-produto" />
+          <Stack.Screen name="selecionar-cliente" />
         </Stack.Protected>
         <Stack.Protected guard={signedOut && !seen}>
           <Stack.Screen name="onboarding" />
@@ -35,11 +40,19 @@ function RootNavigator() {
   );
 }
 
+// O rascunho de pré-venda (e sua chave de idempotência) morre ao entrar/sair: nunca passa de um usuário a outro.
+function SessionScopedDraft({ children }: { children: ReactNode }) {
+  const { status } = useSession();
+  return <DraftProvider key={status}>{children}</DraftProvider>;
+}
+
 export default function RootLayout() {
   return (
     <OnboardingProvider>
       <SessionProvider>
-        <RootNavigator />
+        <SessionScopedDraft>
+          <RootNavigator />
+        </SessionScopedDraft>
       </SessionProvider>
     </OnboardingProvider>
   );
