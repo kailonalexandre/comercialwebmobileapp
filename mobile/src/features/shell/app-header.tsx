@@ -1,17 +1,16 @@
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 
 import { useSession } from '@/features/auth/session-context';
+import { useUnreadCount } from '@/features/shell/use-unread-count';
 import { BrandMark } from '@/shared/components/brand-mark';
 import { Icon } from '@/shared/components/icon';
 import { Text } from '@/shared/components/text';
 import { colors, radius, spacing, touchTarget } from '@/shared/theme/tokens';
 
-// Mock até existir o módulo de notificações na API.
-const unreadNotifications = 4;
-
 // Cabeçalho das telas principais: marca, notificações e avatar do usuário da sessão.
 export function AppHeader() {
   const userName = useSession().profile?.userName ?? '';
+  const unreadNotifications = useUnreadCount();
   const badge = unreadNotifications > 9 ? '9+' : String(unreadNotifications);
 
   return (

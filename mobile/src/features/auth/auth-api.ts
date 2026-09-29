@@ -5,12 +5,17 @@ import { api } from '@/infrastructure/api';
 import type { Session } from '@/infrastructure/security/session-store';
 
 // Empresa ativa vem do servidor (sessão), nunca de um valor enviado pelo app.
-export type Profile = { userName: string; businessId: number; businessName: string };
+export type Profile = { userName: string; businessId: number; businessName: string; permissions: string[] };
 
 // Identifica a sessão na lista de dispositivos sem expor o nome pessoal do aparelho.
 const deviceName = `${Platform.OS === 'ios' ? 'iOS' : 'Android'} · app ${Constants.expoConfig?.version ?? ''}`.trim();
 
-const devProfile: Profile = { userName: 'Administrador', businessId: 0, businessName: 'Empresa Demonstração' };
+const devProfile: Profile = {
+  userName: 'Administrador',
+  businessId: 0,
+  businessName: 'Empresa Demonstração',
+  permissions: ['products.view', 'people.view', 'sales.view'],
+};
 
 // Troca o código do QR (uso único, 2 min) pela sessão da API. O código não é guardado.
 // A API valida o código no ComercialWeb; empresa e usuário vêm de lá, nunca do app.
@@ -31,7 +36,13 @@ export async function pair(code: string): Promise<Session> {
 }
 
 export async function fetchProfile(): Promise<Profile> {
-  return api ? api.request<Profile>('/v1/me') : devProfile;
+  if (!api) return devProfile;
+  const [me, granted] = await Promise.all([
+    api.request<Omit<Profile, 'permissions'>>('/v1/me'),
+    api.request<{ permissions: string[] }>('/v1/me/permissions'),
+  ]);
+  // Só decide o que mostrar; cada rota do servidor confere a permissão de novo.
+  return { ...me, permissions: granted.permissions };
 }
 
 export async function logout(): Promise<void> {
