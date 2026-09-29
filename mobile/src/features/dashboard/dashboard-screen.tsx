@@ -1,14 +1,16 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 
 import { useSession } from '@/features/auth/session-context';
-import { dashboardMock, type Kpi } from '@/features/dashboard/mock';
+import { formatLocal, toKpis, type Kpi } from '@/features/dashboard/dashboard-model';
+import { useDashboard } from '@/features/dashboard/use-dashboard';
 import { AppHeader } from '@/features/shell/app-header';
 import { appEnvironment } from '@/infrastructure/config';
 import { Icon, type IconName } from '@/shared/components/icon';
+import { StateView } from '@/shared/components/state-view';
 import { IconTile } from '@/shared/components/icon-tile';
 import { Text } from '@/shared/components/text';
 import { colors, radius, shadow, spacing, tones } from '@/shared/theme/tokens';
@@ -61,13 +63,17 @@ function SectionHeader({ title, action, onAction }: { title: string; action: str
 }
 
 export function DashboardScreen() {
-  const data = dashboardMock;
+  const { data, failed, reload } = useDashboard();
   const { profile } = useSession();
   const envLabel = environmentLabel[appEnvironment];
 
+  if (!data) return failed ? <StateView kind="error" onRetry={reload} /> : <StateView kind="loading" />;
+  const kpis = toKpis(data);
+  const recentSales = data.recentSales ?? [];
+
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={false} onRefresh={reload} />}>
         <AppHeader />
 
         <View style={styles.greeting}>
@@ -119,7 +125,7 @@ export function DashboardScreen() {
         </LinearGradient>
 
         <View style={styles.grid}>
-          {data.kpis.map((kpi) => (
+          {kpis.map((kpi) => (
             <KpiCard key={kpi.id} kpi={kpi} />
           ))}
         </View>
@@ -148,21 +154,31 @@ export function DashboardScreen() {
           ))}
         </View>
 
-        <SectionHeader title="Últimas vendas" action="Ver todas" onAction={soon('Vendas')} />
-        <View style={styles.list}>
-          {data.recentSales.map((sale, i) => (
-            <View key={sale.id} style={[styles.saleRow, i > 0 && styles.divider]}>
-              <IconTile icon="receipt-outline" size={36} />
-              <View style={styles.flex}>
-                <Text variant="label">{sale.customer}</Text>
-                <Text variant="caption" color="textMuted">
-                  Nº {sale.id} · {sale.date}
+        {data.recentSales !== null && (
+          <>
+            <SectionHeader title="Últimas vendas" action="Ver todas" onAction={soon('Vendas')} />
+            <View style={styles.list}>
+              {recentSales.length === 0 && (
+                <Text color="textMuted" style={styles.empty}>
+                  Nenhuma venda ainda.
                 </Text>
-              </View>
-              <Text variant="label">{formatCents(sale.cents)}</Text>
+              )}
+              {recentSales.map((sale, i) => (
+                <View key={sale.id} style={[styles.saleRow, i > 0 && styles.divider]}>
+                  <IconTile icon="receipt-outline" size={36} />
+                  <View style={styles.flex}>
+                    <Text variant="label">{sale.customerName ?? 'Consumidor final'}</Text>
+                    <Text variant="caption" color="textMuted">
+                      {sale.number ? `Nº ${sale.number} · ` : ''}
+                      {formatLocal(sale.occurredAt)}
+                    </Text>
+                  </View>
+                  <Text variant="label">{formatCents(sale.totalCents)}</Text>
+                </View>
+              ))}
             </View>
-          ))}
-        </View>
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -221,5 +237,6 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.7 },
   list: { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.md },
   saleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
+  empty: { paddingVertical: spacing.lg, textAlign: 'center' },
   divider: { borderTopWidth: 1, borderTopColor: colors.border },
 });
