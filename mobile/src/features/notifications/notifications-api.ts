@@ -1,4 +1,5 @@
 import type { NotificationItem } from '@/features/notifications/notifications-model';
+import { emitUnreadChanged } from '@/features/shell/unread-events';
 import { api } from '@/infrastructure/api';
 import type { Paged } from '@/shared/hooks/use-paged-list';
 
@@ -20,6 +21,12 @@ async function fetchPage(page: number, search: string, read?: 'unread'): Promise
 export const fetchAllNotifications = (page: number, search: string) => fetchPage(page, search);
 export const fetchUnreadNotifications = (page: number, search: string) => fetchPage(page, search, 'unread');
 
-export const markNotificationRead = (id: number) => api?.request(`/v1/notifications/${id}/read`, { method: 'POST' }) ?? Promise.resolve();
-export const archiveNotification = (id: number) => api?.request(`/v1/notifications/${id}/archive`, { method: 'POST' }) ?? Promise.resolve();
-export const markAllNotificationsRead = () => api?.request('/v1/notifications/read-all', { method: 'POST' }) ?? Promise.resolve();
+// Toda mudança de leitura avisa os cabeçalhos para atualizarem o contador do sino.
+async function post(path: string) {
+  await api?.request(path, { method: 'POST' });
+  emitUnreadChanged();
+}
+
+export const markNotificationRead = (id: number) => post(`/v1/notifications/${id}/read`);
+export const archiveNotification = (id: number) => post(`/v1/notifications/${id}/archive`);
+export const markAllNotificationsRead = () => post('/v1/notifications/read-all');

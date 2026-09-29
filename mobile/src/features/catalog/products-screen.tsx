@@ -20,6 +20,7 @@ export function ProductsScreen() {
         <ListRow
           title={p.name}
           lines={[`Cód. ${p.code}${p.sku ? ` · SKU ${p.sku}` : ''}`]}
+          onPress={() => router.push({ pathname: '/produto/[id]', params: { id: String(p.id) } })}
           trailing={
             <>
               {!p.isActive && <StatusPill label="Inativo" tone="danger" />}

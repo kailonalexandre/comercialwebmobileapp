@@ -18,6 +18,7 @@ export function CustomersScreen() {
         <ListRow
           title={c.name}
           lines={[c.phone, c.city ? `${c.city}${c.state ? `/${c.state}` : ''}` : null].filter((v): v is string => !!v)}
+          onPress={() => router.push({ pathname: '/cliente/[id]', params: { id: String(c.id) } })}
           trailing={
             c.restrictionBlock ? (
               <StatusPill label="Bloqueado" tone="danger" />

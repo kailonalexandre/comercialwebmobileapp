@@ -1,6 +1,6 @@
 import { useRef, useState, type ReactElement } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '@/shared/components/icon';
 import { Pager } from '@/shared/components/pager';
@@ -9,6 +9,7 @@ import { Text } from '@/shared/components/text';
 import { TextField } from '@/shared/components/text-field';
 import { usePagedList, type PageFetcher } from '@/shared/hooks/use-paged-list';
 import { colors, radius, spacing, touchTarget } from '@/shared/theme/tokens';
+import { userMessage } from '@/shared/utils/error-message';
 
 export type ListControls<T> = { patch: (change: (items: T[]) => T[]) => void; reload: () => void };
 
@@ -33,6 +34,7 @@ export function ListScreen<T>({ title, subtitle, searchPlaceholder, emptyMessage
   const [search, setSearch] = useState('');
   const list = usePagedList(fetchPage, search.trim());
   const scroller = useRef<FlatList<T>>(null);
+  const insets = useSafeAreaInsets();
 
   // Página nova começa no topo.
   const goTo = (page: number) => {
@@ -81,13 +83,13 @@ export function ListScreen<T>({ title, subtitle, searchPlaceholder, emptyMessage
           list.status === 'loading' ? (
             <StateView kind="loading" />
           ) : list.status === 'error' ? (
-            <StateView kind="error" onRetry={list.reload} />
+            <StateView kind="error" message={userMessage(list.error)} onRetry={list.reload} />
           ) : (
             <StateView kind="empty" message={emptyMessage} />
           )
         }
       />
-      <Pager page={list.page} totalPages={list.totalPages} total={list.total} failed={list.failed && list.items.length > 0} bottomGap={tabScreen ? spacing.xl : 0} onPage={goTo} onRetry={list.reload} />
+      <Pager page={list.page} totalPages={list.totalPages} total={list.total} failed={list.failed && list.items.length > 0} bottomGap={tabScreen ? spacing.xl : insets.bottom} onPage={goTo} onRetry={list.reload} />
     </SafeAreaView>
   );
 }
