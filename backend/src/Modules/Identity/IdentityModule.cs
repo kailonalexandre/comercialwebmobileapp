@@ -5,7 +5,9 @@ using ComercialWeb.Mobile.Identity.Authorization;
 using ComercialWeb.Mobile.Identity.Infrastructure;
 using ComercialWeb.Mobile.Identity.Tenancy;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Builder;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
@@ -20,8 +22,12 @@ public sealed record LoginRequest(string? Login, string? Password, string? Devic
 
 public sealed record RefreshRequest(string? RefreshToken);
 
+public sealed record PairRequest(string? Code, string? DeviceName);
+
 public static class IdentityModule
 {
+    private const string PairPolicy = "pair";
+    private const string RefreshPolicy = "refresh";
     private const int MaxInput = 255; // mesmo teto do ComercialWeb: bcrypt de entrada gigante vira DoS de CPU
 
     public static IServiceCollection AddIdentityModule(this IServiceCollection services, IConfiguration config, IHostEnvironment env)
@@ -34,6 +40,30 @@ public static class IdentityModule
         services.AddSingleton<LoginThrottle>();
         services.AddScoped<IIdentityStore, MySqlIdentityStore>();
         services.AddScoped<AuthService>();
+        services.AddScoped<DeviceLink>();
+        services.AddHttpClient<IComercialWebAuth, ComercialWebAuthClient>(http =>
+        {
+            if (Uri.TryCreate(config["ComercialWeb:BaseUrl"], UriKind.Absolute, out var baseUrl))
+            {
+                // O bearer e o refresh do ComercialWeb não podem trafegar em claro.
+                if (baseUrl.Scheme != Uri.UriSchemeHttps && !env.IsDevelopment()) throw new InvalidOperationException("ComercialWeb:BaseUrl deve usar HTTPS.");
+                http.BaseAddress = baseUrl;
+            }
+            http.Timeout = TimeSpan.FromSeconds(15);
+        });
+        // Cifra o par de tokens do ComercialWeb guardado em mobile_sessions. Em produção as chaves precisam
+        // sobreviver a deploys (volume em DataProtection:KeysPath); chave perdida = sessões pareadas caem.
+        var protection = services.AddDataProtection().SetApplicationName("comercialweb-mobile-api");
+        if (config["DataProtection:KeysPath"] is { Length: > 0 } keys) protection.PersistKeysToFileSystem(new DirectoryInfo(keys));
+        else if (!env.IsDevelopment()) throw new InvalidOperationException("DataProtection:KeysPath é obrigatório fora do desenvolvimento.");
+
+        // Rotas sem Bearer: limite por IP para não virar amplificador contra o ComercialWeb nem esgotar os workers.
+        services.AddRateLimiter(o =>
+        {
+            o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            o.AddPolicy(PairPolicy, http => RateLimitPartition.GetFixedWindowLimiter(http.Connection.RemoteIpAddress?.ToString() ?? "?", _ => new() { PermitLimit = 10, Window = TimeSpan.FromMinutes(1) }));
+            o.AddPolicy(RefreshPolicy, http => RateLimitPartition.GetFixedWindowLimiter(http.Connection.RemoteIpAddress?.ToString() ?? "?", _ => new() { PermitLimit = 30, Window = TimeSpan.FromMinutes(1) }));
+        });
         services.AddScoped<IPermissionChecker, MySqlPermissionChecker>();
         services.AddScoped<OperationUnits>();
 
@@ -79,15 +109,23 @@ public static class IdentityModule
     {
         var auth = app.MapGroup("/api/v1/auth");
 
-        auth.MapPost("/login", async (LoginRequest body, HttpContext http, AuthService service, CancellationToken ct) =>
+        // O login do app é por QR (/pair). E-mail/senha fica desligado, salvo Auth:PasswordLogin=true (testes/dev).
+        auth.MapPost("/login", async (LoginRequest body, HttpContext http, AuthService service, IConfiguration config, CancellationToken ct) =>
         {
+            if (!config.GetValue<bool>("Auth:PasswordLogin")) return Results.NotFound();
             if (!Valid(body.Login) || !Valid(body.Password) || body.DeviceName?.Length > 100) return Results.Problem(statusCode: 422);
             var result = await service.LoginAsync(body.Login!, body.Password!, http.Connection.RemoteIpAddress?.ToString(), body.DeviceName, ct);
             return ToHttp(result, http);
         });
 
+        auth.MapPost("/pair", async (PairRequest body, HttpContext http, AuthService service, CancellationToken ct) =>
+        {
+            if (!ValidCode(body.Code) || body.DeviceName?.Length > 100) return Results.Problem(statusCode: 422);
+            return ToHttp(await service.PairAsync(body.Code!, body.DeviceName?.Trim(), ct), http);
+        }).RequireRateLimiting(PairPolicy);
+
         auth.MapPost("/refresh", async (RefreshRequest body, HttpContext http, AuthService service, CancellationToken ct) =>
-            ToHttp(await service.RefreshAsync(body.RefreshToken ?? "", ct), http));
+            ToHttp(await service.RefreshAsync(body.RefreshToken ?? "", ct), http)).RequireRateLimiting(RefreshPolicy);
 
         auth.MapPost("/logout", async (ClaimsPrincipal user, AuthService service, CancellationToken ct) =>
         {
@@ -107,6 +145,9 @@ public static class IdentityModule
         return app;
     }
 
+    // Formato do código do QR (60 alfanuméricos): recusa lixo antes de chamar o ComercialWeb.
+    private static bool ValidCode(string? code) => code is { Length: 60 } && code.All(char.IsAsciiLetterOrDigit);
+
     private static bool Valid(string? value) => !string.IsNullOrWhiteSpace(value) && value.Length <= MaxInput;
 
     private static IResult ToHttp(AuthResult result, HttpContext http)
@@ -117,6 +158,8 @@ public static class IdentityModule
             http.Response.Headers.RetryAfter = ((int)Math.Ceiling(result.RetryAfter!.Value.TotalSeconds)).ToString(CultureInfo.InvariantCulture);
             return Results.Problem(statusCode: 429);
         }
+        if (result.Failure == AuthFailure.InvalidPairingCode) return Results.Problem(statusCode: 422, title: "invalid_pairing_code");
+        if (result.Failure == AuthFailure.Unavailable) return Results.Problem(statusCode: 503);
         // Resposta única: não revela se o usuário existe, está desativado ou sem empresa.
         return Results.Problem(statusCode: 401);
     }

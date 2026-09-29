@@ -2,7 +2,7 @@ using ComercialWeb.Mobile.Identity.Infrastructure;
 
 namespace ComercialWeb.Mobile.Identity.Application;
 
-public enum AuthFailure { InvalidCredentials, LockedOut, InvalidToken }
+public enum AuthFailure { InvalidCredentials, LockedOut, InvalidToken, InvalidPairingCode, Unavailable }
 
 public sealed record AuthResult(IssuedSession? Session, AuthFailure? Failure, TimeSpan? RetryAfter = null)
 {
@@ -10,7 +10,7 @@ public sealed record AuthResult(IssuedSession? Session, AuthFailure? Failure, Ti
     public static AuthResult Fail(AuthFailure failure, TimeSpan? retryAfter = null) => new(null, failure, retryAfter);
 }
 
-public sealed class AuthService(IIdentityStore store, TokenIssuer tokens, LoginThrottle throttle, TimeProvider clock)
+public sealed class AuthService(IIdentityStore store, TokenIssuer tokens, LoginThrottle throttle, TimeProvider clock, IComercialWebAuth cw, DeviceLink link)
 {
     public static readonly TimeSpan RefreshLifetime = TimeSpan.FromDays(30);
     public static readonly TimeSpan SessionLifetime = TimeSpan.FromDays(90);
@@ -46,6 +46,34 @@ public sealed class AuthService(IIdentityStore store, TokenIssuer tokens, LoginT
         return AuthResult.Ok(Issue(session.Id, user.Id, businessId.Value, refresh, now));
     }
 
+    /// <summary>
+    /// Login por QR: o ComercialWeb valida o código (uso único, 2 min), cria o aparelho no painel e diz quem é o usuário
+    /// e a empresa. O app nunca informa usuário nem empresa. Código inválido/expirado/sem acesso: mesma resposta.
+    /// </summary>
+    public async Task<AuthResult> PairAsync(string code, string? deviceName, CancellationToken ct)
+    {
+        var paired = await cw.PairAsync(code, deviceName, ct);
+        if (paired is not { Status: CwStatus.Ok, Value: { } device }) return Failed(paired.Status);
+
+        var who = await cw.BootstrapAsync(device.Tokens.AccessToken, ct);
+        if (who is not { Status: CwStatus.Ok, Value: { } identity })
+        {
+            // O aparelho já foi criado lá: desfaz para não deixar aparelho órfão no painel do ComercialWeb.
+            await cw.LogoutAsync(device.Tokens.AccessToken, ct);
+            return Failed(who.Status);
+        }
+
+        var now = clock.GetUtcNow();
+        var session = new NewSession(Guid.NewGuid(), identity.UserId, identity.BusinessId, deviceName, now, now + SessionLifetime,
+            device.DeviceId, link.Protect(device.Tokens));
+        var (refresh, record) = NewRefresh(session.Id, now);
+        await store.CreateSessionAsync(session, record, ct);
+        return AuthResult.Ok(Issue(session.Id, session.UserId, session.BusinessId, refresh, now));
+
+        static AuthResult Failed(CwStatus status) =>
+            AuthResult.Fail(status is CwStatus.Unavailable or CwStatus.Ok ? AuthFailure.Unavailable : AuthFailure.InvalidPairingCode);
+    }
+
     /// <summary>Rotação obrigatória: cada refresh token vale uma vez. Reuso revoga a sessão inteira.</summary>
     public async Task<AuthResult> RefreshAsync(string refreshToken, CancellationToken ct)
     {
@@ -75,11 +103,21 @@ public sealed class AuthService(IIdentityStore store, TokenIssuer tokens, LoginT
             await store.RevokeSessionAsync(state.SessionId, "refresh_reuse", now, ct);
             return AuthResult.Fail(AuthFailure.InvalidToken);
         }
+
+        // Só quem ganhou a rotação fala com o ComercialWeb: dois refresh simultâneos não disputam o mesmo par de tokens dele.
+        if (!await link.IsStillPairedAsync(state.SessionId, state.UserId, state.BusinessId, ct))
+        {
+            await store.RevokeSessionAsync(state.SessionId, "device_revoked", now, ct);
+            return AuthResult.Fail(AuthFailure.InvalidToken);
+        }
         return AuthResult.Ok(Issue(state.SessionId, state.UserId, state.BusinessId, refresh, now));
     }
 
-    public Task LogoutAsync(Guid sessionId, CancellationToken ct) =>
-        store.RevokeSessionAsync(sessionId, "logout", clock.GetUtcNow(), ct);
+    public async Task LogoutAsync(Guid sessionId, CancellationToken ct)
+    {
+        await link.LogoutAsync(sessionId, ct);
+        await store.RevokeSessionAsync(sessionId, "logout", clock.GetUtcNow(), ct);
+    }
 
     // Mesmo critério do PHP (FILTER_VALIDATE_EMAIL) de forma simplificada: username nunca contém '@'.
     internal static bool IsEmail(string login) => login.Contains('@', StringComparison.Ordinal);

@@ -149,7 +149,7 @@ App ──POST /api/v1/pre-sales (Idempotency-Key)──► API .NET ──POST 
 
 ## Autenticação
 
-- `POST /api/v1/auth/login` com e-mail/senha; senha verificada contra o hash bcrypt do Laravel (`users.password`).
+- **Login por QR (2026-09-29):** o app lê `comercialweb://pair?code=…` e chama `POST /api/v1/auth/pair {code, deviceName}` na API .NET. Detalhes em "Pareamento por QR" abaixo. `POST /auth/login` (e-mail/senha) segue no código, mas **desligado** (404) salvo `Auth__PasswordLogin=true`; só testes e desenvolvimento usam.
 - **Access token** JWT curto (10–15 min), assinado com chave assimétrica guardada só no servidor.
 - **Refresh token** opaco, aleatório, **rotacionado a cada uso**, armazenado em hash em `mobile_sessions` (user, device, business ativo, expiração, revogado_em). Reuso de refresh token antigo revoga toda a sessão.
 - `POST /api/v1/auth/logout` revoga a sessão server-side; o app apaga o SecureStore mesmo sem rede.
@@ -179,3 +179,24 @@ No app: tokens em `expo-secure-store` com `WHEN_UNLOCKED_THIS_DEVICE_ONLY`; `and
 - Chave JWT de produção (PEM EC P-256) via secret do ambiente em `Jwt:SigningKeyPath`; em desenvolvimento é efêmera.
 - Identificador do app: `br.com.infinitsolucoesweb.comercial` (Android e iOS). Não muda após publicar na loja.
 - Backend .NET: aguardar .NET 11 GA ou aceitar RC (go-live) conscientemente.
+
+## Pareamento por QR (app → .NET → ComercialWeb)
+
+Decisão (2026-09-29): a API do app continua sendo o .NET; o app nunca fala com o ComercialWeb. O ComercialWeb expõe `/api/mobile/v1` (contrato em [MOBILE_API.md](MOBILE_API.md)) e o .NET é o cliente dele.
+
+```text
+App ──POST /api/v1/auth/pair {code}──► .NET ──POST /api/mobile/v1/pair──► ComercialWeb (valida código, cria o aparelho no painel)
+                                       ├─ GET /bootstrap (Bearer) → user.id, business.id
+                                       └─ cria mobile_sessions + JWT/refresh do .NET para o app
+```
+
+- O ComercialWeb decide quem é o usuário e a empresa; o app só manda o `code` (60 alfanuméricos, uso único, 2 min). Código inválido, expirado, já usado ou sem `mobile.access`: 422 igual. ComercialWeb fora do ar: 503.
+- O par de tokens do ComercialWeb fica só no servidor, em `mobile_sessions.cw_tokens`, cifrado com Data Protection. Nunca chega ao app.
+- **Servidor do ComercialWeb vem de `ComercialWeb__BaseUrl`, nunca do QR.** Um QR forjado não pode apontar a API para outro host (SSRF). O app ignora o `server` do QR.
+- **Revogação:** a cada refresh do app (10 min) o .NET faz `GET /bootstrap` com o token do aparelho. Aparelho revogado no painel web, ou usuário/empresa diferentes: sessão revogada (`device_revoked`). Access do ComercialWeb expirado: renova com o refresh dele e guarda o novo par. ComercialWeb indisponível: **não** derruba o app (fail-open; o JWT segue revalidado contra usuário/empresa a cada chamada).
+- Logout do app chama `/auth/logout` do ComercialWeb (melhor esforço) e revoga a sessão local.
+- `/auth/pair` (10/min) e `/auth/refresh` (30/min) têm rate limit por IP. No refresh, só quem ganha a rotação do token consulta o ComercialWeb (evita corrida no refresh dele). Qualquer 4xx do ComercialWeb, exceto 429, conta como aparelho recusado; só 5xx, 429 e falha de rede são fail-open. `pair` que falha depois de criar o aparelho lá o desfaz com logout.
+- Configuração em produção: `ComercialWeb__BaseUrl` (HTTPS obrigatório fora de dev), `DataProtection__KeysPath` (obrigatório fora de dev; volume persistente, fora de backup do banco, permissão 700; chave perdida = sessões pareadas caem e exigem novo QR). Migration `0002` só adiciona colunas anuláveis (`cw_device_id`, `cw_tokens`).
+- Limitação: o rate limit do `/pair` no ComercialWeb (10/min) é por IP, e todos os pareamentos chegam do IP do .NET. Se virar gargalo, liberar o IP do .NET no ComercialWeb ou repassar o IP do app. Se alargar `KnownNetworks` de ForwardedHeaders, o rate limit por IP passa a ser falsificável via X-Forwarded-For.
+- Pendente conhecido: `LoginThrottle` nunca remove chaves antigas (só importa com login por senha ligado); sessões de login por senha não têm vínculo com o ComercialWeb.
+- Leituras (vendas, produtos, clientes, notificações) seguem por SQL direto por enquanto; migrar módulo a módulo para `/api/mobile/v1` remove a duplicação de regras.
