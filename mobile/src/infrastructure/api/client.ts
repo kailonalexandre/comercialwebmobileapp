@@ -17,6 +17,8 @@ export class ApiError extends Error {
     readonly kind: ApiErrorKind,
     readonly status?: number,
     readonly correlationId?: string,
+    // Mensagem de regra de negócio do servidor (422), pronta para o usuário. Nunca texto técnico.
+    readonly serverMessage?: string,
   ) {
     super('Não foi possível concluir a operação.');
     this.name = 'ApiError';
@@ -77,6 +79,15 @@ export function shouldRetry(method: HttpMethod, error: ApiError, hasIdempotencyK
   return false;
 }
 
+async function readBusinessMessage(response: Response): Promise<string | undefined> {
+  try {
+    const body = (await response.json()) as { message?: unknown };
+    return typeof body.message === 'string' && body.message.length <= 300 ? body.message : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function createApiClient({
   baseUrl,
   getAccessToken,
@@ -114,7 +125,10 @@ export function createApiClient({
       clearTimeout(timer);
     }
 
-    if (!response.ok) throw new ApiError(kindFromStatus(response.status), response.status, correlationId);
+    if (!response.ok) {
+      const serverMessage = response.status === 422 ? await readBusinessMessage(response) : undefined;
+      throw new ApiError(kindFromStatus(response.status), response.status, correlationId, serverMessage);
+    }
     if (response.status === 204) return undefined as T;
     return (await response.json()) as T;
   }

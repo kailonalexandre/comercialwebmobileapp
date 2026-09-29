@@ -24,7 +24,7 @@ type QuickAction = { label: string; hint: string; icon: IconName; permission?: s
 
 // Sem `permission` = ainda não implementado (aviso "Em breve"), sempre visível como no mockup.
 const quickActions: QuickAction[] = [
-  { label: 'Nova Venda', hint: 'Registrar uma venda', icon: 'cart-outline', onPress: soon('Nova Venda') },
+  { label: 'Nova Venda', hint: 'Lançar pré-venda', icon: 'cart-outline', permission: 'sales.create', onPress: () => router.push('/nova-venda') },
   { label: 'PDV', hint: 'Abrir o caixa', icon: 'calculator-outline', onPress: soon('PDV') },
   { label: 'Produtos', hint: 'Consultar produtos', icon: 'cube-outline', permission: 'products.view', onPress: () => router.push('/produtos') },
   { label: 'Clientes', hint: 'Consultar clientes', icon: 'people-outline', permission: 'people.view', onPress: () => router.push('/clientes') },
