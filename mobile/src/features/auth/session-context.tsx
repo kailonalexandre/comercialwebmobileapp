@@ -12,7 +12,7 @@ type SessionValue = {
   // null enquanto carrega ou se a consulta falhar; telas mostram marcador neutro.
   profile: Profile | null;
   // Entra com o código lido do QR; falha (inválido/expirado/rede) chega ao chamador.
-  connect: (code: string) => Promise<void>;
+  connect: (code: string, deviceName: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -53,8 +53,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const connect = useCallback(async (code: string) => {
-    await saveSession(await pair(code));
+  const connect = useCallback(async (code: string, deviceName: string) => {
+    await saveSession(await pair(code, deviceName));
     setStatus('signedIn');
   }, []);
 

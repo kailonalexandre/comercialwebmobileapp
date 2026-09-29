@@ -1,9 +1,11 @@
+import Constants from 'expo-constants';
 import { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useSession } from '@/features/auth/session-context';
 import { AppHeader } from '@/features/shell/app-header';
+import { appEnv } from '@/infrastructure/config';
 import { Icon, type IconName } from '@/shared/components/icon';
 import { IconTile } from '@/shared/components/icon-tile';
 import { StateView } from '@/shared/components/state-view';
@@ -83,9 +85,12 @@ export function MenuScreen() {
         >
           <Icon name="log-out-outline" size={22} color={colors.danger} />
           <Text variant="label" color="danger">
-            Sair
+            Desconectar
           </Text>
         </Pressable>
+        <Text variant="caption" color="textMuted" style={styles.about}>
+          {`Infinit Comercial ${Constants.expoConfig?.version ?? ''} · ambiente ${appEnv.name.toUpperCase()}`}
+        </Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -117,4 +122,5 @@ const styles = StyleSheet.create({
     minHeight: touchTarget,
     marginTop: spacing.sm,
   },
+  about: { textAlign: 'center' },
 });

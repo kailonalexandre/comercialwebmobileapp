@@ -36,7 +36,10 @@
         }
       ]
     ],
-    "scheme": "infinitcomercial",
+    "scheme": [
+      "infinitcomercial",
+      "comercialweb"
+    ],
     "experiments": {
       "typedRoutes": true
     }

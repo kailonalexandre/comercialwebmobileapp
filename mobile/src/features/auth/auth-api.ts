@@ -1,5 +1,4 @@
-import Constants from 'expo-constants';
-import { Platform } from 'react-native';
+import * as Device from 'expo-device';
 
 import { api } from '@/infrastructure/api';
 import type { Session } from '@/infrastructure/security/session-store';
@@ -7,8 +6,8 @@ import type { Session } from '@/infrastructure/security/session-store';
 // Empresa ativa vem do servidor (sessão), nunca de um valor enviado pelo app.
 export type Profile = { userName: string; businessId: number; businessName: string; permissions: string[] };
 
-// Identifica a sessão na lista de dispositivos sem expor o nome pessoal do aparelho.
-const deviceName = `${Platform.OS === 'ios' ? 'iOS' : 'Android'} · app ${Constants.expoConfig?.version ?? ''}`.trim();
+// Sugestão inicial do nome do aparelho na lista de dispositivos (modelo, não o nome pessoal); o usuário pode editar.
+export const defaultDeviceName = Device.modelName ?? 'Aplicativo';
 
 const devProfile: Profile = {
   userName: 'Administrador',
@@ -19,7 +18,7 @@ const devProfile: Profile = {
 
 // Troca o código do QR (uso único, 2 min) pela sessão da API. O código não é guardado.
 // A API valida o código no ComercialWeb; empresa e usuário vêm de lá, nunca do app.
-export async function pair(code: string): Promise<Session> {
+export async function pair(code: string, deviceName: string): Promise<Session> {
   if (api) {
     return api.request<Session>('/v1/auth/pair', { method: 'POST', body: { code, deviceName }, anonymous: true });
   }

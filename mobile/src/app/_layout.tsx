@@ -36,6 +36,9 @@ function RootNavigator() {
         <Stack.Protected guard={signedOut && !seen}>
           <Stack.Screen name="onboarding" />
         </Stack.Protected>
+        <Stack.Protected guard={signedOut}>
+          <Stack.Screen name="pair" />
+        </Stack.Protected>
         <Stack.Protected guard={signedOut && seen}>
           <Stack.Screen name="login" />
         </Stack.Protected>
