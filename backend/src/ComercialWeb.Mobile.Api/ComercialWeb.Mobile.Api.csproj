@@ -4,6 +4,7 @@
     <ProjectReference Include="..\Modules\Identity\ComercialWeb.Mobile.Identity.csproj" />
     <ProjectReference Include="..\Modules\Catalog\ComercialWeb.Mobile.Catalog.csproj" />
     <ProjectReference Include="..\Modules\Customers\ComercialWeb.Mobile.Customers.csproj" />
+    <ProjectReference Include="..\Modules\Sales\ComercialWeb.Mobile.Sales.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -3,6 +3,7 @@ using System.Security.Claims;
 using ComercialWeb.Mobile.Identity.Application;
 using ComercialWeb.Mobile.Identity.Authorization;
 using ComercialWeb.Mobile.Identity.Infrastructure;
+using ComercialWeb.Mobile.Identity.Tenancy;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -34,6 +35,7 @@ public static class IdentityModule
         services.AddScoped<IIdentityStore, MySqlIdentityStore>();
         services.AddScoped<AuthService>();
         services.AddScoped<IPermissionChecker, MySqlPermissionChecker>();
+        services.AddScoped<OperationUnits>();
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(o =>
         {
@@ -83,11 +85,13 @@ public static class IdentityModule
             return Results.NoContent();
         }).RequireAuthorization();
 
-        app.MapGet("/api/v1/me", async (ClaimsPrincipal user, IIdentityStore store, CancellationToken ct) =>
+        app.MapGet("/api/v1/me", async (ClaimsPrincipal user, IIdentityStore store, OperationUnits units, CancellationToken ct) =>
         {
             var ids = SessionIds.From(user)!;
             var profile = await store.GetProfileAsync(ids.UserId, ids.BusinessId, ct);
-            return profile is null ? Results.NotFound() : Results.Ok(profile);
+            if (profile is null) return Results.NotFound();
+            var unit = await units.ForSessionAsync(ids.SessionId, ids.UserId, ids.BusinessId, ct);
+            return Results.Ok(new { profile.UserName, profile.BusinessId, profile.BusinessName, unit });
         }).RequireAuthorization();
 
         return app;
