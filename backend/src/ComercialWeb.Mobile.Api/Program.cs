@@ -2,6 +2,7 @@ using ComercialWeb.Mobile.Api;
 using ComercialWeb.Mobile.Catalog;
 using ComercialWeb.Mobile.Customers;
 using ComercialWeb.Mobile.Dashboard;
+using ComercialWeb.Mobile.Notifications;
 using ComercialWeb.Mobile.Sales;
 using ComercialWeb.Mobile.Identity;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -29,6 +30,7 @@ builder.Services.AddCatalogModule();
 builder.Services.AddCustomersModule();
 builder.Services.AddSalesModule(builder.Configuration);
 builder.Services.AddDashboardModule();
+builder.Services.AddNotificationsModule();
 
 var app = builder.Build();
 
@@ -62,6 +64,7 @@ app.MapCatalogEndpoints();
 app.MapCustomersEndpoints();
 app.MapSalesEndpoints();
 app.MapDashboardEndpoints();
+app.MapNotificationsEndpoints();
 
 await app.RunAsync();
 

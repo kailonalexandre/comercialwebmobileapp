@@ -5,6 +5,7 @@
     <ProjectReference Include="..\Modules\Catalog\ComercialWeb.Mobile.Catalog.csproj" />
     <ProjectReference Include="..\Modules\Customers\ComercialWeb.Mobile.Customers.csproj" />
     <ProjectReference Include="..\Modules\Dashboard\ComercialWeb.Mobile.Dashboard.csproj" />
+    <ProjectReference Include="..\Modules\Notifications\ComercialWeb.Mobile.Notifications.csproj" />
     <ProjectReference Include="..\Modules\Sales\ComercialWeb.Mobile.Sales.csproj" />
   </ItemGroup>
 

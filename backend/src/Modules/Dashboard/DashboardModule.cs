@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using ComercialWeb.Mobile.Common;
 using ComercialWeb.Mobile.Identity;
 using ComercialWeb.Mobile.Identity.Authorization;
 using Microsoft.AspNetCore.Builder;
@@ -35,8 +36,7 @@ public static class DashboardModule
             var inventory = await Can("inventory.view");
 
             // "Hoje" da empresa (APP_TIMEZONE da web), não do servidor da API.
-            var zone = TimeZoneInfo.FindSystemTimeZoneById(config["ComercialWeb:TimeZone"] ?? "America/Sao_Paulo");
-            var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), zone).DateTime);
+            var today = DateOnly.FromDateTime(LocalTime.Now(config, clock));
 
             return Results.Ok(new DashboardResponse(
                 sales ? await queries.SalesOfDayAsync(ids.BusinessId, today, ct) : null,

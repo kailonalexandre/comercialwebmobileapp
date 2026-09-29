@@ -51,7 +51,17 @@ Risco principal: regras de tenancy, permissão, preço, estoque e venda já vive
 
 - `backend/`: ASP.NET Core 11 (minimal APIs), Dapper + MySqlConnector. Projetos: `Api` (host), `Modules/Identity`, testes.
 - **Tabelas próprias** `mobile_sessions` e `mobile_refresh_tokens`, no mesmo banco do ComercialWeb, criadas por `db/migrations/*.sql` via `dotnet ComercialWeb.Mobile.Api.dll migrate` (pipeline, nunca na subida). FKs para `users`/`businesses` com `ON DELETE CASCADE` para não bloquear a web.
-- Tabelas do Laravel: **somente leitura**. Recomendado usuário MySQL próprio com `SELECT` nelas e escrita só em `mobile_*`.
+- Tabelas do Laravel: **somente leitura**, com uma única exceção (`notifications`, abaixo). Usuário MySQL próprio da API, com privilégios mínimos:
+
+```sql
+GRANT SELECT ON <banco>.* TO 'mobile_api'@'%';
+GRANT INSERT, UPDATE, DELETE ON <banco>.mobile_sessions TO 'mobile_api'@'%';
+GRANT INSERT, UPDATE, DELETE ON <banco>.mobile_refresh_tokens TO 'mobile_api'@'%';
+GRANT INSERT ON <banco>.mobile_schema_migrations TO 'mobile_api'@'%';       -- só para o comando migrate
+GRANT UPDATE (read_at, archived_at, updated_at) ON <banco>.notifications TO 'mobile_api'@'%';
+```
+
+  (`migrate` precisa de DDL em `mobile_*`; rode-o com uma conta de deploy separada, não com a da API em execução.)
 - Login replica `LoginRequest` + `AccountStatusService` + `LoginThrottle` do ComercialWeb: e-mail ou username; ignora `deactivated_at`/`deleted_at`; exige vínculo ativo em empresa ativa; 5 falhas/min e 20/h por login+IP; mesma resposta para qualquer motivo.
 - **Diferença deliberada:** contas de plataforma (superadmin/suporte) sem empresa não entram no app.
 - Empresa da sessão: preferência da web (`user_preferences.current_business_id`) se o vínculo estiver ativo; senão a primeira ativa. Fica na sessão mobile; a preferência da web não é alterada.
@@ -101,6 +111,15 @@ Paginação, `PagedResult` e escape de LIKE ficam em `src/Common` (compartilhado
 - Contas a receber vêm de `financial_lines` (tabela do model `FinancialTitle`): abertas, não agrupadas, `amount - paid`.
 - Estoque baixo: saldo negativo, ou mínimo > 0 (do produto; senão soma das variações) com saldo ≤ mínimo; só produtos ativos.
 - Emissão e validação do JWT usam o mesmo `TimeProvider` injetável (expiração 10 min, tolerância 30 s, testada ponta a ponta).
+
+### Módulo Notifications
+
+- `GET /api/v1/notifications?status=active|archived&read=read|unread&domain=&severity=&search=&page=&pageSize=`, `GET /api/v1/notifications/unread-count`, `POST /api/v1/notifications/{id}/read`, `POST /api/v1/notifications/{id}/archive`, `POST /api/v1/notifications/read-all`. Só exige login (como na web); o recorte é sempre o usuário da sessão.
+- Listagem e contador: do usuário, da empresa da sessão **ou sem empresa**, ativas por padrão, mais novas primeiro. Contador = ativas e não lidas, com as críticas à parte.
+- Estado lido/arquivado vive na tabela do ComercialWeb (`notifications`) para que ler no celular também some do sino da web. É a **única escrita** do app em tabela do ComercialWeb: só `read_at`, `archived_at`, `updated_at`, só de linhas do próprio usuário (outro usuário ou id inexistente: 404), com a semântica de `NotificationRepository` (arquivar também marca como lida; marcar lida é idempotente). A web não tem observer nem efeito colateral nessas colunas.
+- Datas gravadas no horário local da empresa (`LocalTime`, `ComercialWeb:TimeZone`).
+- Não expõe `url` (rota da web) nem `context`; envia `entityType`/`entityId` para o app navegar por conta própria.
+- **Push** (FCM/APNs) fica para fase posterior: exige tabela de dispositivos, provedor e consentimento.
 
 ### Pré-venda (app → ComercialWeb)
 

@@ -206,3 +206,23 @@ CREATE TABLE conditionals (
     status VARCHAR(255) NOT NULL,
     total_cents BIGINT UNSIGNED NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE notifications (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    uuid CHAR(36) NOT NULL,
+    user_id BIGINT UNSIGNED NOT NULL,
+    type_key VARCHAR(120) NOT NULL,
+    domain VARCHAR(40) NOT NULL,
+    severity VARCHAR(20) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    body TEXT NOT NULL,
+    url VARCHAR(255) NULL,
+    business_id BIGINT UNSIGNED NULL,
+    entity_type VARCHAR(120) NULL,
+    entity_id BIGINT UNSIGNED NULL,
+    context JSON NULL,
+    read_at TIMESTAMP NULL,
+    archived_at TIMESTAMP NULL,
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
