@@ -3,7 +3,8 @@ import type { ReactNode } from 'react';
 import { StatusBar } from 'expo-status-bar';
 
 import { SessionProvider, useSession } from '@/features/auth/session-context';
-import { DraftProvider } from '@/features/presale/draft-context';
+import { PdvDraftProvider } from '@/features/pdv/pdv-draft';
+import { PreSaleDraftProvider } from '@/features/presale/presale-draft';
 import { OnboardingProvider, useOnboarding } from '@/features/onboarding/onboarding-context';
 import { StateView } from '@/shared/components/state-view';
 
@@ -45,7 +46,11 @@ function RootNavigator() {
 // O rascunho de pré-venda (e sua chave de idempotência) morre ao entrar/sair: nunca passa de um usuário a outro.
 function SessionScopedDraft({ children }: { children: ReactNode }) {
   const { status } = useSession();
-  return <DraftProvider key={status}>{children}</DraftProvider>;
+  return (
+    <PreSaleDraftProvider key={status}>
+      <PdvDraftProvider key={status}>{children}</PdvDraftProvider>
+    </PreSaleDraftProvider>
+  );
 }
 
 export default function RootLayout() {

@@ -12,16 +12,22 @@ export type ApiErrorKind =
   | 'unknown';
 
 // Erro tipado. `message` é sempre genérica; detalhes técnicos ficam no servidor, rastreáveis pelo correlationId.
+export type Refusal = { code?: string; message?: string; totalCents?: number; remainingCents?: number };
+
 export class ApiError extends Error {
   constructor(
     readonly kind: ApiErrorKind,
     readonly status?: number,
     readonly correlationId?: string,
-    // Mensagem de regra de negócio do servidor (422), pronta para o usuário. Nunca texto técnico.
-    readonly serverMessage?: string,
+    // Recusa de regra de negócio (422): código estável, mensagem pronta para o usuário e, quando houver, totais.
+    readonly refusal?: Refusal,
   ) {
     super('Não foi possível concluir a operação.');
     this.name = 'ApiError';
+  }
+
+  get serverMessage(): string | undefined {
+    return this.refusal?.message;
   }
 }
 
@@ -79,10 +85,12 @@ export function shouldRetry(method: HttpMethod, error: ApiError, hasIdempotencyK
   return false;
 }
 
-async function readBusinessMessage(response: Response): Promise<string | undefined> {
+async function readRefusal(response: Response): Promise<Refusal | undefined> {
   try {
-    const body = (await response.json()) as { message?: unknown };
-    return typeof body.message === 'string' && body.message.length <= 300 ? body.message : undefined;
+    const b = (await response.json()) as Record<string, unknown>;
+    const text = (v: unknown) => (typeof v === 'string' && v.length <= 300 ? v : undefined);
+    const cents = (v: unknown) => (typeof v === 'number' && Number.isSafeInteger(v) ? v : undefined);
+    return { code: text(b.code), message: text(b.message), totalCents: cents(b.totalCents), remainingCents: cents(b.remainingCents) };
   } catch {
     return undefined;
   }
@@ -126,8 +134,8 @@ export function createApiClient({
     }
 
     if (!response.ok) {
-      const serverMessage = response.status === 422 ? await readBusinessMessage(response) : undefined;
-      throw new ApiError(kindFromStatus(response.status), response.status, correlationId, serverMessage);
+      const refusal = response.status === 422 ? await readRefusal(response) : undefined;
+      throw new ApiError(kindFromStatus(response.status), response.status, correlationId, refusal);
     }
     if (response.status === 204) return undefined as T;
     return (await response.json()) as T;

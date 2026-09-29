@@ -1,8 +1,9 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 
 import { fetchCustomers } from '@/features/customers/customers-api';
 import { fetchProducts } from '@/features/catalog/products-api';
-import { useDraft } from '@/features/presale/draft-context';
+import { usePdvDraft } from '@/features/pdv/pdv-draft';
+import { usePreSaleDraft } from '@/features/presale/presale-draft';
 import { addItem } from '@/features/presale/draft-model';
 import { ListScreen } from '@/features/shell/list-screen';
 import { Button } from '@/shared/components/button';
@@ -11,8 +12,16 @@ import { StatusPill } from '@/shared/components/status-pill';
 import { Text } from '@/shared/components/text';
 import { formatCents } from '@/shared/utils/format';
 
+// Os seletores servem à pré-venda e ao PDV: o parâmetro `mode` diz qual rascunho recebe a escolha.
+function useTargetDraft() {
+  const { mode } = useLocalSearchParams<{ mode?: string }>();
+  const presale = usePreSaleDraft();
+  const pdv = usePdvDraft();
+  return mode === 'pdv' ? pdv : presale;
+}
+
 export function PickProductScreen() {
-  const { setDraft } = useDraft();
+  const { setDraft } = useTargetDraft();
   return (
     <ListScreen
       title="Adicionar produto"
@@ -37,7 +46,7 @@ export function PickProductScreen() {
 }
 
 export function PickCustomerScreen() {
-  const { setDraft } = useDraft();
+  const { setDraft } = useTargetDraft();
   const choose = (customer: { id: number; name: string } | null) => {
     setDraft((d) => ({ ...d, customer }));
     router.back();
