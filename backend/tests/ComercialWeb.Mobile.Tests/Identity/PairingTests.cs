@@ -1,0 +1,253 @@
+using System.Net;
+using System.Security.Cryptography;
+using ComercialWeb.Mobile.Identity.Application;
+using ComercialWeb.Mobile.Identity.Infrastructure;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.IdentityModel.JsonWebTokens;
+using Microsoft.IdentityModel.Tokens;
+
+namespace ComercialWeb.Mobile.Tests.Identity;
+
+/// <summary>ComercialWeb falso: programa o que cada rota de /api/mobile/v1 responde e registra as chamadas.</summary>
+public sealed class FakeComercialWebAuth : IComercialWebAuth
+{
+    public CwResult<CwPairing> Pair { get; set; } = new(CwStatus.Ok, new CwPairing(new CwTokens("cw-access-1", "cw-refresh-1"), "3f2b8c1e-0000-4000-8000-000000000001"));
+    public Func<string, CwResult<CwBootstrap>> Bootstrap { get; set; } = _ => new(CwStatus.Ok, new CwBootstrap(1, 10));
+    public CwResult<CwTokens> Refresh { get; set; } = new(CwStatus.Ok, new CwTokens("cw-access-2", "cw-refresh-2"));
+    public List<string> Calls { get; } = [];
+
+    public Task<CwResult<CwPairing>> PairAsync(string code, string? deviceName, CancellationToken ct)
+    {
+        Calls.Add($"pair:{code}");
+        return Task.FromResult(Pair);
+    }
+
+    public Task<CwResult<CwBootstrap>> BootstrapAsync(string accessToken, CancellationToken ct)
+    {
+        Calls.Add($"bootstrap:{accessToken}");
+        return Task.FromResult(Bootstrap(accessToken));
+    }
+
+    public Task<CwResult<CwTokens>> RefreshAsync(string refreshToken, CancellationToken ct)
+    {
+        Calls.Add($"refresh:{refreshToken}");
+        return Task.FromResult(Refresh);
+    }
+
+    public Task<CwStatus> LogoutAsync(string accessToken, CancellationToken ct)
+    {
+        Calls.Add($"logout:{accessToken}");
+        return Task.FromResult(CwStatus.Ok);
+    }
+}
+
+public sealed class PairingTests
+{
+    private const string Code = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567";
+    private static CancellationToken Ct => TestContext.Current.CancellationToken;
+
+    private readonly FakeIdentityStore _store = new();
+    private readonly ManualClock _clock = new(new DateTimeOffset(2026, 9, 29, 12, 0, 0, TimeSpan.Zero));
+    private readonly FakeComercialWebAuth _cw = new();
+    private readonly DeviceLink _link;
+    private readonly AuthService _auth;
+
+    public PairingTests()
+    {
+        var jwt = new JwtSettings("i", "a", new ECDsaSecurityKey(ECDsa.Create(ECCurve.NamedCurves.nistP256)));
+        _store.Users.Add(new(1, "ana@a.com", "ana", "x"));
+        _store.ActiveMemberships.Add((1, 10));
+        _link = new DeviceLink(_store, _cw, DataProtectionProvider.Create("teste"));
+        _auth = new AuthService(_store, new TokenIssuer(jwt), new LoginThrottle(_clock), _clock, _cw, _link);
+    }
+
+    [Fact]
+    public async Task Pareamento_cria_sessao_do_usuario_e_empresa_que_o_comercialweb_informou()
+    {
+        var result = await _auth.PairAsync(Code, "Galaxy", Ct);
+
+        var jwt = new JsonWebToken(result.Session!.AccessToken);
+        Assert.Equal("1", jwt.Subject);
+        Assert.Equal("10", jwt.GetClaim(TokenIssuer.BusinessClaim).Value);
+        var session = Assert.Single(_store.Sessions.Values).Session;
+        Assert.Equal("3f2b8c1e-0000-4000-8000-000000000001", session.CwDeviceId);
+        Assert.Equal("Galaxy", session.DeviceName);
+    }
+
+    [Fact]
+    public async Task Tokens_do_comercialweb_ficam_cifrados_e_nunca_vao_ao_app()
+    {
+        var result = await _auth.PairAsync(Code, null, Ct);
+
+        var stored = Assert.Single(_store.CwTokens.Values);
+        Assert.DoesNotContain("cw-access-1", stored, StringComparison.Ordinal);
+        Assert.DoesNotContain("cw-refresh-1", stored, StringComparison.Ordinal);
+        Assert.DoesNotContain("cw-", result.Session!.AccessToken + result.Session.RefreshToken, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(CwStatus.Rejected, AuthFailure.InvalidPairingCode)]
+    [InlineData(CwStatus.TokenExpired, AuthFailure.InvalidPairingCode)]
+    [InlineData(CwStatus.Unavailable, AuthFailure.Unavailable)]
+    public async Task Falha_no_pair_nao_cria_sessao(CwStatus status, AuthFailure expected)
+    {
+        _cw.Pair = new(status);
+
+        var result = await _auth.PairAsync(Code, null, Ct);
+
+        Assert.Equal(expected, result.Failure);
+        Assert.Empty(_store.Sessions);
+    }
+
+    [Fact]
+    public async Task Bootstrap_recusado_depois_do_pair_nao_cria_sessao()
+    {
+        _cw.Bootstrap = _ => new(CwStatus.Rejected);
+
+        Assert.Equal(AuthFailure.InvalidPairingCode, (await _auth.PairAsync(Code, null, Ct)).Failure);
+        Assert.Empty(_store.Sessions);
+    }
+
+    [Fact]
+    public async Task Bootstrap_que_falha_desfaz_o_aparelho_criado_no_comercialweb()
+    {
+        _cw.Bootstrap = _ => new(CwStatus.Unavailable);
+        _cw.Calls.Clear();
+
+        Assert.Equal(AuthFailure.Unavailable, (await _auth.PairAsync(Code, null, Ct)).Failure);
+        Assert.Contains("logout:cw-access-1", _cw.Calls);
+    }
+
+    [Fact]
+    public async Task Resposta_ok_sem_corpo_nao_e_sucesso()
+    {
+        _cw.Pair = new(CwStatus.Ok);
+
+        Assert.Equal(AuthFailure.Unavailable, (await _auth.PairAsync(Code, null, Ct)).Failure);
+        Assert.Empty(_store.Sessions);
+    }
+
+    [Fact]
+    public async Task Refresh_confere_o_aparelho_no_comercialweb()
+    {
+        var refresh = (await _auth.PairAsync(Code, null, Ct)).Session!.RefreshToken;
+        _cw.Calls.Clear();
+
+        Assert.NotNull((await _auth.RefreshAsync(refresh, Ct)).Session);
+        Assert.Equal(["bootstrap:cw-access-1"], _cw.Calls);
+    }
+
+    [Fact]
+    public async Task Aparelho_revogado_no_painel_derruba_o_refresh_e_a_sessao()
+    {
+        var refresh = (await _auth.PairAsync(Code, null, Ct)).Session!.RefreshToken;
+        _cw.Bootstrap = _ => new(CwStatus.Rejected);
+
+        Assert.Equal(AuthFailure.InvalidToken, (await _auth.RefreshAsync(refresh, Ct)).Failure);
+        Assert.Equal("device_revoked", Assert.Single(_store.Sessions.Values).Reason);
+    }
+
+    [Fact]
+    public async Task Access_do_comercialweb_expirado_renova_com_o_refresh_dele_e_guarda_o_novo_par()
+    {
+        var refresh = (await _auth.PairAsync(Code, null, Ct)).Session!.RefreshToken;
+        _cw.Bootstrap = access => access == "cw-access-1" ? new(CwStatus.TokenExpired) : new(CwStatus.Ok, new CwBootstrap(1, 10));
+        _cw.Calls.Clear();
+
+        Assert.NotNull((await _auth.RefreshAsync(refresh, Ct)).Session);
+        Assert.Equal(["bootstrap:cw-access-1", "refresh:cw-refresh-1", "bootstrap:cw-access-2"], _cw.Calls);
+
+        // Na próxima checagem já usa o par novo.
+        _cw.Calls.Clear();
+        _cw.Bootstrap = _ => new(CwStatus.Ok, new CwBootstrap(1, 10));
+        Assert.True(await _link.IsStillPairedAsync(_store.Sessions.Keys.Single(), 1, 10, Ct));
+        Assert.Equal(["bootstrap:cw-access-2"], _cw.Calls);
+    }
+
+    [Fact]
+    public async Task Refresh_do_comercialweb_recusado_revoga()
+    {
+        var refresh = (await _auth.PairAsync(Code, null, Ct)).Session!.RefreshToken;
+        _cw.Bootstrap = _ => new(CwStatus.TokenExpired);
+        _cw.Refresh = new(CwStatus.Rejected);
+
+        Assert.Equal(AuthFailure.InvalidToken, (await _auth.RefreshAsync(refresh, Ct)).Failure);
+    }
+
+    [Fact]
+    public async Task Comercialweb_fora_do_ar_nao_derruba_o_app()
+    {
+        var refresh = (await _auth.PairAsync(Code, null, Ct)).Session!.RefreshToken;
+        _cw.Bootstrap = _ => new(CwStatus.Unavailable);
+
+        Assert.NotNull((await _auth.RefreshAsync(refresh, Ct)).Session);
+    }
+
+    [Fact]
+    public async Task Bootstrap_de_outro_usuario_ou_empresa_revoga()
+    {
+        var refresh = (await _auth.PairAsync(Code, null, Ct)).Session!.RefreshToken;
+        _cw.Bootstrap = _ => new(CwStatus.Ok, new CwBootstrap(1, 99));
+
+        Assert.Equal(AuthFailure.InvalidToken, (await _auth.RefreshAsync(refresh, Ct)).Failure);
+    }
+
+    [Fact]
+    public async Task Sessao_sem_vinculo_nao_consulta_o_comercialweb()
+    {
+        var id = Guid.NewGuid();
+        await _store.CreateSessionAsync(new NewSession(id, 1, 10, null, _clock.Now, _clock.Now.AddDays(1)), new NewRefreshToken(new byte[32], id, _clock.Now, _clock.Now.AddDays(1)), Ct);
+
+        Assert.True(await _link.IsStillPairedAsync(id, 1, 10, Ct));
+        Assert.Empty(_cw.Calls);
+    }
+
+    [Fact]
+    public async Task Logout_remove_o_aparelho_no_comercialweb_e_revoga_a_sessao()
+    {
+        await _auth.PairAsync(Code, null, Ct);
+        _cw.Calls.Clear();
+        var id = _store.Sessions.Keys.Single();
+
+        await _auth.LogoutAsync(id, Ct);
+
+        Assert.Equal(["logout:cw-access-1"], _cw.Calls);
+        Assert.Equal("logout", _store.Sessions[id].Reason);
+    }
+}
+
+public sealed class ComercialWebAuthClientTests
+{
+    private static CancellationToken Ct => TestContext.Current.CancellationToken;
+
+    private sealed class Stub(Func<HttpResponseMessage> reply) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) => Task.FromResult(reply());
+    }
+
+    private static ComercialWebAuthClient Client(Func<HttpResponseMessage> reply) =>
+        new(new HttpClient(new Stub(reply)) { BaseAddress = new Uri("https://cw.test") }, Microsoft.Extensions.Logging.Abstractions.NullLogger<ComercialWebAuthClient>.Instance);
+
+    [Theory]
+    [InlineData(HttpStatusCode.NotFound, CwStatus.Rejected)]
+    [InlineData(HttpStatusCode.BadRequest, CwStatus.Rejected)]
+    [InlineData(HttpStatusCode.Forbidden, CwStatus.Rejected)]
+    [InlineData(HttpStatusCode.TooManyRequests, CwStatus.Unavailable)]
+    [InlineData(HttpStatusCode.BadGateway, CwStatus.Unavailable)]
+    public async Task Status_http_vira_resultado_sem_afrouxar_a_revogacao(HttpStatusCode code, CwStatus expected)
+    {
+        var result = await Client(() => new HttpResponseMessage(code)).BootstrapAsync("t", Ct);
+
+        Assert.Equal(expected, result.Status);
+    }
+
+    [Fact]
+    public async Task Distingue_token_expirado_de_401_qualquer_inclusive_com_corpo_nao_json()
+    {
+        var expired = new HttpResponseMessage(HttpStatusCode.Unauthorized) { Content = new StringContent("""{"error":{"code":"mobile_token_expired"}}""", System.Text.Encoding.UTF8, "application/json") };
+        var html = new HttpResponseMessage(HttpStatusCode.Unauthorized) { Content = new StringContent("<html>", System.Text.Encoding.UTF8, "text/html") };
+
+        Assert.Equal(CwStatus.TokenExpired, (await Client(() => expired).BootstrapAsync("t", Ct)).Status);
+        Assert.Equal(CwStatus.Rejected, (await Client(() => html).BootstrapAsync("t", Ct)).Status);
+    }
+}

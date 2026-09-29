@@ -33,6 +33,7 @@ internal sealed class FakeIdentityStore : IIdentityStore
     public Task CreateSessionAsync(NewSession session, NewRefreshToken token, CancellationToken ct)
     {
         Sessions[session.Id] = (session, null, null);
+        if (session.CwTokens is not null) CwTokens[session.Id] = session.CwTokens;
         Tokens[Convert.ToHexString(token.Hash)] = (token, null);
         return Task.CompletedTask;
     }
@@ -67,6 +68,17 @@ internal sealed class FakeIdentityStore : IIdentityStore
             && s.Session.UserId == userId && s.Session.BusinessId == businessId
             && Users.Any(u => u.Id == userId && u.Active)
             && ActiveMemberships.Contains((userId, businessId)));
+
+    public Dictionary<Guid, string> CwTokens { get; } = [];
+
+    public Task<string?> GetCwTokensAsync(Guid sessionId, CancellationToken ct) =>
+        Task.FromResult(CwTokens.TryGetValue(sessionId, out var t) ? t : null);
+
+    public Task SaveCwTokensAsync(Guid sessionId, string protectedTokens, CancellationToken ct)
+    {
+        if (CwTokens.ContainsKey(sessionId)) CwTokens[sessionId] = protectedTokens;
+        return Task.CompletedTask;
+    }
 
     public Task<Profile?> GetProfileAsync(long userId, long businessId, CancellationToken ct) => Task.FromResult<Profile?>(null);
 }

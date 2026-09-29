@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using ComercialWeb.Mobile.Identity.Application;
 using ComercialWeb.Mobile.Identity.Infrastructure;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 
@@ -23,7 +24,8 @@ public sealed class AuthServiceTests
         _store.ActiveMemberships.Add((1, 10));
         _store.ActiveMemberships.Add((1, 20));
         _store.Preferences[1] = 20;
-        _auth = new AuthService(_store, new TokenIssuer(_jwt), new LoginThrottle(_clock), _clock);
+        var cw = new FakeComercialWebAuth();
+        _auth = new AuthService(_store, new TokenIssuer(_jwt), new LoginThrottle(_clock), _clock, cw, new DeviceLink(_store, cw, DataProtectionProvider.Create("teste")));
     }
 
     private Task<AuthResult> Login(string login = "ana@empresa.com", string password = Password) =>

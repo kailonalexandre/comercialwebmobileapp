@@ -22,6 +22,7 @@ public abstract class ApiFixture : IAsyncLifetime
         _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
         {
             b.UseSetting("ConnectionStrings:ComercialWeb", Db.ConnectionString);
+            b.UseSetting("Auth:PasswordLogin", "true"); // as suítes entram por senha; o QR tem suíte própria
             ConfigureHost(b);
         });
     }

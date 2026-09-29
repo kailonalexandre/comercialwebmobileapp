@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
-import { fetchProfile, login, logout, type Credentials, type Profile } from '@/features/auth/auth-api';
+import { fetchProfile, logout, pair, type Profile } from '@/features/auth/auth-api';
 import { setUnauthorizedHandler } from '@/infrastructure/api';
 import { clearSession, loadSession, saveSession } from '@/infrastructure/security/session-store';
 
@@ -10,7 +10,8 @@ type SessionValue = {
   status: Status;
   // null enquanto carrega ou se a consulta falhar; telas mostram marcador neutro.
   profile: Profile | null;
-  signIn: (credentials: Credentials, remember: boolean) => Promise<void>;
+  // Entra com o código lido do QR; falha (inválido/expirado/rede) chega ao chamador.
+  connect: (code: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -50,12 +51,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const signIn = useCallback(async (credentials: Credentials, remember: boolean) => {
-    await saveSession(await login(credentials), remember);
+  const connect = useCallback(async (code: string) => {
+    await saveSession(await pair(code));
     setStatus('signedIn');
   }, []);
 
-  const value = useMemo(() => ({ status, profile, signIn, signOut }), [status, profile, signIn, signOut]);
+  const value = useMemo(() => ({ status, profile, connect, signOut }), [status, profile, connect, signOut]);
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
 

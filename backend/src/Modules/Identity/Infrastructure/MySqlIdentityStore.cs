@@ -44,10 +44,10 @@ public sealed class MySqlIdentityStore(MySqlDataSource db) : IIdentityStore
         await using var tx = await conn.BeginTransactionAsync(ct);
         await conn.ExecuteAsync(new CommandDefinition(
             """
-            INSERT INTO mobile_sessions (id, user_id, business_id, device_name, created_at, last_used_at, expires_at)
-            VALUES (@Id, @UserId, @BusinessId, @DeviceName, @CreatedAt, @CreatedAt, @ExpiresAt)
+            INSERT INTO mobile_sessions (id, user_id, business_id, device_name, cw_device_id, cw_tokens, created_at, last_used_at, expires_at)
+            VALUES (@Id, @UserId, @BusinessId, @DeviceName, @CwDeviceId, @CwTokens, @CreatedAt, @CreatedAt, @ExpiresAt)
             """,
-            new { Id = session.Id.ToString(), session.UserId, session.BusinessId, session.DeviceName, CreatedAt = session.CreatedAt.UtcDateTime, ExpiresAt = session.ExpiresAt.UtcDateTime },
+            new { Id = session.Id.ToString(), session.UserId, session.BusinessId, session.DeviceName, session.CwDeviceId, session.CwTokens, CreatedAt = session.CreatedAt.UtcDateTime, ExpiresAt = session.ExpiresAt.UtcDateTime },
             tx, cancellationToken: ct));
         await InsertTokenAsync(conn, tx, token, ct);
         await tx.CommitAsync(ct);
@@ -119,6 +119,21 @@ public sealed class MySqlIdentityStore(MySqlDataSource db) : IIdentityStore
             WHERE u.id = @userId
             """,
             new { userId, businessId }, cancellationToken: ct));
+    }
+
+    public async Task<string?> GetCwTokensAsync(Guid sessionId, CancellationToken ct)
+    {
+        await using var conn = await db.OpenConnectionAsync(ct);
+        return await conn.QuerySingleOrDefaultAsync<string?>(new CommandDefinition(
+            "SELECT cw_tokens FROM mobile_sessions WHERE id = @id", new { id = sessionId.ToString() }, cancellationToken: ct));
+    }
+
+    public async Task SaveCwTokensAsync(Guid sessionId, string protectedTokens, CancellationToken ct)
+    {
+        await using var conn = await db.OpenConnectionAsync(ct);
+        await conn.ExecuteAsync(new CommandDefinition(
+            "UPDATE mobile_sessions SET cw_tokens = @protectedTokens WHERE id = @id AND cw_tokens IS NOT NULL",
+            new { protectedTokens, id = sessionId.ToString() }, cancellationToken: ct));
     }
 
     private static Task<int> InsertTokenAsync(MySqlConnection conn, MySqlTransaction tx, NewRefreshToken t, CancellationToken ct) =>

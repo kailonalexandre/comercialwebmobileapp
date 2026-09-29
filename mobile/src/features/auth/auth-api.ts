@@ -4,9 +4,6 @@ import { Platform } from 'react-native';
 import { api } from '@/infrastructure/api';
 import type { Session } from '@/infrastructure/security/session-store';
 
-// `login` aceita e-mail ou usuário, como no ComercialWeb web (LoginRequest).
-export type Credentials = { login: string; password: string };
-
 // Empresa ativa vem do servidor (sessão), nunca de um valor enviado pelo app.
 export type Profile = { userName: string; businessId: number; businessName: string };
 
@@ -15,13 +12,11 @@ const deviceName = `${Platform.OS === 'ios' ? 'iOS' : 'Android'} · app ${Consta
 
 const devProfile: Profile = { userName: 'Administrador', businessId: 0, businessName: 'Empresa Demonstração' };
 
-export async function login(credentials: Credentials): Promise<Session> {
+// Troca o código do QR (uso único, 2 min) pela sessão da API. O código não é guardado.
+// A API valida o código no ComercialWeb; empresa e usuário vêm de lá, nunca do app.
+export async function pair(code: string): Promise<Session> {
   if (api) {
-    return api.request<Session>('/v1/auth/login', {
-      method: 'POST',
-      body: { ...credentials, deviceName },
-      anonymous: true,
-    });
+    return api.request<Session>('/v1/auth/pair', { method: 'POST', body: { code, deviceName }, anonymous: true });
   }
 
   // Sem API configurada: sessão fictícia apenas em desenvolvimento, para validar telas.
