@@ -31,7 +31,8 @@ CREATE TABLE business_user (
 CREATE TABLE user_preferences (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     user_id BIGINT UNSIGNED NOT NULL,
-    current_business_id BIGINT UNSIGNED NULL
+    current_business_id BIGINT UNSIGNED NULL,
+    current_location_id BIGINT UNSIGNED NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE permissions (
@@ -117,4 +118,61 @@ CREATE TABLE people (
     is_supplier TINYINT(1) NOT NULL DEFAULT 0,
     is_active TINYINT(1) NOT NULL DEFAULT 1,
     deleted_at TIMESTAMP NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE storage_locations (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    business_id BIGINT UNSIGNED NOT NULL,
+    type VARCHAR(255) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    primary_marker TINYINT UNSIGNED NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE user_storage_locations (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    storage_location_id BIGINT UNSIGNED NOT NULL,
+    business_id BIGINT UNSIGNED NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE sales (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    business_id BIGINT UNSIGNED NOT NULL,
+    location_id BIGINT UNSIGNED NOT NULL,
+    customer_person_id BIGINT UNSIGNED NULL,
+    seller_user_id BIGINT UNSIGNED NULL,
+    seller_person_id BIGINT UNSIGNED NULL,
+    number VARCHAR(255) NOT NULL,
+    status VARCHAR(255) NOT NULL DEFAULT 'pendente',
+    price_mode VARCHAR(20) NOT NULL DEFAULT 'varejo',
+    subtotal_cents BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    item_discount_cents BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    discount_cents BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    surcharge_cents BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    freight_cents BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    total_cents BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    observation TEXT NULL,
+    created_at TIMESTAMP NULL,
+    deleted_at TIMESTAMP NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE sale_items (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    sale_id BIGINT UNSIGNED NOT NULL,
+    product_id BIGINT UNSIGNED NOT NULL,
+    sku VARCHAR(255) NULL,
+    description VARCHAR(200) NOT NULL,
+    quantity DECIMAL(12,3) NOT NULL,
+    unit_price_cents BIGINT UNSIGNED NOT NULL,
+    discount_cents BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    total_cents BIGINT UNSIGNED NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE sale_payments (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    sale_id BIGINT UNSIGNED NOT NULL,
+    method VARCHAR(255) NOT NULL,
+    amount_cents BIGINT UNSIGNED NOT NULL,
+    installments INT UNSIGNED NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

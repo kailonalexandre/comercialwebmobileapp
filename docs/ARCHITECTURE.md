@@ -79,6 +79,21 @@ Risco principal: regras de tenancy, permissão, preço, estoque e venda já vive
 
 Paginação, `PagedResult` e escape de LIKE ficam em `src/Common` (compartilhado pelos módulos).
 
+### Unidade de operação (loja/filial)
+
+- Espelha `App\Shared\Tenancy\CurrentLocation`: candidatas = unidades (`storage_locations.type = 'unit'`) ativas da empresa; se o usuário tiver unidades permitidas (`user_storage_locations`), só elas. Escolha: preferida → principal (`primary_marker`) → primeira por nome.
+- Guardada em `mobile_sessions.location_id` no login (a partir da preferência da web) e **revalidada a cada request**; unidade desativada ou proibida cai no fallback sem relogar. O app não altera a unidade escolhida no navegador.
+- Achado na web (espelhado, não corrigido aqui): `allowedLocations` não filtra por empresa, então restrição cadastrada na empresa B deixa o usuário sem unidade na empresa A.
+- `/api/v1/me` informa a unidade atual. Sem unidade operável: 409 nas rotas que dependem dela.
+
+### Módulo Sales (consulta)
+
+- `GET /api/v1/sales?search=&status=&from=&to=&page=&pageSize=` e `GET /api/v1/sales/{id}`, permissão `sales.view` (a mesma da "Consulta de Vendas" da web; lançar venda é `sales.access`).
+- Recorte igual à web: empresa **e unidade** da sessão, sem consolidar filiais; excluídas fora. Venda de outra unidade/empresa: 404.
+- `status` só aceita `pendente`, `pre_venda`, `finalizada`, `devolucao` (inclui `troca`), `condicional_aberto|fechado|cancelado`; outro valor: 422. Período por `DATE(created_at)`.
+- Datas no horário local da empresa (America/Sao_Paulo), sem offset, exatamente como gravadas e exibidas pela web. Valores em centavos.
+- Criação/alteração de venda **não implementada**: exige decisão sobre reutilizar as regras de venda da web (estoque, preço, fiscal, idempotência via `sales.client_sale_uuid`).
+
 ## Autenticação
 
 - `POST /api/v1/auth/login` com e-mail/senha; senha verificada contra o hash bcrypt do Laravel (`users.password`).
