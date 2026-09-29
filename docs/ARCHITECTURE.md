@@ -93,6 +93,15 @@ Paginação, `PagedResult` e escape de LIKE ficam em `src/Common` (compartilhado
 - `status` só aceita `pendente`, `pre_venda`, `finalizada`, `devolucao` (inclui `troca`), `condicional_aberto|fechado|cancelado`; outro valor: 422. Período por `DATE(created_at)`.
 - Datas no horário local da empresa (America/Sao_Paulo), sem offset, exatamente como gravadas e exibidas pela web. Valores em centavos.
 
+### Módulo Dashboard
+
+- `GET /api/v1/dashboard`: mesmos cards e consultas do `DashboardRepository` da web. Cada bloco só vem se o usuário tiver a permissão do card na web (senão `null`): vendas de hoje e condicionais abertos (`sales.view`), contas a receber (`financial.receivables.view`), estoque baixo (`inventory.view`), últimas 8 vendas (`sales.view`).
+- Escopo: **empresa inteira, todas as unidades** (como o dashboard da web; `BelongsToUnit` só preenche a unidade na criação, não filtra leitura). Excluídos fora.
+- "Hoje" no fuso da empresa (`ComercialWeb:TimeZone`, padrão `America/Sao_Paulo`, o `APP_TIMEZONE` da web), sobre `COALESCE(occurred_at, created_at)`.
+- Contas a receber vêm de `financial_lines` (tabela do model `FinancialTitle`): abertas, não agrupadas, `amount - paid`.
+- Estoque baixo: saldo negativo, ou mínimo > 0 (do produto; senão soma das variações) com saldo ≤ mínimo; só produtos ativos.
+- Emissão e validação do JWT usam o mesmo `TimeProvider` injetável (expiração 10 min, tolerância 30 s, testada ponta a ponta).
+
 ### Pré-venda (app → ComercialWeb)
 
 Decisão (2026-09-29): o app é uma **extensão do ComercialWeb**. Lê vendas direto do banco e **envia pré-vendas para o ComercialWeb**, que aplica as próprias regras. Nenhuma regra de venda é reimplementada em .NET.

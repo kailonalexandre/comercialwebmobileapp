@@ -77,6 +77,7 @@ CREATE TABLE products (
     description TEXT NULL,
     cost_price DECIMAL(15,2) NOT NULL,
     sale_price DECIMAL(15,2) NOT NULL,
+    minimum_quantity DECIMAL(15,3) NOT NULL DEFAULT 0,
     is_active TINYINT(1) NOT NULL DEFAULT 1,
     deleted_at TIMESTAMP NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -93,7 +94,8 @@ CREATE TABLE product_variations (
     business_id BIGINT UNSIGNED NOT NULL,
     product_id BIGINT UNSIGNED NOT NULL,
     reference VARCHAR(80) NULL,
-    barcode VARCHAR(80) NULL
+    barcode VARCHAR(80) NULL,
+    minimum_stock DECIMAL(15,3) NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE people (
@@ -153,6 +155,7 @@ CREATE TABLE sales (
     freight_cents BIGINT UNSIGNED NOT NULL DEFAULT 0,
     total_cents BIGINT UNSIGNED NOT NULL DEFAULT 0,
     observation TEXT NULL,
+    occurred_at TIMESTAMP NULL,
     created_at TIMESTAMP NULL,
     deleted_at TIMESTAMP NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -175,4 +178,31 @@ CREATE TABLE sale_payments (
     method VARCHAR(255) NOT NULL,
     amount_cents BIGINT UNSIGNED NOT NULL,
     installments INT UNSIGNED NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE stock_balances (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    business_id BIGINT UNSIGNED NOT NULL,
+    product_id BIGINT UNSIGNED NOT NULL,
+    storage_location_id BIGINT UNSIGNED NOT NULL,
+    quantity_milli BIGINT NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Tabela do model FinancialTitle.
+CREATE TABLE financial_lines (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    business_id BIGINT UNSIGNED NOT NULL,
+    type VARCHAR(255) NOT NULL,
+    status VARCHAR(255) NOT NULL,
+    grouped_into_id BIGINT UNSIGNED NULL,
+    amount_cents BIGINT NOT NULL DEFAULT 0,
+    paid_cents BIGINT NOT NULL DEFAULT 0,
+    deleted_at TIMESTAMP NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE conditionals (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    business_id BIGINT UNSIGNED NOT NULL,
+    status VARCHAR(255) NOT NULL,
+    total_cents BIGINT UNSIGNED NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

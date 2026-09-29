@@ -61,6 +61,16 @@ public static class IdentityModule
                 },
             };
         });
+        // Emissão (TokenIssuer/AuthService) e validação usam o mesmo relógio injetável.
+        services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme).Configure<TimeProvider>((o, clock) =>
+        {
+            var skew = o.TokenValidationParameters.ClockSkew;
+            o.TokenValidationParameters.LifetimeValidator = (notBefore, expires, _, _) =>
+            {
+                var now = clock.GetUtcNow().UtcDateTime;
+                return (notBefore is null || notBefore <= now + skew) && (expires is null || expires > now - skew);
+            };
+        });
         services.AddAuthorization();
         return services;
     }
