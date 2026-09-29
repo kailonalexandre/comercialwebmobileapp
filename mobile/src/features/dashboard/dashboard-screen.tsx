@@ -16,16 +16,19 @@ import { Text } from '@/shared/components/text';
 import { colors, radius, shadow, spacing, tones } from '@/shared/theme/tokens';
 import { formatCents } from '@/shared/utils/format';
 
+const soon = (title: string) => () => Alert.alert(title, 'Em breve.');
+
 const environmentLabel = { local: 'Ambiente local', homologacao: 'Homologação', producao: null } as const;
 
-const quickActions: { label: string; hint: string; icon: IconName }[] = [
-  { label: 'Nova Venda', hint: 'Registrar uma venda', icon: 'cart-outline' },
-  { label: 'PDV', hint: 'Abrir o caixa', icon: 'calculator-outline' },
-  { label: 'Produtos', hint: 'Consultar produtos', icon: 'cube-outline' },
-  { label: 'Clientes', hint: 'Consultar clientes', icon: 'people-outline' },
-];
+type QuickAction = { label: string; hint: string; icon: IconName; permission?: string; onPress: () => void };
 
-const soon = (title: string) => () => Alert.alert(title, 'Em breve.');
+// Sem `permission` = ainda não implementado (aviso "Em breve"), sempre visível como no mockup.
+const quickActions: QuickAction[] = [
+  { label: 'Nova Venda', hint: 'Registrar uma venda', icon: 'cart-outline', onPress: soon('Nova Venda') },
+  { label: 'PDV', hint: 'Abrir o caixa', icon: 'calculator-outline', onPress: soon('PDV') },
+  { label: 'Produtos', hint: 'Consultar produtos', icon: 'cube-outline', permission: 'products.view', onPress: () => router.push('/produtos') },
+  { label: 'Clientes', hint: 'Consultar clientes', icon: 'people-outline', permission: 'people.view', onPress: () => router.push('/clientes') },
+];
 
 function KpiCard({ kpi }: { kpi: Kpi }) {
   const t = tones[kpi.tone];
@@ -132,12 +135,12 @@ export function DashboardScreen() {
 
         <SectionHeader title="Acesso rápido" action="Ver todos" onAction={() => router.navigate('/menu')} />
         <View style={styles.grid}>
-          {quickActions.map((a) => (
+          {quickActions.filter((a) => !a.permission || profile?.permissions.includes(a.permission)).map((a) => (
             <Pressable
               key={a.label}
               accessibilityRole="button"
               accessibilityLabel={`${a.label}, ${a.hint}`}
-              onPress={soon(a.label)}
+              onPress={a.onPress}
               style={({ pressed }) => [styles.quick, pressed && styles.pressed]}
             >
               <IconTile icon={a.icon} size={40} />
@@ -156,7 +159,7 @@ export function DashboardScreen() {
 
         {data.recentSales !== null && (
           <>
-            <SectionHeader title="Últimas vendas" action="Ver todas" onAction={soon('Vendas')} />
+            <SectionHeader title="Últimas vendas" action="Ver todas" onAction={() => router.navigate('/vendas')} />
             <View style={styles.list}>
               {recentSales.length === 0 && (
                 <Text color="textMuted" style={styles.empty}>
