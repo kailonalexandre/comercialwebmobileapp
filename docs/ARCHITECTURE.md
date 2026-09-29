@@ -209,3 +209,20 @@ App ──POST /api/v1/auth/pair {code}──► .NET ──POST /api/mobile/v1/
 - Limitação: o rate limit do `/pair` no ComercialWeb (10/min) é por IP, e todos os pareamentos chegam do IP do .NET. Se virar gargalo, liberar o IP do .NET no ComercialWeb ou repassar o IP do app. Se alargar `KnownNetworks` de ForwardedHeaders, o rate limit por IP passa a ser falsificável via X-Forwarded-For.
 - Pendente conhecido: `LoginThrottle` nunca remove chaves antigas (só importa com login por senha ligado); sessões de login por senha não têm vínculo com o ComercialWeb.
 - Leituras (vendas, produtos, clientes, notificações) seguem por SQL direto por enquanto; migrar módulo a módulo para `/api/mobile/v1` remove a duplicação de regras.
+
+## PDV móvel (venda finalizada com pagamento)
+
+Mesmo desenho da pré-venda: o app fala só com o .NET, o .NET fala com o ComercialWeb por rotas de máquina assinadas (HMAC), e o ComercialWeb aplica as regras do PDV da web (`PdvSaleService` + `PdvSaleCommitService` idempotente).
+
+```text
+App ─POST /api/v1/pdv/quote|sales (Idempotency-Key)─► .NET ─POST /api/mobile/v1/pdv/{quote,sales,payment-methods} (HMAC)─► ComercialWeb
+```
+
+- **Preço e total são do servidor.** O app manda produto, quantidade inteira, cliente, observação e valores recebidos por forma; nunca preço nem total. A tela mostra o total da cotação (`/pdv/quote`), não o estimado.
+- **Caixa aberto do operador é obrigatório** (o app não abre caixa). Sem caixa: 422 `cash_register_closed` e o app orienta a abrir no ComercialWeb.
+- **Idempotência:** o `Idempotency-Key` vira `client_sale_uuid`. Reenvio devolve a venda já gravada (200) sem tocar em estoque, caixa ou financeiro, mesmo se o estoque acabou depois. Resultado incerto (rede, timeout, 5xx) trava o carrinho: só reenviar com a mesma chave ou descartar.
+- **Formas liberadas na v1:** dinheiro, Pix, débito e crédito à vista (sem parcelamento). Lista vinda do ComercialWeb (`/pdv/payment-methods`, só as ativas da empresa).
+- **Recusas com código estável** (422): `cash_register_closed`, `payment_incomplete` (com `totalCents`/`remainingCents`), `payment_method_not_allowed`, `business_rule` (estoque, cliente bloqueado, limite). Erro estrutural do Laravel não vaza mensagem.
+- Permissão: `pdv.access`, conferida no .NET e de novo no ComercialWeb.
+- Código do lado Laravel: worktree `~/comercialWeb/comercial-web-mobile-bridge`, branch `feature/mobile-pdv-sales` (commit f59abdf2, sem push nem merge; a integração no ComercialWeb é decisão do usuário).
+- Pendente: parcelamento e cartão com operadora, abertura/fechamento de caixa e nota fiscal pelo app; emissão fiscal segue as regras da web (pode enfileirar NFC-e conforme a configuração da empresa).
