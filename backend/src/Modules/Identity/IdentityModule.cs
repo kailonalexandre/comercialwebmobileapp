@@ -90,7 +90,7 @@ public static class IdentityModule
             var ids = SessionIds.From(user)!;
             var profile = await store.GetProfileAsync(ids.UserId, ids.BusinessId, ct);
             if (profile is null) return Results.NotFound();
-            var unit = await units.ForSessionAsync(ids.SessionId, ids.UserId, ids.BusinessId, ct);
+            var unit = await units.CurrentAsync(ids.UserId, ids.BusinessId, ct);
             return Results.Ok(new { profile.UserName, profile.BusinessId, profile.BusinessName, unit });
         }).RequireAuthorization();
 

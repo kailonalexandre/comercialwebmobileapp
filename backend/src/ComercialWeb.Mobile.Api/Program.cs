@@ -26,7 +26,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(o =>
 builder.Services.AddIdentityModule(builder.Configuration, builder.Environment);
 builder.Services.AddCatalogModule();
 builder.Services.AddCustomersModule();
-builder.Services.AddSalesModule();
+builder.Services.AddSalesModule(builder.Configuration);
 
 var app = builder.Build();
 

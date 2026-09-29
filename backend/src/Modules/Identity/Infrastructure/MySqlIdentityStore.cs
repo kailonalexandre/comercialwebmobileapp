@@ -1,5 +1,4 @@
 using ComercialWeb.Mobile.Identity.Application;
-using ComercialWeb.Mobile.Identity.Tenancy;
 using Dapper;
 using MySqlConnector;
 
@@ -43,16 +42,12 @@ public sealed class MySqlIdentityStore(MySqlDataSource db) : IIdentityStore
     {
         await using var conn = await db.OpenConnectionAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
-        // Unidade inicial: a mesma que a web usaria agora (preferência do navegador, se permitida).
-        var unit = await conn.QueryFirstOrDefaultAsync<OperationUnit>(new CommandDefinition(
-            OperationUnits.ResolveSql.Replace("@preferredId", "(SELECT current_location_id FROM user_preferences WHERE user_id = @userId LIMIT 1)", StringComparison.Ordinal),
-            new { userId = session.UserId, businessId = session.BusinessId }, tx, cancellationToken: ct));
         await conn.ExecuteAsync(new CommandDefinition(
             """
-            INSERT INTO mobile_sessions (id, user_id, business_id, location_id, device_name, created_at, last_used_at, expires_at)
-            VALUES (@Id, @UserId, @BusinessId, @LocationId, @DeviceName, @CreatedAt, @CreatedAt, @ExpiresAt)
+            INSERT INTO mobile_sessions (id, user_id, business_id, device_name, created_at, last_used_at, expires_at)
+            VALUES (@Id, @UserId, @BusinessId, @DeviceName, @CreatedAt, @CreatedAt, @ExpiresAt)
             """,
-            new { Id = session.Id.ToString(), session.UserId, session.BusinessId, LocationId = unit?.Id, session.DeviceName, CreatedAt = session.CreatedAt.UtcDateTime, ExpiresAt = session.ExpiresAt.UtcDateTime },
+            new { Id = session.Id.ToString(), session.UserId, session.BusinessId, session.DeviceName, CreatedAt = session.CreatedAt.UtcDateTime, ExpiresAt = session.ExpiresAt.UtcDateTime },
             tx, cancellationToken: ct));
         await InsertTokenAsync(conn, tx, token, ct);
         await tx.CommitAsync(ct);
