@@ -1,8 +1,9 @@
-import { useState, type ReactElement } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { useRef, useState, type ReactElement } from 'react';
+import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/shared/components/icon';
+import { Pager } from '@/shared/components/pager';
 import { StateView } from '@/shared/components/state-view';
 import { Text } from '@/shared/components/text';
 import { TextField } from '@/shared/components/text-field';
@@ -23,21 +24,29 @@ type Props<T> = {
   header?: ReactElement;
   // Controles logo abaixo da busca (filtros, ações em lote).
   filters?: ReactElement;
+  // Telas dentro da barra de abas: o botão central invade a paginação e precisa de folga.
+  tabScreen?: boolean;
 };
 
 // Tela de lista padrão: busca, paginação por rolagem, puxar para atualizar e estados de carga/erro/vazio.
-export function ListScreen<T>({ title, subtitle, searchPlaceholder, emptyMessage, fetchPage, keyOf, renderRow, onBack, header, filters }: Props<T>) {
+export function ListScreen<T>({ title, subtitle, searchPlaceholder, emptyMessage, fetchPage, keyOf, renderRow, onBack, header, filters, tabScreen }: Props<T>) {
   const [search, setSearch] = useState('');
   const list = usePagedList(fetchPage, search.trim());
+  const scroller = useRef<FlatList<T>>(null);
+
+  // Página nova começa no topo.
+  const goTo = (page: number) => {
+    scroller.current?.scrollToOffset({ offset: 0, animated: false });
+    list.goTo(page);
+  };
 
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
       <FlatList
+        ref={scroller}
         data={list.items}
         keyExtractor={keyOf}
         renderItem={({ item }) => renderRow(item, { patch: list.patch, reload: list.reload })}
-        onEndReached={list.loadMore}
-        onEndReachedThreshold={0.4}
         refreshing={false}
         onRefresh={list.reload}
         keyboardShouldPersistTaps="handled"
@@ -77,8 +86,8 @@ export function ListScreen<T>({ title, subtitle, searchPlaceholder, emptyMessage
             <StateView kind="empty" message={emptyMessage} />
           )
         }
-        ListFooterComponent={list.loadingMore ? <ActivityIndicator color={colors.primary} style={styles.footer} /> : null}
       />
+      <Pager page={list.page} totalPages={list.totalPages} total={list.total} failed={list.failed && list.items.length > 0} bottomGap={tabScreen ? spacing.xl : 0} onPage={goTo} onRetry={list.reload} />
     </SafeAreaView>
   );
 }
@@ -93,5 +102,4 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   back: { width: touchTarget, height: touchTarget, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', marginLeft: -spacing.sm },
   separator: { height: spacing.sm },
-  footer: { padding: spacing.lg },
 });

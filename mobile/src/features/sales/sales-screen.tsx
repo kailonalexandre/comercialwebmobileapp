@@ -39,6 +39,7 @@ export function SalesScreen() {
       keyOf={(s) => String(s.id)}
       renderRow={(s) => <SaleRow sale={s} />}
       header={<AppHeader />}
+      tabScreen
     />
   );
 }
