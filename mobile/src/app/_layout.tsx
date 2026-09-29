@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { StatusBar } from 'expo-status-bar';
 
 import { SessionProvider, useSession } from '@/features/auth/session-context';
+import { PushBridge } from '@/features/push/push-bridge';
 import { DraftProvider } from '@/features/presale/draft-context';
 import { OnboardingProvider, useOnboarding } from '@/features/onboarding/onboarding-context';
 import { StateView } from '@/shared/components/state-view';
@@ -53,6 +54,7 @@ export default function RootLayout() {
     <OnboardingProvider>
       <SessionProvider>
         <SessionScopedDraft>
+          <PushBridge />
           <RootNavigator />
         </SessionScopedDraft>
       </SessionProvider>

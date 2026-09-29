@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { fetchProfile, logout, pair, type Profile } from '@/features/auth/auth-api';
+import { unregisterPush } from '@/features/push/register-push';
 import { setUnauthorizedHandler } from '@/infrastructure/api';
 import { clearSession, loadSession, saveSession } from '@/infrastructure/security/session-store';
 
@@ -40,6 +41,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [status]);
 
   const signOut = useCallback(async () => {
+    await unregisterPush(); // ainda autenticado; melhor esforço
     await logout();
     await clearSession();
     setStatus('signedOut');
