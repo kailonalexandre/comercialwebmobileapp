@@ -3,9 +3,11 @@ using ComercialWeb.Mobile.Common;
 using ComercialWeb.Mobile.Identity;
 using ComercialWeb.Mobile.Identity.Authorization;
 using ComercialWeb.Mobile.Identity.Tenancy;
+using ComercialWeb.Mobile.Sales.PreSales;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ComercialWeb.Mobile.Sales;
@@ -15,8 +17,16 @@ public static class SalesModule
     // Mesma permissão da "Consulta de Vendas" da web (separada de sales.access, que é lançar venda).
     public const string ViewSales = "sales.view";
 
-    public static IServiceCollection AddSalesModule(this IServiceCollection services) =>
+    public static IServiceCollection AddSalesModule(this IServiceCollection services, IConfiguration config)
+    {
         services.AddScoped<SaleQueries>();
+        services.AddHttpClient<ComercialWebClient>(http =>
+        {
+            if (Uri.TryCreate(config["ComercialWeb:BaseUrl"], UriKind.Absolute, out var baseUrl)) http.BaseAddress = baseUrl;
+            http.Timeout = TimeSpan.FromSeconds(20);
+        });
+        return services;
+    }
 
     public static IEndpointRouteBuilder MapSalesEndpoints(this IEndpointRouteBuilder app)
     {
@@ -31,7 +41,7 @@ public static class SalesModule
                 return Paging.Invalid();
 
             var ids = SessionIds.From(user)!;
-            var unit = await units.ForSessionAsync(ids.SessionId, ids.UserId, ids.BusinessId, ct);
+            var unit = await units.CurrentAsync(ids.UserId, ids.BusinessId, ct);
             if (unit is null) return NoUnit();
             return Results.Ok(await queries.SearchAsync(ids.BusinessId, unit.Id, new SaleFilter(search, status, from, to), paging, ct));
         }).RequirePermission(ViewSales);
@@ -39,12 +49,13 @@ public static class SalesModule
         sales.MapGet("/{id:long}", async (long id, ClaimsPrincipal user, SaleQueries queries, OperationUnits units, CancellationToken ct) =>
         {
             var ids = SessionIds.From(user)!;
-            var unit = await units.ForSessionAsync(ids.SessionId, ids.UserId, ids.BusinessId, ct);
+            var unit = await units.CurrentAsync(ids.UserId, ids.BusinessId, ct);
             if (unit is null) return NoUnit();
             var sale = await queries.FindAsync(ids.BusinessId, unit.Id, id, ct);
             return sale is null ? Results.Problem(statusCode: StatusCodes.Status404NotFound) : Results.Ok(sale);
         }).RequirePermission(ViewSales);
 
+        app.MapPreSaleEndpoints();
         return app;
     }
 

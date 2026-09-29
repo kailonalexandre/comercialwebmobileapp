@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Hosting;
 using System.Net.Http.Headers;
 using Microsoft.AspNetCore.Mvc.Testing;
 
@@ -19,10 +20,18 @@ public abstract class ApiFixture : IAsyncLifetime
         if (TestDatabase.Server is null) return;
         await SeedAsync();
         _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
-            b.UseSetting("ConnectionStrings:ComercialWeb", Db.ConnectionString));
+        {
+            b.UseSetting("ConnectionStrings:ComercialWeb", Db.ConnectionString);
+            ConfigureHost(b);
+        });
     }
 
     protected abstract Task SeedAsync();
+
+    /// <summary>Ponto de extensão para configurações e dublês específicos de uma suíte.</summary>
+    protected virtual void ConfigureHost(IWebHostBuilder builder)
+    {
+    }
 
     public HttpClient Anonymous() => _factory!.CreateClient();
 

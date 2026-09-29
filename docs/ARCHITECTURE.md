@@ -82,7 +82,7 @@ Paginação, `PagedResult` e escape de LIKE ficam em `src/Common` (compartilhado
 ### Unidade de operação (loja/filial)
 
 - Espelha `App\Shared\Tenancy\CurrentLocation`: candidatas = unidades (`storage_locations.type = 'unit'`) ativas da empresa; se o usuário tiver unidades permitidas (`user_storage_locations`), só elas. Escolha: preferida → principal (`primary_marker`) → primeira por nome.
-- Guardada em `mobile_sessions.location_id` no login (a partir da preferência da web) e **revalidada a cada request**; unidade desativada ou proibida cai no fallback sem relogar. O app não altera a unidade escolhida no navegador.
+- Resolvida **a cada request a partir da preferência da web** (`user_preferences.current_location_id`), exatamente como a web: app e navegador operam sempre na mesma unidade, e a pré-venda enviada ao ComercialWeb cai na unidade que o app mostra. Unidade desativada ou proibida cai no fallback sem relogar.
 - Achado na web (espelhado, não corrigido aqui): `allowedLocations` não filtra por empresa, então restrição cadastrada na empresa B deixa o usuário sem unidade na empresa A.
 - `/api/v1/me` informa a unidade atual. Sem unidade operável: 409 nas rotas que dependem dela.
 
@@ -92,7 +92,27 @@ Paginação, `PagedResult` e escape de LIKE ficam em `src/Common` (compartilhado
 - Recorte igual à web: empresa **e unidade** da sessão, sem consolidar filiais; excluídas fora. Venda de outra unidade/empresa: 404.
 - `status` só aceita `pendente`, `pre_venda`, `finalizada`, `devolucao` (inclui `troca`), `condicional_aberto|fechado|cancelado`; outro valor: 422. Período por `DATE(created_at)`.
 - Datas no horário local da empresa (America/Sao_Paulo), sem offset, exatamente como gravadas e exibidas pela web. Valores em centavos.
-- Criação/alteração de venda **não implementada**: exige decisão sobre reutilizar as regras de venda da web (estoque, preço, fiscal, idempotência via `sales.client_sale_uuid`).
+
+### Pré-venda (app → ComercialWeb)
+
+Decisão (2026-09-29): o app é uma **extensão do ComercialWeb**. Lê vendas direto do banco e **envia pré-vendas para o ComercialWeb**, que aplica as próprias regras. Nenhuma regra de venda é reimplementada em .NET.
+
+```text
+App ──POST /api/v1/pre-sales (Idempotency-Key)──► API .NET ──POST /api/mobile/v1/pre-sales (HMAC)──► ComercialWeb
+                                                                                                 └─ SaleDraftService::finalize(isPreSale)
+```
+
+- App envia só cliente, vendedor (opcional), observação e itens `{productId, quantity}`. **Preço, desconto e total são calculados no ComercialWeb.**
+- `Idempotency-Key` (UUID gerado no app ao montar o pedido) vira `sales.client_sale_uuid`; o índice único `(business_id, client_sale_uuid)` garante uma venda só, mesmo com reenvio ou chamadas simultâneas. Resposta 201 criada, 200 reenvio.
+- Usuário e empresa vêm da sessão validada pela API .NET, nunca do corpo do app. O ComercialWeb confere de novo conta, vínculo, `sales.access` + `sales.create`, cliente bloqueado, limite de desconto e estoque (a pré-venda baixa estoque, como na web).
+- No ComercialWeb, a empresa entra por `CurrentBusiness::supervise()` (não altera a empresa selecionada no navegador) e o rascunho vive em memória (`InMemorySaleDraftStore`), sem tocar no rascunho de sessão da web.
+- Assinatura servidor-a-servidor: HMAC-SHA256 de `"{timestamp}\n{MÉTODO}\n{caminho}\n{corpo}"`, janela de 5 min. Verificada em PHP e C# com o mesmo vetor.
+- Erros para o app: 422 com `message` de regra de negócio (ex.: cliente bloqueado), 403 sem permissão, 503 quando o ComercialWeb está fora ou mal configurado (o app reenvia com a mesma chave).
+- Configuração (somente em variáveis de ambiente dos servidores):
+  - API .NET: `ComercialWeb__BaseUrl`, `ComercialWeb__MobileApiSecret`.
+  - ComercialWeb: `MOBILE_API_SECRET` (mesmo valor). Sem ele, a rota de máquina recusa tudo (401).
+  - O caminho assinado supõe o ComercialWeb servido na raiz do domínio.
+- Venda finalizada com pagamento (PDV móvel) fica para fase posterior; reutilizará o commit idempotente do PDV.
 
 ## Autenticação
 
