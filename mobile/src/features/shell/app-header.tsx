@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 
 import { useSession } from '@/features/auth/session-context';
@@ -24,7 +25,7 @@ export function AppHeader() {
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Notificações, ${unreadNotifications} não lidas`}
-        onPress={() => Alert.alert('Notificações', 'Em breve.')}
+        onPress={() => router.push('/notificacoes')}
         style={styles.iconButton}
       >
         <Icon name="notifications-outline" size={26} color={colors.text} />

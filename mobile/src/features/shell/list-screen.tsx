@@ -9,6 +9,8 @@ import { TextField } from '@/shared/components/text-field';
 import { usePagedList, type PageFetcher } from '@/shared/hooks/use-paged-list';
 import { colors, radius, spacing, touchTarget } from '@/shared/theme/tokens';
 
+export type ListControls<T> = { patch: (change: (items: T[]) => T[]) => void; reload: () => void };
+
 type Props<T> = {
   title: string;
   subtitle?: string;
@@ -16,13 +18,15 @@ type Props<T> = {
   emptyMessage: string;
   fetchPage: PageFetcher<T>;
   keyOf: (item: T) => string;
-  renderRow: (item: T) => ReactElement;
+  renderRow: (item: T, controls: ListControls<T>) => ReactElement;
   onBack?: () => void;
   header?: ReactElement;
+  // Controles logo abaixo da busca (filtros, ações em lote).
+  filters?: ReactElement;
 };
 
 // Tela de lista padrão: busca, paginação por rolagem, puxar para atualizar e estados de carga/erro/vazio.
-export function ListScreen<T>({ title, subtitle, searchPlaceholder, emptyMessage, fetchPage, keyOf, renderRow, onBack, header }: Props<T>) {
+export function ListScreen<T>({ title, subtitle, searchPlaceholder, emptyMessage, fetchPage, keyOf, renderRow, onBack, header, filters }: Props<T>) {
   const [search, setSearch] = useState('');
   const list = usePagedList(fetchPage, search.trim());
 
@@ -31,7 +35,7 @@ export function ListScreen<T>({ title, subtitle, searchPlaceholder, emptyMessage
       <FlatList
         data={list.items}
         keyExtractor={keyOf}
-        renderItem={({ item }) => renderRow(item)}
+        renderItem={({ item }) => renderRow(item, { patch: list.patch, reload: list.reload })}
         onEndReached={list.loadMore}
         onEndReachedThreshold={0.4}
         refreshing={false}
@@ -61,6 +65,7 @@ export function ListScreen<T>({ title, subtitle, searchPlaceholder, emptyMessage
               autoCorrect={false}
               returnKeyType="search"
             />
+            {filters}
           </View>
         }
         ListEmptyComponent={
