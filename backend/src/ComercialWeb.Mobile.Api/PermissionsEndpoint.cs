@@ -5,6 +5,7 @@ using ComercialWeb.Mobile.Dashboard;
 using ComercialWeb.Mobile.Identity;
 using ComercialWeb.Mobile.Identity.Authorization;
 using ComercialWeb.Mobile.Sales;
+using ComercialWeb.Mobile.Sales.Pdv;
 using ComercialWeb.Mobile.Sales.PreSales;
 
 namespace ComercialWeb.Mobile.Api;
@@ -22,6 +23,7 @@ internal static class PermissionsEndpoint
         CustomersModule.ViewPeople,
         SalesModule.ViewSales,
         PreSaleEndpoints.CreatePreSale,
+        PdvEndpoints.UsePdv,
         DashboardModule.ViewReceivables,
         DashboardModule.ViewInventory,
     ];

@@ -2,12 +2,13 @@ import { toRequest, type Draft } from '@/features/presale/draft-model';
 import { ApiError } from '@/infrastructure/api/client';
 import { api } from '@/infrastructure/api';
 
-export type PreSaleCreated = { saleId: number; number: string; status: string; totalCents: number; alreadyExisted: boolean };
+// Comprovante comum à pré-venda e à venda do PDV (changeCents só existe na venda com pagamento).
+export type PreSaleCreated = { saleId: number; number: string; status: string; totalCents: number; alreadyExisted: boolean; changeCents?: number };
 
 // rejected = o servidor recusou (nada foi criado); uncertain = não sabemos se chegou (rede, timeout, 5xx).
 export type SendResult =
   | { kind: 'ok'; sale: PreSaleCreated }
-  | { kind: 'rejected'; message: string }
+  | { kind: 'rejected'; message: string; code?: string; totalCents?: number }
   | { kind: 'forbidden' }
   | { kind: 'uncertain' };
 

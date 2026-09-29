@@ -1,56 +1,19 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { useDraft } from '@/features/presale/draft-context';
-import {
-  canSend,
-  estimateCents,
-  MAX_OBSERVATION,
-  parseQuantity,
-  removeItem,
-  setQuantity,
-  type DraftItem,
-} from '@/features/presale/draft-model';
+import { DraftEditor } from '@/features/presale/draft-editor';
+import { canSend, estimateCents } from '@/features/presale/draft-model';
+import { usePreSaleDraft } from '@/features/presale/presale-draft';
 import { Button } from '@/shared/components/button';
 import { Icon } from '@/shared/components/icon';
 import { Text } from '@/shared/components/text';
-import { TextField } from '@/shared/components/text-field';
 import { colors, radius, spacing, touchTarget } from '@/shared/theme/tokens';
 import { formatCents } from '@/shared/utils/format';
 
-function QuantityField({ item, disabled }: { item: DraftItem; disabled: boolean }) {
-  const { setDraft } = useDraft();
-  const [text, setText] = useState(String(item.quantity).replace('.', ','));
-
-  // Cada valor válido vale na hora (o botão Enviar pode ser tocado sem o campo perder o foco);
-  // ao sair do campo, texto inválido volta ao último valor bom.
-  function change(next: string) {
-    setText(next);
-    const q = parseQuantity(next);
-    if (q !== null) setDraft((d) => ({ ...d, items: setQuantity(d.items, item.productId, q) }));
-  }
-
-  function restore() {
-    if (parseQuantity(text) === null) setText(String(item.quantity).replace('.', ','));
-  }
-
-  return (
-    <TextField
-      value={text}
-      onChangeText={change}
-      onBlur={restore}
-      keyboardType="decimal-pad"
-      editable={!disabled}
-      label="Quantidade"
-      style={styles.qty}
-    />
-  );
-}
-
 export function NewSaleScreen() {
-  const { draft, phase, setDraft, send, reset } = useDraft();
+  const store = usePreSaleDraft();
+  const { draft, phase, send, reset } = store;
   const locked = phase.name !== 'editing';
 
   if (phase.name === 'done') {
@@ -87,57 +50,7 @@ export function NewSaleScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Cliente: ${draft.customer?.name ?? 'Consumidor final'}. Alterar`}
-          disabled={locked}
-          onPress={() => router.push('/selecionar-cliente')}
-          style={[styles.card, styles.between]}
-        >
-          <View style={styles.flex}>
-            <Text variant="caption" color="textMuted">
-              Cliente
-            </Text>
-            <Text variant="label">{draft.customer?.name ?? 'Consumidor final'}</Text>
-          </View>
-          {!locked && <Icon name="chevron-forward" size={20} color={colors.textMuted} />}
-        </Pressable>
-
-        <Text variant="heading">Itens</Text>
-        {draft.items.length === 0 && <Text color="textMuted">Nenhum item. Adicione ao menos um produto.</Text>}
-        {draft.items.map((item) => (
-          <View key={item.productId} style={styles.card}>
-            <View style={styles.between}>
-              <View style={styles.flex}>
-                <Text variant="label">{item.name}</Text>
-                <Text variant="caption" color="textMuted">
-                  {formatCents(item.unitPriceCents)} cada
-                </Text>
-              </View>
-              {!locked && (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Remover ${item.name}`}
-                  onPress={() => setDraft((d) => ({ ...d, items: removeItem(d.items, item.productId) }))}
-                  style={styles.remove}
-                >
-                  <Icon name="trash-outline" size={22} color={colors.danger} />
-                </Pressable>
-              )}
-            </View>
-            <QuantityField item={item} disabled={locked} />
-          </View>
-        ))}
-        {!locked && <Button label="Adicionar produto" variant="outline" icon="add" onPress={() => router.push('/selecionar-produto')} />}
-
-        <TextField
-          label="Observação"
-          placeholder="Opcional"
-          value={draft.observation}
-          onChangeText={(observation) => setDraft((d) => ({ ...d, observation: observation.slice(0, MAX_OBSERVATION) }))}
-          editable={!locked}
-          multiline
-        />
+        <DraftEditor store={store} mode="presale" locked={locked} />
 
         <View style={styles.card}>
           <View style={styles.between}>
@@ -182,8 +95,6 @@ const styles = StyleSheet.create({
   card: { gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border },
   between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
   flex: { flex: 1 },
-  remove: { width: touchTarget, height: touchTarget, alignItems: 'center', justifyContent: 'center' },
-  qty: { textAlign: 'right' },
   doneBlock: { flex: 1, justifyContent: 'center', gap: spacing.lg, padding: spacing.xl },
   doneIcon: { width: 72, height: 72, borderRadius: radius.pill, backgroundColor: colors.successSoft, alignItems: 'center', justifyContent: 'center' },
 });

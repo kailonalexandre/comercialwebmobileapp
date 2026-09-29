@@ -1,12 +1,16 @@
 export type DraftItem = { productId: number; name: string; unitPriceCents: number; quantity: number };
 
+// Valor recebido por forma de pagamento (só o PDV usa; a pré-venda não recebe).
+export type PaymentLine = { method: string; label: string; amountCents: number };
+
 export type Draft = {
   customer: { id: number; name: string } | null;
   observation: string;
   items: DraftItem[];
+  payments: PaymentLine[];
 };
 
-export const emptyDraft: Draft = { customer: null, observation: '', items: [] };
+export const emptyDraft: Draft = { customer: null, observation: '', items: [], payments: [] };
 
 // Limites do servidor (FormRequest do ComercialWeb): recusar aqui poupa a ida e volta.
 export const MAX_ITEMS = 200;
@@ -50,3 +54,34 @@ export function toRequest(draft: Draft) {
 
 export const canSend = (draft: Draft) =>
   draft.items.length > 0 && draft.items.length <= MAX_ITEMS && draft.observation.length <= MAX_OBSERVATION;
+
+export const MAX_PAYMENTS = 8;
+
+// Uma linha por forma: receber de novo na mesma forma soma no valor.
+export function addPayment(payments: PaymentLine[], line: PaymentLine): PaymentLine[] {
+  if (line.amountCents <= 0) return payments;
+  const existing = payments.find((p) => p.method === line.method);
+  if (existing) return payments.map((p) => (p === existing ? { ...p, amountCents: p.amountCents + line.amountCents } : p));
+  return payments.length >= MAX_PAYMENTS ? payments : [...payments, line];
+}
+
+export const removePayment = (payments: PaymentLine[], method: string): PaymentLine[] => payments.filter((p) => p.method !== method);
+
+export const paidCents = (payments: PaymentLine[]): number => payments.reduce((sum, p) => sum + p.amountCents, 0);
+
+// Contra o total que o SERVIDOR cotou: quanto falta e quanto volta de troco.
+export const remainingCents = (totalCents: number, payments: PaymentLine[]): number => Math.max(0, totalCents - paidCents(payments));
+export const changeCents = (totalCents: number, payments: PaymentLine[]): number => Math.max(0, paidCents(payments) - totalCents);
+
+// "12,50" ou "12.5" -> 1250. Inválido, zero ou negativo = null.
+export function parseMoney(text: string): number | null {
+  const m = /^\s*(\d{1,7})(?:[.,](\d{1,2}))?\s*$/.exec(text);
+  if (!m) return null;
+  const cents = Number(m[1]) * 100 + Number((m[2] ?? '').padEnd(2, '0'));
+  return cents > 0 ? cents : null;
+}
+
+export const toSaleRequest = (draft: Draft) => ({
+  ...toRequest(draft),
+  payments: draft.payments.map((p) => ({ method: p.method, amountCents: p.amountCents })),
+});

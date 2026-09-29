@@ -3,6 +3,7 @@ using ComercialWeb.Mobile.Common;
 using ComercialWeb.Mobile.Identity;
 using ComercialWeb.Mobile.Identity.Authorization;
 using ComercialWeb.Mobile.Identity.Tenancy;
+using ComercialWeb.Mobile.Sales.Pdv;
 using ComercialWeb.Mobile.Sales.PreSales;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -24,6 +25,11 @@ public static class SalesModule
         {
             if (Uri.TryCreate(config["ComercialWeb:BaseUrl"], UriKind.Absolute, out var baseUrl)) http.BaseAddress = baseUrl;
             http.Timeout = TimeSpan.FromSeconds(20);
+        });
+        services.AddHttpClient<PdvClient>(http =>
+        {
+            if (Uri.TryCreate(config["ComercialWeb:BaseUrl"], UriKind.Absolute, out var baseUrl)) http.BaseAddress = baseUrl;
+            http.Timeout = TimeSpan.FromSeconds(30);
         });
         return services;
     }
@@ -56,6 +62,7 @@ public static class SalesModule
         }).RequirePermission(ViewSales);
 
         app.MapPreSaleEndpoints();
+        app.MapPdvEndpoints();
         return app;
     }
 
