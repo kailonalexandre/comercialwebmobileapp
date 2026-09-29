@@ -22,6 +22,7 @@ function RootNavigator() {
           <Stack.Screen name="venda/[id]" />
           <Stack.Screen name="produtos" />
           <Stack.Screen name="clientes" />
+          <Stack.Screen name="notificacoes" />
         </Stack.Protected>
         <Stack.Protected guard={signedOut && !seen}>
           <Stack.Screen name="onboarding" />

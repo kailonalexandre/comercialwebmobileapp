@@ -48,5 +48,8 @@ export function usePagedList<T>(fetchPage: PageFetcher<T>, search: string) {
       .catch(() => setState((s) => ({ ...s, loadingMore: false })));
   }, [fetchPage, search, state]);
 
-  return { ...state, reload, loadMore };
+  // Altera itens já carregados (ex.: marcar como lido) sem nova ida ao servidor.
+  const patch = useCallback((change: (items: T[]) => T[]) => setState((s) => ({ ...s, items: change(s.items) })), []);
+
+  return { ...state, reload, loadMore, patch };
 }
