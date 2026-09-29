@@ -5,6 +5,7 @@
     <Project Path="src/Modules/Customers/ComercialWeb.Mobile.Customers.csproj" />
     <Project Path="src/Modules/Dashboard/ComercialWeb.Mobile.Dashboard.csproj" />
     <Project Path="src/Modules/Notifications/ComercialWeb.Mobile.Notifications.csproj" />
+    <Project Path="src/Modules/Push/ComercialWeb.Mobile.Push.csproj" />
     <Project Path="src/Common/ComercialWeb.Mobile.Common.csproj" />
     <Project Path="src/Modules/Identity/ComercialWeb.Mobile.Identity.csproj" />
     <Project Path="src/Modules/Sales/ComercialWeb.Mobile.Sales.csproj" />

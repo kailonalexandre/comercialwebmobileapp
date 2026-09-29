@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SessionProvider, useSession } from '@/features/auth/session-context';
 import { PdvDraftProvider } from '@/features/pdv/pdv-draft';
 import { PreSaleDraftProvider } from '@/features/presale/presale-draft';
+import { PushBridge } from '@/features/push/push-bridge';
 import { OnboardingProvider, useOnboarding } from '@/features/onboarding/onboarding-context';
 import { StateView } from '@/shared/components/state-view';
 
@@ -58,6 +59,7 @@ export default function RootLayout() {
     <OnboardingProvider>
       <SessionProvider>
         <SessionScopedDraft>
+          <PushBridge />
           <RootNavigator />
         </SessionScopedDraft>
       </SessionProvider>

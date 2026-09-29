@@ -124,7 +124,16 @@ Paginação, `PagedResult` e escape de LIKE ficam em `src/Common` (compartilhado
 - Estado lido/arquivado vive na tabela do ComercialWeb (`notifications`) para que ler no celular também some do sino da web. É a **única escrita** do app em tabela do ComercialWeb: só `read_at`, `archived_at`, `updated_at`, só de linhas do próprio usuário na empresa da sessão ou sem empresa (outro usuário, outra empresa ou id inexistente: 404), com a semântica de `NotificationRepository` (arquivar também marca como lida; marcar lida é idempotente). A web não tem observer nem efeito colateral nessas colunas.
 - Datas gravadas no horário local da empresa (`LocalTime`, `ComercialWeb:TimeZone`).
 - Não expõe `url` (rota da web) nem `context`; envia `entityType`/`entityId` para o app navegar por conta própria.
-- **Push** (FCM/APNs) fica para fase posterior: exige tabela de dispositivos, provedor e consentimento.
+- **Push**: ver a seção "Push (Expo)" abaixo.
+
+### Push (Expo)
+
+- App: após entrar, pede permissão, cria o canal Android `default`, obtém o Expo push token (`extra.eas.projectId` do `app.json`) e faz `PUT /api/v1/me/push-token {token, platform}`. Sem projectId, permissão negada, aparelho sem Play Services ou qualquer erro: não registra e segue (nunca bloqueia o login). No logout: `DELETE /api/v1/me/push-token` (melhor esforço). Tocar na notificação abre `/notificacoes`.
+- API (módulo `Push`, tabela `mobile_push_tokens`, migration 0003): um token por sessão, UNIQUE no token (token que passa a outra sessão substitui a linha). Ao registrar, a marca d'água `last_notification_id` começa no maior id de notificações do usuário: as antigas não são enviadas.
+- `PushDispatcher` (BackgroundService) consulta a cada `Push:PollSeconds` as sessões **ativas** (não revogadas nem expiradas) e envia, em ordem, as notificações `id > marca d'água` do escopo da sessão (usuário + empresa da sessão ou sem empresa), não lidas e não arquivadas, no máximo 50 por dispositivo por ciclo. A marca só avança após envio aceito pelo Expo. `DeviceNotRegistered` apaga o token; erro de rede/5xx ou recusa de uma mensagem: log de aviso sem segredo e nova tentativa no próximo ciclo. Título/corpo já são texto de usuário; o `data` leva só `notificationId`, `entityType`, `entityId`.
+- Config: `Push__Enabled` (padrão `false`: nada roda), `Push__PollSeconds` (padrão 15), `Push__ExpoAccessToken` (opcional, só se a conta Expo exigir "enhanced security"; vai como Bearer e nunca é logado).
+- Limitações: polling, não tempo real (atraso até `PollSeconds`); dispatcher de instância única. Com várias instâncias da API cada uma enviaria a mesma notificação, então antes disso é preciso um lock (ex.: `GET_LOCK` do MySQL).
+- Para o push real chegar (não coberto por testes automáticos): criar o projeto EAS (`eas init`) e pôr o projectId em `expo.extra.eas.projectId` do `app.json`; criar o projeto Firebase, baixar o `google-services.json` (fora do git) e apontar `expo.android.googleServicesFile`; enviar a chave FCM V1 ao Expo (`eas credentials`); gerar novo build; ligar `Push__Enabled=true` na API.
 
 ### Pré-venda (app → ComercialWeb)
 
