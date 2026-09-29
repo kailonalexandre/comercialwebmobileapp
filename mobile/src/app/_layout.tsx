@@ -23,6 +23,8 @@ function RootNavigator() {
           <Stack.Screen name="(app)" />
           <Stack.Screen name="venda/[id]" />
           <Stack.Screen name="produtos" />
+          <Stack.Screen name="produto/[id]" />
+          <Stack.Screen name="cliente/[id]" />
           <Stack.Screen name="clientes" />
           <Stack.Screen name="notificacoes" />
           <Stack.Screen name="nova-venda" />

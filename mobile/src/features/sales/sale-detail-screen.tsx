@@ -1,19 +1,16 @@
-import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useLocalSearchParams } from 'expo-router';
+import { useCallback } from 'react';
+import { StyleSheet, View } from 'react-native';
 
 import { formatLocal } from '@/features/dashboard/dashboard-model';
 import { fetchSale } from '@/features/sales/sales-api';
-import { formatQuantity, statusLabel, statusTone, type SaleDetail } from '@/features/sales/sales-model';
-import { Icon } from '@/shared/components/icon';
-import { StateView } from '@/shared/components/state-view';
+import { formatQuantity, statusLabel, statusTone } from '@/features/sales/sales-model';
+import { DetailFrame } from '@/features/shell/detail-frame';
 import { StatusPill } from '@/shared/components/status-pill';
 import { Text } from '@/shared/components/text';
-import { colors, radius, spacing, touchTarget } from '@/shared/theme/tokens';
+import { useDetail } from '@/shared/hooks/use-detail';
+import { colors, radius, spacing } from '@/shared/theme/tokens';
 import { formatCents } from '@/shared/utils/format';
-
-type Load = { sale: SaleDetail | null; failure: 'none' | 'not_found' | 'error' };
 
 function Line({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (
@@ -28,44 +25,13 @@ function Line({ label, value, strong }: { label: string; value: string; strong?:
 
 export function SaleDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const [load, setLoad] = useState<Load>({ sale: null, failure: 'none' });
-  const [attempt, setAttempt] = useState(0);
-
-  useEffect(() => {
-    let active = true;
-    fetchSale(Number(id))
-      .then((sale) => active && setLoad({ sale, failure: 'none' }))
-      .catch((e: { kind?: string }) => active && setLoad({ sale: null, failure: e.kind === 'not_found' ? 'not_found' : 'error' }));
-    return () => {
-      active = false;
-    };
-  }, [id, attempt]);
-
-  const { sale, failure } = load;
+  const fetcher = useCallback(() => fetchSale(Number(id)), [id]);
+  const { data: sale, failure, error, reload } = useDetail(fetcher);
 
   return (
-    <SafeAreaView edges={['top']} style={styles.root}>
-      <View style={styles.top}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Voltar" onPress={() => router.back()} style={styles.back}>
-          <Icon name="chevron-back" size={26} color={colors.text} />
-        </Pressable>
-        <Text variant="heading">Venda</Text>
-      </View>
-
-      {!sale && failure === 'none' && <StateView kind="loading" />}
-      {failure === 'not_found' && <StateView kind="empty" message="Venda não encontrada." />}
-      {failure === 'error' && (
-        <StateView
-          kind="error"
-          onRetry={() => {
-            setLoad({ sale: null, failure: 'none' });
-            setAttempt((n) => n + 1);
-          }}
-        />
-      )}
-
+    <DetailFrame title="Venda" loading={!sale && !failure} failure={failure} error={error} notFoundMessage="Venda não encontrada." onRetry={reload}>
       {sale && (
-        <ScrollView contentContainerStyle={styles.content}>
+        <>
           <View style={styles.card}>
             <View style={styles.between}>
               <Text variant="title">{sale.number}</Text>
@@ -124,17 +90,13 @@ export function SaleDetailScreen() {
               <Text color="textMuted">{sale.observation}</Text>
             </>
           )}
-        </ScrollView>
+        </>
       )}
-    </SafeAreaView>
+    </DetailFrame>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.background },
-  top: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
-  back: { width: touchTarget, height: touchTarget, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', marginLeft: -spacing.sm },
-  content: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl * 2 },
   card: { gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border },
   between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   line: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md },

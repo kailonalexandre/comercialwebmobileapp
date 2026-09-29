@@ -12,3 +12,13 @@ export async function fetchProducts(page: number, search: string): Promise<Paged
   if (search) query.set('search', search);
   return api.request<Paged<Product>>(`/v1/products?${query.toString()}`);
 }
+
+export type ProductDetail = Product & { description: string | null };
+
+export async function fetchProduct(id: number): Promise<ProductDetail> {
+  if (!api) {
+    if (!__DEV__) throw new Error('API não configurada.');
+    return { id, code: 1, name: 'Camiseta básica', sku: 'CAM-01', barcode: null, salePriceCents: 4_990, isActive: true, description: 'Algodão, modelagem reta.' };
+  }
+  return api.request<ProductDetail>(`/v1/products/${id}`);
+}
