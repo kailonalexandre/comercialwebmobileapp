@@ -25,6 +25,7 @@ internal static class PermissionsEndpoint
         SalesModule.ViewSales,
         PreSaleEndpoints.CreatePreSale,
         PdvEndpoints.UsePdv,
+        PdvEndpoints.DiscountPdv,
         DashboardModule.ViewReceivables,
         DashboardModule.ViewInventory,
         OrdersEndpoints.StoreOrders,

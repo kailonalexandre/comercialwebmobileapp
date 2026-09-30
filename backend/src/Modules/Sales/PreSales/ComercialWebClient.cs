@@ -9,17 +9,18 @@ using Microsoft.Extensions.Logging;
 
 namespace ComercialWeb.Mobile.Sales.PreSales;
 
-public sealed record PreSaleLine(long ProductId, decimal Quantity);
+public sealed record PreSaleLine(long ProductId, decimal Quantity, decimal? DiscountPercent = null, long? DiscountCents = null);
 
 /// <summary>Pedido já validado; usuário e empresa vêm da sessão, nunca do app.</summary>
 public sealed record PreSaleCommand(
-    long UserId, long BusinessId, Guid ClientSaleUuid, long? CustomerId, long? SellerPersonId, string? Observation, IReadOnlyList<PreSaleLine> Items);
+    long UserId, long BusinessId, Guid ClientSaleUuid, long? CustomerId, long? SellerPersonId, string? Observation, IReadOnlyList<PreSaleLine> Items,
+    decimal? SaleDiscountPercent = null, long? SaleDiscountCents = null);
 
 public sealed record PreSaleCreated(long SaleId, string Number, string Status, long TotalCents, bool AlreadyExisted);
 
 public enum PreSaleFailure { Forbidden, BusinessRule, Unavailable }
 
-public sealed record PreSaleOutcome(PreSaleCreated? Created, PreSaleFailure? Failure, string? Message = null);
+public sealed record PreSaleOutcome(PreSaleCreated? Created, PreSaleFailure? Failure, string? Message = null, string? Code = null);
 
 /// <summary>
 /// Envia pré-vendas ao ComercialWeb (POST /api/mobile/v1/pre-sales), onde as regras de venda da web são aplicadas.
@@ -54,7 +55,9 @@ public sealed partial class ComercialWebClient(HttpClient http, IConfiguration c
             customer_id = command.CustomerId,
             seller_person_id = command.SellerPersonId,
             observation = command.Observation,
-            items = command.Items.Select(i => new { product_id = i.ProductId, quantity = i.Quantity }),
+            items = command.Items.Select(i => new { product_id = i.ProductId, quantity = i.Quantity, discount_percent = i.DiscountPercent, discount_cents = i.DiscountCents }),
+            sale_discount_percent = command.SaleDiscountPercent,
+            sale_discount_cents = command.SaleDiscountCents,
         }, Json);
 
         using var request = new HttpRequestMessage(HttpMethod.Post, PreSalesPath) { Content = new ByteArrayContent(body) };
@@ -90,7 +93,9 @@ public sealed partial class ComercialWebClient(HttpClient http, IConfiguration c
             case HttpStatusCode.UnprocessableEntity:
                 var error = await response.Content.ReadFromJsonAsync<ErrorDto>(Json, ct);
                 // Só a mensagem de regra de negócio vai para o app; erro de validação estrutural fica genérico.
-                return new PreSaleOutcome(null, PreSaleFailure.BusinessRule, error?.Error?.Code == "business_rule" ? error.Error.Message : null);
+                return error?.Error?.Code is "business_rule" or "discount_limit_exceeded"
+                    ? new PreSaleOutcome(null, PreSaleFailure.BusinessRule, error.Error.Message, error.Error.Code)
+                    : new PreSaleOutcome(null, PreSaleFailure.BusinessRule);
             default:
                 LogUnexpectedStatus(logger, (int)response.StatusCode);
                 return new PreSaleOutcome(null, PreSaleFailure.Unavailable);

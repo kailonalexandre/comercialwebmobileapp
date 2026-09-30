@@ -1,8 +1,9 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { Icon } from '@/shared/components/icon';
 import { Text } from '@/shared/components/text';
-import { colors, spacing, touchTarget } from '@/shared/theme/tokens';
+import { spacing, touchTarget } from '@/shared/theme/tokens';
+import { makeStyles, useTheme } from '@/shared/theme/theme-context';
 
 type Props = {
   page: number;
@@ -17,6 +18,7 @@ type Props = {
 
 // Barra de paginação numerada: Anterior, "Página X de Y" e Próxima; o total de registros aparece sempre.
 export function Pager({ page, totalPages, total, failed, bottomGap = 0, onPage, onRetry }: Props) {
+  const styles = useStyles();
   if (total === 0 && !failed) return null;
   return (
     <View style={[styles.bar, { paddingBottom: spacing.sm + bottomGap }]}>
@@ -44,6 +46,8 @@ export function Pager({ page, totalPages, total, failed, bottomGap = 0, onPage, 
 }
 
 function Step({ label, icon, disabled, onPress }: { label: string; icon: 'chevron-back' | 'chevron-forward'; disabled: boolean; onPress: () => void }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   return (
     <Pressable
       accessibilityRole="button"
@@ -58,11 +62,11 @@ function Step({ label, icon, disabled, onPress }: { label: string; icon: 'chevro
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   bar: { gap: spacing.xs, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.background },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   info: { alignItems: 'center' },
   step: { width: touchTarget, height: touchTarget, borderRadius: touchTarget / 2, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
   disabled: { opacity: 0.35 },
   center: { textAlign: 'center' },
-});
+}));

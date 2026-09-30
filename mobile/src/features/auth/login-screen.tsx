@@ -1,10 +1,8 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { defaultDeviceName } from '@/features/auth/auth-api';
-import { LoginWave } from '@/features/auth/login-wave';
 import { useSession } from '@/features/auth/session-context';
 import { parsePairingLink, type PairingLink } from '@/features/auth/pairing';
 import { ApiError } from '@/infrastructure/api/client';
@@ -15,7 +13,10 @@ import { CodeScanner } from '@/shared/components/code-scanner';
 import { EnvBadge } from '@/shared/components/env-badge';
 import { Text } from '@/shared/components/text';
 import { TextField } from '@/shared/components/text-field';
-import { colors, radius, spacing } from '@/shared/theme/tokens';
+import { radius, shadow, spacing } from '@/shared/theme/tokens';
+import { makeStyles, useTheme } from '@/shared/theme/theme-context';
+
+const STEPS = ['No ComercialWeb, abra Configurações → Aplicativo Mobile', 'Clique em Gerar QR Code', 'Aponte a câmera do celular para o código'];
 
 function messageFor(e: unknown): string {
   if (e instanceof ApiError) {
@@ -32,6 +33,8 @@ function messageFor(e: unknown): string {
 }
 
 export function LoginScreen({ deepLink }: { deepLink?: string }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const { connect } = useSession();
   const [scanning, setScanning] = useState(false);
   const [link, setLink] = useState('');
@@ -72,18 +75,35 @@ export function LoginScreen({ deepLink }: { deepLink?: string }) {
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <SafeAreaView edges={['top']} style={styles.content}>
-            <LinearGradient colors={[colors.gradientStart, colors.gradientEnd]} style={styles.logo}>
+            <View style={styles.logo}>
               <BrandMark size={52} color={colors.onPrimary} />
-            </LinearGradient>
-            <EnvBadge />
+            </View>
+            <View style={styles.badgeRow}>
+              <EnvBadge />
+            </View>
             <View style={styles.titleBlock}>
-              <Text variant="title" style={[styles.brand, styles.center]}>
+              <Text variant="title" style={[styles.brand, styles.center]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
                 Infinit Comercial
               </Text>
               <Text color="textMuted" style={styles.center}>
-                No ComercialWeb, abra Configurações → Aplicativo Mobile e gere um QR Code.
+                Conecte este aparelho ao ComercialWeb em menos de um minuto.
               </Text>
             </View>
+
+            {!pending && (
+              <View style={styles.steps}>
+                {STEPS.map((step, i) => (
+                  <View key={step} style={styles.step}>
+                    <View style={styles.stepNumber}>
+                      <Text variant="label" color="primary">
+                        {i + 1}
+                      </Text>
+                    </View>
+                    <Text style={styles.flex}>{step}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
 
             {pending ? (
               <View style={styles.form}>
@@ -140,31 +160,26 @@ export function LoginScreen({ deepLink }: { deepLink?: string }) {
               </View>
             )}
           </SafeAreaView>
-          <LoginWave />
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.background },
+const useStyles = makeStyles((colors) => ({
+  root: { flex: 1, backgroundColor: colors.page },
   flex: { flex: 1 },
   scroll: { flexGrow: 1, justifyContent: 'space-between' },
   content: { paddingHorizontal: spacing.xl, gap: spacing.lg },
-  logo: {
-    width: 88,
-    height: 88,
-    borderRadius: radius.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: spacing.xl,
-    alignSelf: 'center',
-  },
+  logo: { width: 88, height: 88, borderRadius: radius.xl, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginTop: spacing.xl, alignSelf: 'center' },
   titleBlock: { gap: spacing.xs, alignItems: 'center' },
-  center: { textAlign: 'center' },
   brand: { fontSize: 32, lineHeight: 40 },
+  steps: { gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.background, ...shadow.card },
+  step: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  stepNumber: { width: 32, height: 32, borderRadius: radius.pill, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  center: { textAlign: 'center' },
+  badgeRow: { alignItems: 'center' },
   form: { gap: spacing.lg, marginTop: spacing.xl },
   divider: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   line: { flex: 1, height: 1, backgroundColor: colors.border },
-});
+}));

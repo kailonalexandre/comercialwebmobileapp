@@ -14,10 +14,14 @@ const devSale: SaleListItem = {
   sellerName: 'Administrador',
 };
 
-export async function fetchSales(page: number, search: string): Promise<Paged<SaleListItem>> {
+// `status` da API de vendas (o servidor recusa valores fora da lista com 422).
+export type SaleStatusFilter = 'all' | 'finalizada' | 'pre_venda' | 'devolucao';
+
+export async function fetchSales(page: number, search: string, status: SaleStatusFilter = 'all'): Promise<Paged<SaleListItem>> {
   if (!api) return devPage([devSale]);
   const query = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) });
   if (search) query.set('search', search);
+  if (status !== 'all') query.set('status', status);
   return api.request<Paged<SaleListItem>>(`/v1/sales?${query.toString()}`);
 }
 

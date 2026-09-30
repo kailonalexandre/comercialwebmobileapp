@@ -183,3 +183,14 @@ test('log de rede mostra método, caminho sem query e status, nunca o token', as
   expect(lines[0]).toMatch(/^GET \/v1\/customers -> 200 \d+ms/);
   expect(lines[0]).not.toContain('segredo-token');
 });
+
+test('resposta binária (PDF) volta como bytes e o motivo do 422 chega na recusa', async () => {
+  const bytes = new Uint8Array([37, 80, 68, 70]).buffer;
+  const pdf = setup({ arrayBuffer: async () => bytes });
+  await expect(pdf.client.request('/v1/sales/1/receipt/pdf', { method: 'POST', body: {}, binary: true })).resolves.toEqual(new Uint8Array([37, 80, 68, 70]));
+
+  const refused = setup({ ok: false, status: 422, json: async () => ({ code: 'business_rule', reason: 'customer_phone_missing', message: 'Sem telefone.' }) });
+  await expect(refused.client.request('/v1/sales/1/receipt/whatsapp', { method: 'POST', body: {} })).rejects.toMatchObject({
+    refusal: { reason: 'customer_phone_missing', code: 'business_rule' },
+  });
+});

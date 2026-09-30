@@ -1,8 +1,9 @@
-import { ActivityIndicator, Pressable, StyleSheet } from 'react-native';
+import { ActivityIndicator, Pressable } from 'react-native';
 
 import { Icon, type IconName } from '@/shared/components/icon';
 import { Text } from '@/shared/components/text';
-import { colors, radius, shadow, spacing, touchTarget } from '@/shared/theme/tokens';
+import { radius, shadow, spacing, touchTarget } from '@/shared/theme/tokens';
+import { makeStyles, useTheme } from '@/shared/theme/theme-context';
 
 type Variant = 'primary' | 'secondary' | 'outline' | 'inverse';
 
@@ -16,16 +17,11 @@ type Props = {
   disabled?: boolean;
 };
 
-const foreground: Record<Variant, string> = {
-  primary: colors.onPrimary,
-  secondary: colors.primary,
-  outline: colors.primary,
-  inverse: colors.primary,
-};
-
 export function Button({ label, onPress, variant = 'primary', icon, trailingIcon, loading = false, disabled = false }: Props) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const inactive = disabled || loading;
-  const fg = foreground[variant];
+  const fg = variant === 'primary' ? colors.onPrimary : colors.primary;
 
   return (
     <Pressable
@@ -51,7 +47,7 @@ export function Button({ label, onPress, variant = 'primary', icon, trailingIcon
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   base: {
     minHeight: touchTarget + spacing.sm,
     borderRadius: radius.md,
@@ -68,4 +64,4 @@ const styles = StyleSheet.create({
   inverse: { backgroundColor: colors.background },
   pressed: { opacity: 0.85 },
   inactive: { opacity: 0.6 },
-});
+}));

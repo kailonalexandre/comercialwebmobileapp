@@ -9,7 +9,7 @@ export type Quote = {
   subtotalCents: number;
   discountCents: number;
   totalCents: number;
-  items: { productId: number; name: string; quantity: number; unitPriceCents: number; totalCents: number }[];
+  items: { productId: number; name: string; quantity: number; unitPriceCents: number; totalCents: number; discountCents?: number }[];
 };
 
 const devMethods: PaymentMethod[] = [

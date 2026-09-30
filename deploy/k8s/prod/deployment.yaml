@@ -1,0 +1,95 @@
+# API .NET do app (namespace comercial-prod). UMA réplica, estratégia Recreate: o disparador de push e a renovação de token
+# do ComercialWeb são por instância; com duas réplicas cada uma enviaria a mesma notificação. Escalar exige lock no banco.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mobile-api
+  namespace: comercial-prod
+  labels: { app.kubernetes.io/name: mobile-api }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app.kubernetes.io/name: mobile-api }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: mobile-api }
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull-mobile   # próprio da API (GHCR do kailonalexandre); não reutiliza o ghcr-pull do ComercialWeb
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1654
+        fsGroup: 1654
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: api
+          # O deploy troca MOBILE_API_IMAGE_TAG pelo SHA completo do commit (nunca "latest").
+          image: ghcr.io/kailonalexandre/comercialweb-mobile-api:MOBILE_API_IMAGE_TAG
+          ports:
+            - { name: http, containerPort: 8080 }
+          env:
+            - { name: ASPNETCORE_ENVIRONMENT, value: Production }
+            - { name: ComercialWeb__BaseUrl, value: "https://comercial.infinitsolucoesweb.com.br" }
+            - { name: ComercialWeb__TimeZone, value: America/Sao_Paulo }
+            - { name: DataProtection__KeysPath, value: /keys/dp }
+            - { name: Jwt__SigningKeyPath, value: /jwt/jwt.pem }
+            # Rede de pods do K3s (a mesma do TRUSTED_PROXIES do ComercialWeb): só o Traefik pode informar o IP do cliente.
+            - { name: ForwardedHeaders__KnownNetworks, value: "10.42.0.0/16" }
+            # Ligar (true) só depois de instalar a credencial FCM/Expo em produção (docs/PUSH_SETUP.md).
+            - { name: Push__Enabled, value: "false" }
+          envFrom:
+            # Chaves: ConnectionStrings__ComercialWeb, ComercialWeb__MobileApiSecret. Ver secret.example.yaml.
+            - secretRef: { name: mobile-api-env }
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 512Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - { name: keys, mountPath: /keys }
+            - { name: jwt, mountPath: /jwt, readOnly: true }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: keys
+          persistentVolumeClaim: { claimName: mobile-api-keys }
+        - name: jwt
+          secret:
+            secretName: mobile-api-jwt
+            defaultMode: 0440
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mobile-api
+  namespace: comercial-prod
+  labels: { app.kubernetes.io/name: mobile-api }
+spec:
+  selector: { app.kubernetes.io/name: mobile-api }
+  ports:
+    - { name: http, port: 80, targetPort: http }
+---
+# Chaves do Data Protection (cifram o par de tokens do ComercialWeb guardado em mobile_sessions). Chave perdida = toda
+# sessão pareada cai e exige novo QR. Fora de backup do banco; entra no backup do nó.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mobile-api-keys
+  namespace: comercial-prod
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests: { storage: 1Gi }

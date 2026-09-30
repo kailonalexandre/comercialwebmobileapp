@@ -1,0 +1,19 @@
+# PRÉ-REQUISITO do rate limit por IP. Medido em produção (2026-09-30): o ComercialWeb recebe X-Forwarded-For com o IP de
+# um pod (10.42.0.x), não o do navegador, porque o Service `traefik` está com externalTrafficPolicy: Cluster e o tráfego é
+# mascarado (SNAT) antes de chegar ao Traefik. Com `Local` o IP de origem é preservado.
+#
+# ATENÇÃO: muda o comportamento de TODO o tráfego de entrada do cluster, inclusive o do ComercialWeb (melhora: os limites
+# e logs por IP dele passam a ver o IP real). Em nó único (prod-01) é seguro, pois o Traefik roda no mesmo nó que recebe
+# a conexão. Aplique em horário calmo e confira em seguida (docs/DEPLOY.md, "Conferir o IP do cliente").
+#
+# ROLLBACK: kubectl delete -f traefik-real-ip.yaml   (o k3s volta ao Service padrão em poucos segundos).
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    service:
+      spec:
+        externalTrafficPolicy: Local

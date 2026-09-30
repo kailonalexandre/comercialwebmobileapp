@@ -1,22 +1,30 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { fetchPaymentMethods, type PaymentMethod } from '@/features/pdv/pdv-api';
+import { useSession } from '@/features/auth/session-context';
 import { usePdvDraft } from '@/features/pdv/pdv-draft';
 import { usePdvQuote } from '@/features/pdv/use-pdv-quote';
 import { DraftEditor } from '@/features/presale/draft-editor';
+import { ReceiptActions } from '@/features/sales/receipt-actions';
 import { addPayment, changeCents, paidCents, parseMoney, remainingCents, removePayment } from '@/features/presale/draft-model';
 import { Button } from '@/shared/components/button';
 import { Icon } from '@/shared/components/icon';
 import { Text } from '@/shared/components/text';
 import { TextField } from '@/shared/components/text-field';
-import { colors, radius, spacing } from '@/shared/theme/tokens';
+import { layout, radius, shadow, spacing } from '@/shared/theme/tokens';
+import { makeStyles, useTheme } from '@/shared/theme/theme-context';
 import { formatCents } from '@/shared/utils/format';
 
 export function PdvScreen() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const store = usePdvDraft();
+  const { profile } = useSession();
+  // Só esconde o campo; o ComercialWeb confere pdv.discount em cada venda.
+  const canDiscount = profile?.permissions.includes('pdv.discount') ?? false;
   const { draft, phase, setDraft, send, reset } = store;
   const locked = phase.name !== 'editing';
   const quote = usePdvQuote(draft, phase.name === 'editing');
@@ -68,6 +76,7 @@ export function PdvScreen() {
               Troco: {formatCents(phase.sale.changeCents ?? 0)}
             </Text>
           )}
+          <ReceiptActions saleId={phase.sale.saleId} />
           <Button label="Nova venda" onPress={reset} />
           <Button
             label="Ver vendas"
@@ -87,9 +96,15 @@ export function PdvScreen() {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text variant="title">PDV</Text>
 
-        <DraftEditor store={store} mode="pdv" locked={locked} integerQuantity />
+        <DraftEditor store={store} mode="pdv" locked={locked} integerQuantity canDiscount={canDiscount} />
 
         <View style={styles.card}>
+          {(quote.quote?.discountCents ?? 0) > 0 && (
+            <View style={styles.between}>
+              <Text color="textMuted">Descontos</Text>
+              <Text color="textMuted">- {formatCents(quote.quote?.discountCents ?? 0)}</Text>
+            </View>
+          )}
           <View style={styles.between}>
             <Text variant="label">Total</Text>
             <Text variant="heading">{quote.status === 'loading' && total === null ? 'Calculando…' : total === null ? '—' : formatCents(total)}</Text>
@@ -194,24 +209,39 @@ export function PdvScreen() {
               Se descartar, confira em Vendas se a venda anterior chegou a ser registrada.
             </Text>
           </View>
-        ) : (
-          <Button label="Finalizar venda" onPress={send} loading={phase.name === 'sending'} disabled={!canFinalize} />
-        )}
+        ) : null}
       </ScrollView>
+
+      {phase.name !== 'uncertain' && (
+        <View style={styles.footer}>
+          <View style={styles.flex}>
+            <Text variant="caption" color="textMuted">
+              Total · {draft.items.length} {draft.items.length === 1 ? 'item' : 'itens'}
+            </Text>
+            <Text variant="total" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+              {total === null ? '—' : formatCents(total)}
+            </Text>
+          </View>
+          <View style={styles.flex}>
+            <Button label="Cobrar" onPress={send} loading={phase.name === 'sending'} disabled={!canFinalize} />
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl * 3 },
-  card: { gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border },
+const useStyles = makeStyles((colors) => ({
+  root: { flex: 1, backgroundColor: colors.page },
+  content: { ...layout.content, padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl * 3 },
+  card: { gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.background, ...shadow.card },
   between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   flex: { flex: 1 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chip: { paddingHorizontal: spacing.md, minHeight: 40, justifyContent: 'center', borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border },
   chipActive: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
+  footer: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, padding: spacing.lg, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border },
   doneBlock: { flex: 1, justifyContent: 'center', gap: spacing.lg, padding: spacing.xl },
   doneIcon: { width: 72, height: 72, borderRadius: radius.pill, backgroundColor: colors.successSoft, alignItems: 'center', justifyContent: 'center' },
-});
+}));

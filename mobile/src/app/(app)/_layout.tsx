@@ -1,15 +1,13 @@
 import { Tabs } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 
 import { Icon, type IconName } from '@/shared/components/icon';
-import { colors, radius, shadow, spacing, typography } from '@/shared/theme/tokens';
+import { fonts, radius, shadow, spacing, typography } from '@/shared/theme/tokens';
+import { makeStyles, useTheme } from '@/shared/theme/theme-context';
 
 function TabIcon({ name, focused }: { name: IconName; focused: boolean }) {
-  return (
-    <View style={[styles.iconPill, focused && styles.iconPillActive]}>
-      <Icon name={name} size={24} color={focused ? colors.primary : colors.textMuted} />
-    </View>
-  );
+  const { colors } = useTheme();
+  return <Icon name={name} size={24} color={focused ? colors.primary : colors.textMuted} />;
 }
 
 const tab = (title: string, icon: IconName, activeIcon: IconName) => ({
@@ -18,51 +16,54 @@ const tab = (title: string, icon: IconName, activeIcon: IconName) => ({
 });
 
 export default function AppTabsLayout() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
-        tabBarLabelStyle: { fontSize: typography.caption.fontSize - 1, fontWeight: '600' },
+        tabBarAllowFontScaling: false,
+        tabBarLabelStyle: { fontFamily: fonts.semibold, fontSize: typography.caption.fontSize - 2 },
         tabBarStyle: styles.bar,
         tabBarItemStyle: styles.item,
       }}
     >
       <Tabs.Screen name="index" options={tab('Início', 'home-outline', 'home')} />
-      <Tabs.Screen name="vendas" options={tab('Vendas', 'cart-outline', 'cart')} />
+      <Tabs.Screen name="vendas" options={tab('Vendas', 'receipt-outline', 'receipt')} />
       <Tabs.Screen
         name="pdv"
         options={{
           title: 'PDV',
-          // FAB central como ícone: o rótulo padrão fica alinhado com os outros itens.
+          // Botão central em destaque; o rótulo segue alinhado com os outros itens.
           tabBarIcon: () => (
             <View style={styles.pdvIcon}>
               <View style={styles.pdvButton}>
-                <Icon name="add" size={32} color={colors.onPrimary} />
+                <Icon name="barcode-outline" size={28} color={colors.onPrimary} />
               </View>
             </View>
           ),
         }}
       />
-      <Tabs.Screen name="financeiro" options={tab('Financeiro', 'cash-outline', 'cash')} />
-      <Tabs.Screen name="menu" options={tab('Menu', 'menu-outline', 'menu')} />
+      <Tabs.Screen name="pedidos" options={tab('Pedidos', 'cube-outline', 'cube')} />
+      <Tabs.Screen name="menu" options={tab('Menu', 'grid-outline', 'grid')} />
+      {/* Financeiro ainda não tem endpoints no ComercialWeb: fora da barra, a rota segue existindo. */}
+      <Tabs.Screen name="financeiro" options={{ href: null }} />
     </Tabs>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   bar: { paddingTop: spacing.sm, backgroundColor: colors.background, borderTopColor: colors.border },
   item: { gap: 2 },
-  iconPill: { width: 56, height: 32, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
-  iconPillActive: { backgroundColor: colors.primarySoft },
   pdvIcon: { width: 56, height: 32, alignItems: 'center' },
   pdvButton: {
     position: 'absolute',
     bottom: 0,
-    width: 60,
-    height: 60,
-    borderRadius: radius.pill,
+    width: 56,
+    height: 56,
+    borderRadius: radius.lg,
     backgroundColor: colors.primary,
     borderWidth: 4,
     borderColor: colors.background,
@@ -70,4 +71,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...shadow.raised,
   },
-});
+}));

@@ -1,3 +1,4 @@
+using ComercialWeb.Mobile.Common;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -28,30 +29,44 @@ public sealed partial class PushDispatcher(PushStore store, IPushSender sender, 
     /// <summary>Um ciclo. Lança em falha do envio (a marca d'água do dispositivo fica onde estava, retenta no próximo ciclo).</summary>
     public async Task RunOnceAsync(CancellationToken ct)
     {
+        // Espera alguns segundos antes de avisar: a API marca a venda que o app acabou de criar (mobile_sale_origins)
+        // logo depois da resposta do ComercialWeb, e o aviso dessa venda não deve chegar ao próprio celular.
+        var grace = config.GetValue("Push:OriginGraceSeconds", 8);
+        DateTime? createdBefore = grace > 0 ? LocalTime.Now(config, clock).AddSeconds(-grace) : null;
+
         foreach (var token in await store.ActiveTokensAsync(clock.GetUtcNow().UtcDateTime, ct))
         {
-            var pending = await store.PendingAsync(token, PerCycleCap, ct);
+            var pending = await store.PendingAsync(token, PerCycleCap, createdBefore, ct);
             if (pending.Count == 0) continue;
 
-            var results = await sender.SendAsync(
-                [.. pending.Select(n => new PushMessage(token.Token, n.Title, n.Body, n.Id, n.EntityType, n.EntityId))], ct);
+            // Vendas feitas pelo próprio app não geram aviso no celular (só no web); a marca d'água avança por cima delas.
+            var toSend = pending.Where(n => !n.FromApp).ToList();
+            var results = toSend.Count == 0
+                ? []
+                : await sender.SendAsync([.. toSend.Select(n => new PushMessage(token.Token, n.Title, n.Body, n.Id, n.EntityType, n.EntityId))], ct);
+            var outcomes = toSend.Zip(results).ToDictionary(x => x.First.Id, x => x.Second);
 
-            // Avança até a última entrega OK antes do primeiro erro; erro genérico será tentado de novo.
+            // Avança até a última entrega OK (ou venda do app, que não precisa de aviso) antes do primeiro erro.
             long? lastOk = null;
-            for (var i = 0; i < pending.Count; i++)
+            foreach (var n in pending)
             {
-                if (results[i] == PushOutcome.DeviceNotRegistered)
+                if (n.FromApp)
+                {
+                    lastOk = n.Id;
+                    continue;
+                }
+                if (outcomes[n.Id] == PushOutcome.DeviceNotRegistered)
                 {
                     await store.DeleteAsync(token.SessionId, ct);
                     lastOk = null;
                     break;
                 }
-                if (results[i] == PushOutcome.Error)
+                if (outcomes[n.Id] == PushOutcome.Error)
                 {
-                    LogRejected(pending[i].Id);
+                    LogRejected(n.Id);
                     break;
                 }
-                lastOk = pending[i].Id;
+                lastOk = n.Id;
             }
             if (lastOk is { } id) await store.AdvanceAsync(token.SessionId, id, ct);
         }

@@ -11,7 +11,7 @@ export function ProductsScreen() {
   return (
     <ListScreen
       title="Produtos"
-      searchPlaceholder="Nome, código, SKU ou código de barras"
+      searchPlaceholder="Nome, código ou barras"
       emptyMessage="Nenhum produto encontrado."
       fetchPage={fetchProducts}
       scanBarcode

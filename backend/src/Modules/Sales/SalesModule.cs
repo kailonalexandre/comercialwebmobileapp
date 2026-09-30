@@ -5,6 +5,7 @@ using ComercialWeb.Mobile.Identity.Authorization;
 using ComercialWeb.Mobile.Identity.Tenancy;
 using ComercialWeb.Mobile.Sales.Orders;
 using ComercialWeb.Mobile.Sales.Pdv;
+using ComercialWeb.Mobile.Sales.Receipts;
 using ComercialWeb.Mobile.Sales.PreSales;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -22,6 +23,7 @@ public static class SalesModule
     public static IServiceCollection AddSalesModule(this IServiceCollection services, IConfiguration config)
     {
         services.AddScoped<SaleQueries>();
+        services.AddScoped<SaleOrigins>();
         services.AddHttpClient<ComercialWebClient>(http =>
         {
             if (Uri.TryCreate(config["ComercialWeb:BaseUrl"], UriKind.Absolute, out var baseUrl)) http.BaseAddress = baseUrl;
@@ -31,6 +33,13 @@ public static class SalesModule
         {
             if (Uri.TryCreate(config["ComercialWeb:BaseUrl"], UriKind.Absolute, out var baseUrl)) http.BaseAddress = baseUrl;
             http.Timeout = TimeSpan.FromSeconds(30);
+        });
+        services.AddHttpClient<ReceiptClient>(http =>
+        {
+            if (Uri.TryCreate(config["ComercialWeb:BaseUrl"], UriKind.Absolute, out var baseUrl)) http.BaseAddress = baseUrl;
+            http.Timeout = TimeSpan.FromSeconds(30);
+            // Resposta maior que um PDF de comprovante nunca é lida inteira para a memória (estoura como falha de rede: 503).
+            http.MaxResponseContentBufferSize = 15 * 1024 * 1024;
         });
         return services;
     }
@@ -65,6 +74,7 @@ public static class SalesModule
         app.MapPreSaleEndpoints();
         app.MapPdvEndpoints();
         app.MapOrdersEndpoints();
+        app.MapReceiptEndpoints();
         return app;
     }
 
