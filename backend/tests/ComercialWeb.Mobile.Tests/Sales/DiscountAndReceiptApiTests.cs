@@ -186,22 +186,3 @@ public sealed class ReceiptApiTests(ReceiptFixture api) : IClassFixture<ReceiptF
     public void Nome_do_arquivo_so_aceita_caracteres_seguros(string? raw, string expected) =>
         Assert.Equal(expected, ReceiptClient.SafeFileName(raw, 5));
 }
-
-public sealed class ReceiptRateLimitTests(ReceiptFixture api) : IClassFixture<ReceiptFixture>
-{
-    private static CancellationToken Ct => TestContext.Current.CancellationToken;
-
-    [Fact]
-    public async Task Envio_em_massa_do_mesmo_usuario_e_freado_com_429_e_outro_usuario_nao_e_afetado()
-    {
-        TestDatabase.RequireMySql();
-        api.ComercialWeb.Reply = () => FakeComercialWeb.Json(HttpStatusCode.Accepted, """{"success":true}""");
-        var ana = await api.SignedInAsync("ana");
-
-        var statuses = new List<HttpStatusCode>();
-        for (var i = 0; i < 22; i++) statuses.Add((await ana.PostAsJsonAsync($"/api/v1/sales/{i + 1}/receipt/whatsapp", new { phone = "11912345678" }, Ct)).StatusCode);
-
-        Assert.Equal(20, statuses.Count(s => s == HttpStatusCode.Accepted));
-        Assert.Equal(2, statuses.Count(s => s == HttpStatusCode.TooManyRequests));
-    }
-}

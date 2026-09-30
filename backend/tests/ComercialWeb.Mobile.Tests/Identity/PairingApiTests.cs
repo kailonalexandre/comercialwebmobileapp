@@ -92,17 +92,3 @@ public sealed class PairingApiTests(PairingFixture api) : IClassFixture<PairingF
 }
 
 /// <summary>Fixture própria: o limite é por IP e não pode consumir a cota das outras suítes.</summary>
-public sealed class PairingRateLimitTests(PairingFixture api) : IClassFixture<PairingFixture>
-{
-    [Fact]
-    public async Task Pair_tem_limite_por_ip()
-    {
-        TestDatabase.RequireMySql();
-        var statuses = new List<HttpStatusCode>();
-
-        for (var i = 0; i < 12; i++)
-            statuses.Add((await api.Anonymous().PostAsJsonAsync("/api/v1/auth/pair", new { code = "curto" }, TestContext.Current.CancellationToken)).StatusCode);
-
-        Assert.Contains(HttpStatusCode.TooManyRequests, statuses);
-    }
-}

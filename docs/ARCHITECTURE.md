@@ -115,7 +115,7 @@ Paginação, `PagedResult` e escape de LIKE ficam em `src/Common` (compartilhado
 ### Desconto e comprovante (venda)
 
 - **Desconto:** `POST /api/v1/pre-sales` e `/api/v1/pdv/quote|sales` aceitam por item `discountPercent` (0 a 99,99, até 2 casas) **ou** `discountCents`, e na venda `saleDiscountPercent` **ou** `saleDiscountCents`; nunca os dois do mesmo par (422 sem chamar o ComercialWeb). O app só envia a intenção: o ComercialWeb recalcula tudo, aplica `pdv.discount` e o limite de desconto do cliente e responde `discount_limit_exceeded` (com a mensagem para o operador) ou `business_rule`. O total mostrado vem do `/pdv/quote` (que devolve `discountCents` total e por item), nunca calculado no aparelho.
-- **Limites do comprovante:** 20 chamadas por minuto por usuário (WhatsApp e PDF juntos; 429 acima disso), para um vendedor não disparar envios em massa pelo número da empresa; resposta do ComercialWeb lida com teto de 15 MB; `reason` só aceita `connection_missing` e `customer_phone_missing`, e `code` só `business_rule`/`forbidden`/`not_found`/`validation`. No app o PDF fica no cache até o próximo comprovante (não é apagado ao abrir a folha de compartilhar, para o app de destino conseguir lê-lo).
+- **Limites do comprovante:** o rate limit é da borda (seção "Borda" abaixo), não da API. Resposta do ComercialWeb lida com teto de 15 MB; `reason` só aceita `connection_missing` e `customer_phone_missing`, e `code` só `business_rule`/`forbidden`/`not_found`/`validation`. No app o PDF fica no cache até o próximo comprovante (não é apagado ao abrir a folha de compartilhar, para o app de destino conseguir lê-lo).
 - **Comprovante:** `POST /api/v1/sales/{id}/receipt/whatsapp` (corpo opcional `{phone}`) pede ao ComercialWeb que envie o PDF pelo WhatsApp da empresa, com o template configurado lá; 202 na fila; 422 com `reason` `connection_missing` ou `customer_phone_missing`. `POST /api/v1/sales/{id}/receipt/pdf` devolve o PDF (só se o ComercialWeb responder `application/pdf`, até 15 MB; nome do arquivo sanitizado) para o app compartilhar por outros apps. Basta uma destas permissões: `sales.view`, `sales.access`, `pdv.access`; empresa e usuário vêm da sessão e o ComercialWeb confere de novo (venda de outra empresa: 404).
 
 ### Módulo Dashboard
@@ -183,11 +183,28 @@ App ──POST /api/v1/pre-sales (Idempotency-Key)──► API .NET ──POST 
 
 No app: tokens em `expo-secure-store` com `WHEN_UNLOCKED_THIS_DEVICE_ONLY`; `android.allowBackup=false`; 401 força logout; retry automático desabilitado por padrão; `Idempotency-Key` em operações com efeito financeiro/estoque.
 
+## Borda: rate limit e IP do cliente
+
+**Decisão (2026-09-30):** a API .NET **não tem rate limit próprio**. Limite de requisições é responsabilidade da borda (Traefik no K3s de produção; nginx no Compose de dev), antes da aplicação: assim o bloqueio acontece antes de gastar CPU, conexão de banco ou chamada ao ComercialWeb, e o limite não depende de a API enxergar o IP certo.
+
+| Rota | Limite sugerido | Chave |
+|---|---|---|
+| `POST /api/v1/auth/pair` | 10/min (rajada 5) | IP do cliente |
+| `POST /api/v1/auth/refresh` | 30/min | IP do cliente |
+| `POST /api/v1/sales/*/receipt/whatsapp` e `/pdf` | 20/min | cabeçalho `Authorization` (uma sessão) |
+| demais rotas `/api/v1/*` | 120/min | IP do cliente |
+
+- **Por que o comprovante é sensível:** cada chamada ao WhatsApp usa o número da empresa; sem limite um vendedor dispara envios em massa.
+- **Traefik (K3s):** `Middleware` `rateLimit` (`average`, `period`, `burst`, `sourceCriterion`) ligado por `IngressRoute`, um por grupo de rotas. Conferir `ipStrategy.depth` com o que o Traefik realmente enxerga (o Service `traefik` está com `externalTrafficPolicy: Cluster`, que pode mascarar o IP de origem).
+- **nginx (dev, Compose):** `limit_req_zone` por `$binary_remote_addr` (e por `$http_authorization` no comprovante) + `limit_req ... burst ... nodelay`, resposta 429.
+- **IP do cliente na API:** só o proxy da borda pode dizer quem é o cliente. `ForwardedHeaders__KnownNetworks` lista o CIDR exato de quem fala com a API (rede de pods `10.42.0.0/16` atrás do Traefik; rede do container do nginx no Compose). Fora disso a API usa o IP da conexão. Esse IP vai ao ComercialWeb em `X-Mobile-Client-Ip` para o limite do `/pair` dele ser por aparelho.
+- **Lembrete:** o ComercialWeb mantém os limites dele (`/pair` 10/min por IP de cliente, refresh por aparelho, 120/min autenticadas) como segunda barreira.
+
 ## Riscos conhecidos e decisões (revisão de 2026-09-29)
 
 - **MySQL em dev:** o usuário `mobile_api` com privilégio mínimo é o correto. Em desenvolvimento local (container sem acesso root) a API usou temporariamente o usuário do próprio Laravel (privilégio total no banco dele). **Só dev**: produção e homologação usam `mobile_api`, e o `migrate` roda com uma conta de deploy separada.
 - **Scheme `comercialweb://` não é exclusivo:** outro app instalado no aparelho pode registrá-lo e receber o `code` quando o QR é lido pela **câmera do sistema** (o leitor dentro do app não é afetado). O código é de uso único e vale 2 min, e o pareamento por deep link pede confirmação, mas o risco existe. Mitigação de longo prazo: App Links/Universal Links verificados (`https://<domínio>/pair?...`), o que depende do formato do QR gerado pelo ComercialWeb.
-- **Rate limit por IP e deploy:** o IP do cliente vem do `ForwardedHeaders`. Ao definir o deploy, configure `KnownProxies` com o IP exato do proxy (nunca uma rede larga). Com a API em container atrás de um nginx no host, sem isso todos os aparelhos caem no mesmo balde (10 pareamentos/min para todos).
+- **IP do cliente e proxies:** ver "Borda". Sem `ForwardedHeaders__KnownNetworks` a API enxerga o IP do proxy e todos os aparelhos caem no mesmo IP no ComercialWeb.
 - **`X-Mobile-Client-Ip` fora da assinatura HMAC:** a assinatura cobre timestamp, método, caminho e corpo. Incluir o IP exige mudar o contrato do lado Laravel; hoje o risco é teórico (TLS entre os servidores, código de uso único).
 - **Bloqueio por versão:** o `minAppVersion` só é reavaliado no pareamento e a cada refresh. Com a tela "Atualização necessária" aberta o app não faz requisições; se o administrador baixar a versão mínima, o aparelho sai do bloqueio ao desconectar e parear de novo (ou ao instalar a atualização).
 - **Renovação do token do ComercialWeb:** serializada por sessão dentro de uma instância da API (`DeviceLink`); com várias instâncias seria preciso lock no banco (`GET_LOCK`).

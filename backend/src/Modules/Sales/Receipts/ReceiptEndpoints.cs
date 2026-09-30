@@ -37,14 +37,14 @@ public static partial class ReceiptEndpoints
             return result.Status == ReceiptStatus.Ok
                 ? Results.Json(new { message = "Comprovante enviado para a fila do WhatsApp." }, statusCode: StatusCodes.Status202Accepted)
                 : Problem(result);
-        }).RequireAnyPermission(Permissions).RequireRateLimiting(IdentityModule.ReceiptPolicy);
+        }).RequireAnyPermission(Permissions);
 
         receipt.MapPost("/pdf", async (long id, ClaimsPrincipal user, ReceiptClient client, CancellationToken ct) =>
         {
             var ids = SessionIds.From(user)!;
             var (pdf, failure) = await client.PdfAsync(ids.UserId, ids.BusinessId, id, ct);
             return pdf is null ? Problem(failure!) : Results.File(pdf.Content, "application/pdf", pdf.FileName);
-        }).RequireAnyPermission(Permissions).RequireRateLimiting(IdentityModule.ReceiptPolicy);
+        }).RequireAnyPermission(Permissions);
 
         return app;
     }

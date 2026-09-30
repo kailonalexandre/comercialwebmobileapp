@@ -24,7 +24,13 @@ builder.Services.AddProblemDetails(o => o.CustomizeProblemDetails = ctx =>
     ctx.ProblemDetails.Extensions["correlationId"] = CorrelationId.For(ctx.HttpContext);
 });
 builder.Services.Configure<ForwardedHeadersOptions>(o =>
-    o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto);
+{
+    o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    // Só o proxy da borda pode dizer quem é o cliente. O padrão do ASP.NET confia apenas em loopback; atrás do Traefik
+    // (K3s) ou de um nginx, a origem é a rede de pods/containers: ForwardedHeaders__KnownNetworks="10.42.0.0/16" (CIDR exato, nunca largo).
+    foreach (var cidr in (builder.Configuration["ForwardedHeaders:KnownNetworks"] ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        o.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(cidr));
+});
 
 builder.Services.AddIdentityModule(builder.Configuration, builder.Environment);
 builder.Services.AddCatalogModule();
@@ -55,7 +61,6 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
     app.UseHttpsRedirection();
 }
-app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 

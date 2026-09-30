@@ -7,7 +7,6 @@ using ComercialWeb.Mobile.Identity.Tenancy;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Builder;
-using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
@@ -26,11 +25,6 @@ public sealed record PairRequest(string? Code, string? DeviceName, string? Platf
 
 public static class IdentityModule
 {
-    private const string PairPolicy = "pair";
-    private const string RefreshPolicy = "refresh";
-
-    /// <summary>Envio e download de comprovante: por usuário, para um vendedor não disparar WhatsApp em massa pelo número da empresa.</summary>
-    public const string ReceiptPolicy = "receipt";
     private const int MaxInput = 255; // mesmo teto do ComercialWeb: bcrypt de entrada gigante vira DoS de CPU
 
     public static IServiceCollection AddIdentityModule(this IServiceCollection services, IConfiguration config, IHostEnvironment env)
@@ -60,16 +54,7 @@ public static class IdentityModule
         if (config["DataProtection:KeysPath"] is { Length: > 0 } keys) protection.PersistKeysToFileSystem(new DirectoryInfo(keys));
         else if (!env.IsDevelopment()) throw new InvalidOperationException("DataProtection:KeysPath é obrigatório fora do desenvolvimento.");
 
-        // Rotas sem Bearer: limite por IP para não virar amplificador contra o ComercialWeb nem esgotar os workers.
-        services.AddRateLimiter(o =>
-        {
-            o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-            o.AddPolicy(PairPolicy, http => RateLimitPartition.GetFixedWindowLimiter(http.Connection.RemoteIpAddress?.ToString() ?? "?", _ => new() { PermitLimit = 10, Window = TimeSpan.FromMinutes(1) }));
-            o.AddPolicy(ReceiptPolicy, http => RateLimitPartition.GetFixedWindowLimiter(
-                SessionIds.From(http.User) is { } ids ? $"u{ids.UserId}" : http.Connection.RemoteIpAddress?.ToString() ?? "?",
-                _ => new() { PermitLimit = 20, Window = TimeSpan.FromMinutes(1) }));
-            o.AddPolicy(RefreshPolicy, http => RateLimitPartition.GetFixedWindowLimiter(http.Connection.RemoteIpAddress?.ToString() ?? "?", _ => new() { PermitLimit = 30, Window = TimeSpan.FromMinutes(1) }));
-        });
+        // Rate limit NÃO mora aqui: é da borda (Traefik/nginx), antes da aplicação. Ver docs/ARCHITECTURE.md, "Borda".
         services.AddScoped<IPermissionChecker, MySqlPermissionChecker>();
         services.AddScoped<OperationUnits>();
 
@@ -128,10 +113,10 @@ public static class IdentityModule
         {
             if (!ValidCode(body.Code) || body.DeviceName?.Length > 100) return Results.Problem(statusCode: 422);
             return ToHttp(await service.PairAsync(body.Code!, body.DeviceName?.Trim(), ClientIp(http), ct, DeviceInfo.From(body.Platform, body.AppVersion)), http);
-        }).RequireRateLimiting(PairPolicy);
+        });
 
         auth.MapPost("/refresh", async (RefreshRequest body, HttpContext http, AuthService service, CancellationToken ct) =>
-            ToHttp(await service.RefreshAsync(body.RefreshToken ?? "", ct), http)).RequireRateLimiting(RefreshPolicy);
+            ToHttp(await service.RefreshAsync(body.RefreshToken ?? "", ct), http));
 
         auth.MapPost("/logout", async (ClaimsPrincipal user, AuthService service, CancellationToken ct) =>
         {
