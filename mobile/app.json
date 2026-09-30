@@ -31,7 +31,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "A câmera é usada apenas para ler o QR Code de pareamento com o ComercialWeb.",
+          "cameraPermission": "A câmera é usada apenas para ler o QR Code de pareamento e o código de barras dos produtos.",
           "recordAudioAndroid": false
         }
       ]

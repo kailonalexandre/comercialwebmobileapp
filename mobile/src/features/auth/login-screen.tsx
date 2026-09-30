@@ -6,12 +6,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { defaultDeviceName } from '@/features/auth/auth-api';
 import { LoginWave } from '@/features/auth/login-wave';
 import { useSession } from '@/features/auth/session-context';
-import { QrScanner } from '@/features/auth/qr-scanner';
 import { parsePairingLink, type PairingLink } from '@/features/auth/pairing';
 import { ApiError } from '@/infrastructure/api/client';
 import { appEnv } from '@/infrastructure/config';
 import { BrandMark } from '@/shared/components/brand-mark';
 import { Button } from '@/shared/components/button';
+import { CodeScanner } from '@/shared/components/code-scanner';
 import { EnvBadge } from '@/shared/components/env-badge';
 import { Text } from '@/shared/components/text';
 import { TextField } from '@/shared/components/text-field';
@@ -64,7 +64,7 @@ export function LoginScreen({ deepLink }: { deepLink?: string }) {
     void pairWith(raw);
   }
 
-  if (scanning) return <QrScanner onScanned={onScanned} onCancel={() => setScanning(false)} />;
+  if (scanning) return <CodeScanner types={['qr']} purpose="ler o QR Code de pareamento" onScanned={onScanned} onCancel={() => setScanning(false)} />;
 
   return (
     <View style={styles.root}>

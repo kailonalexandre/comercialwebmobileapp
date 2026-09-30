@@ -2,6 +2,7 @@ import { useRef, useState, type ReactElement } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { CodeScanner } from '@/shared/components/code-scanner';
 import { Icon } from '@/shared/components/icon';
 import { Pager } from '@/shared/components/pager';
 import { StateView } from '@/shared/components/state-view';
@@ -27,11 +28,16 @@ type Props<T> = {
   filters?: ReactElement;
   // Telas dentro da barra de abas: o botão central invade a paginação e precisa de folga.
   tabScreen?: boolean;
+  // Mostra na busca o botão de leitura de código de barras pela câmera.
+  scanBarcode?: boolean;
 };
 
+const BARCODES = ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'itf14'] as const;
+
 // Tela de lista padrão: busca, paginação por rolagem, puxar para atualizar e estados de carga/erro/vazio.
-export function ListScreen<T>({ title, subtitle, searchPlaceholder, emptyMessage, fetchPage, keyOf, renderRow, onBack, header, filters, tabScreen }: Props<T>) {
+export function ListScreen<T>({ title, subtitle, searchPlaceholder, emptyMessage, fetchPage, keyOf, renderRow, onBack, header, filters, tabScreen, scanBarcode }: Props<T>) {
   const [search, setSearch] = useState('');
+  const [scanning, setScanning] = useState(false);
   const list = usePagedList(fetchPage, search.trim());
   const scroller = useRef<FlatList<T>>(null);
   const insets = useSafeAreaInsets();
@@ -41,6 +47,20 @@ export function ListScreen<T>({ title, subtitle, searchPlaceholder, emptyMessage
     scroller.current?.scrollToOffset({ offset: 0, animated: false });
     list.goTo(page);
   };
+
+  if (scanning) {
+    return (
+      <CodeScanner
+        types={[...BARCODES]}
+        purpose="ler o código de barras do produto"
+        onScanned={(code) => {
+          setSearch(code.trim());
+          setScanning(false);
+        }}
+        onCancel={() => setScanning(false)}
+      />
+    );
+  }
 
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
@@ -75,6 +95,13 @@ export function ListScreen<T>({ title, subtitle, searchPlaceholder, emptyMessage
               onChangeText={setSearch}
               autoCorrect={false}
               returnKeyType="search"
+              trailing={
+                scanBarcode ? (
+                  <Pressable accessibilityRole="button" accessibilityLabel="Ler código de barras" onPress={() => setScanning(true)} hitSlop={spacing.sm}>
+                    <Icon name="barcode-outline" size={24} color={colors.primary} />
+                  </Pressable>
+                ) : undefined
+              }
             />
             {filters}
           </View>

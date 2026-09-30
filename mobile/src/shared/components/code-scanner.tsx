@@ -1,4 +1,4 @@
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView, useCameraPermissions, type BarcodeType } from 'expo-camera';
 import { useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,17 +7,24 @@ import { Button } from '@/shared/components/button';
 import { Text } from '@/shared/components/text';
 import { colors, spacing } from '@/shared/theme/tokens';
 
-type Props = { onScanned: (data: string) => void; onCancel: () => void };
+type Props = {
+  types: BarcodeType[];
+  // Complemento de "A câmera é usada só para …" na tela de permissão.
+  purpose: string;
+  onScanned: (data: string) => void;
+  onCancel: () => void;
+};
 
-export function QrScanner({ onScanned, onCancel }: Props) {
+// Leitor de câmera em tela cheia: QR de pareamento e código de barras de produto.
+export function CodeScanner({ types, purpose, onScanned, onCancel }: Props) {
   const [permission, requestPermission] = useCameraPermissions();
-  // O leitor dispara várias vezes por segundo; o código é de uso único, então só o primeiro vale.
+  // O leitor dispara várias vezes por segundo; só a primeira leitura vale.
   const done = useRef(false);
 
   if (!permission?.granted) {
     return (
       <SafeAreaView style={styles.center}>
-        <Text style={styles.text}>A câmera é usada só para ler o QR Code de pareamento.</Text>
+        <Text style={styles.text}>{`A câmera é usada só para ${purpose}.`}</Text>
         <Button label="Permitir câmera" onPress={requestPermission} />
         <Button label="Cancelar" variant="outline" onPress={onCancel} />
       </SafeAreaView>
@@ -29,7 +36,7 @@ export function QrScanner({ onScanned, onCancel }: Props) {
       <CameraView
         style={styles.flex}
         facing="back"
-        barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+        barcodeScannerSettings={{ barcodeTypes: types }}
         onBarcodeScanned={({ data }) => {
           if (done.current) return;
           done.current = true;
