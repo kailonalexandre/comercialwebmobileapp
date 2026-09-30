@@ -104,6 +104,13 @@ Paginação, `PagedResult` e escape de LIKE ficam em `src/Common` (compartilhado
 - `status` só aceita `pendente`, `pre_venda`, `finalizada`, `devolucao` (inclui `troca`), `condicional_aberto|fechado|cancelado`; outro valor: 422. Período por `DATE(created_at)`.
 - Datas no horário local da empresa (America/Sao_Paulo), sem offset, exatamente como gravadas e exibidas pela web. Valores em centavos.
 
+### Pedidos (Loja Virtual e marketplaces)
+
+- `GET /api/v1/orders?source=all|store|mercadolivre&status=&search=&page=&pageSize=` (`loja-virtual.access` **ou** `marketplaces.view`) e `GET /api/v1/orders/marketplace/{id}` (`marketplaces.view`).
+- É o Monitor de Pedidos da web: a API não tem regra própria, só repassa `GET /api/mobile/v1/orders` e `/orders/marketplace/{id}` com o token do aparelho (`DeviceLink.CallAsync`). Resposta `{sections: [{channel, failure, meta, items}]}`, uma seção por canal com paginação própria; `failure` preenchido = a fonte externa estava fora (o app mostra erro com "tentar de novo", não lista vazia).
+- Parâmetro inválido: 422 sem consultar o ComercialWeb. ComercialWeb fora: 503. Recusa dele na lista: 403; no detalhe: 404 (a permissão já foi conferida aqui).
+- App: aba de canais conforme as permissões do usuário (`/me/permissions` agora inclui as duas). Só pedido de marketplace tem detalhe; o da Loja Virtual ainda não existe na API do ComercialWeb.
+
 ### Módulo Dashboard
 
 - `GET /api/v1/dashboard`: mesmos cards e consultas do `DashboardRepository` da web. Cada bloco só vem se o usuário tiver a permissão do card na web (senão `null`): vendas de hoje e condicionais abertos (`sales.view`), contas a receber (`financial.receivables.view`), estoque baixo (`inventory.view`), últimas 8 vendas (`sales.view`).

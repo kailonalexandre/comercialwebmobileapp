@@ -12,7 +12,7 @@ import { TextField } from '@/shared/components/text-field';
 import { colors, radius, spacing, touchTarget, type Tone } from '@/shared/theme/tokens';
 import { normalizeSearch } from '@/shared/utils/format';
 
-type Module = { title: string; description: string; icon: IconName; tone: Tone; href?: '/configuracoes' };
+type Module = { title: string; description: string; icon: IconName; tone: Tone; href?: '/configuracoes' | '/pedidos' };
 
 // Espelha os módulos do ComercialWeb (app/Modules). Cada item vira rota quando a feature existir.
 const modules: Module[] = [
@@ -22,7 +22,7 @@ const modules: Module[] = [
   { title: 'Estoque', description: 'Movimentações, inventário e relatórios', icon: 'cube-outline', tone: 'info' },
   { title: 'Compras e Entradas', description: 'Pedidos, entradas e notas fiscais', icon: 'bus-outline', tone: 'primary' },
   { title: 'Relatórios', description: 'Vendas, estoque, financeiro e mais', icon: 'bar-chart-outline', tone: 'primary' },
-  { title: 'Loja Virtual', description: 'Produtos, pedidos e configurações', icon: 'storefront-outline', tone: 'accent' },
+  { title: 'Loja Virtual', description: 'Produtos, pedidos e configurações', icon: 'storefront-outline', tone: 'accent', href: '/pedidos' },
   { title: 'Configurações', description: 'Empresa, usuários e preferências', icon: 'settings-outline', tone: 'info', href: '/configuracoes' },
 ];
 
