@@ -16,6 +16,11 @@ public sealed class FakeComercialWebAuth : IComercialWebAuth
     public Func<string, CwResult<CwBootstrap>> Bootstrap { get; set; } = _ => new(CwStatus.Ok, new CwBootstrap(1, 10));
     public CwResult<CwTokens> Refresh { get; set; } = new(CwStatus.Ok, new CwTokens("cw-access-2", "cw-refresh-2"));
     public Func<string, long, CwResult<CwStock>> Stock { get; set; } = (_, _) => new(CwStatus.Ok, new CwStock(7, 12_500));
+    public Func<string, CwOrdersQuery, CwResult<IReadOnlyList<CwOrderSection>>> Orders { get; set; } = (_, q) => new(CwStatus.Ok,
+        [new CwOrderSection("store", null, new CwPageMeta(q.Page, q.PageSize, 1, 1),
+            [new CwOrderItem("77", "LV-77", "Maria", 15_990, "Pago", "Pix", "Correios", false, "2026-09-29T10:00:00-03:00", "2026-09-29T10:05:00-03:00")])]);
+    public Func<string, long, CwResult<CwMarketplaceOrder>> MarketplaceOrder { get; set; } = (_, id) => new(CwStatus.Ok,
+        new CwMarketplaceOrder(id, "mercadolivre", "2000001", "Pago", "paid", 9_990, "João", "2026-09-29T09:00:00-03:00", [new CwMarketplaceOrderItem("Camiseta", "CAM-01", 100, 2, 4_995)]));
     public List<string> Calls { get; } = [];
 
     public Task<CwResult<CwPairing>> PairAsync(string code, string? deviceName, string? clientIp, CancellationToken ct)
@@ -40,6 +45,18 @@ public sealed class FakeComercialWebAuth : IComercialWebAuth
     {
         Calls.Add($"stock:{accessToken}:{productId}");
         return Task.FromResult(Stock(accessToken, productId));
+    }
+
+    public Task<CwResult<IReadOnlyList<CwOrderSection>>> OrdersAsync(string accessToken, CwOrdersQuery query, CancellationToken ct)
+    {
+        Calls.Add($"orders:{query.Source}:{query.Status}:{query.Search}:{query.Page}:{query.PageSize}");
+        return Task.FromResult(Orders(accessToken, query));
+    }
+
+    public Task<CwResult<CwMarketplaceOrder>> MarketplaceOrderAsync(string accessToken, long orderId, CancellationToken ct)
+    {
+        Calls.Add($"marketplace-order:{orderId}");
+        return Task.FromResult(MarketplaceOrder(accessToken, orderId));
     }
 
     public Task<CwStatus> LogoutAsync(string accessToken, CancellationToken ct)
@@ -348,6 +365,40 @@ public sealed class ComercialWebAuthClientTests
         var (request, _) = Assert.Single(stub.Received);
         Assert.Equal("https://cw.test/api/mobile/v1/products/5/stock", request.RequestUri!.ToString());
         Assert.Equal("Bearer tok", request.Headers.Authorization!.ToString());
+    }
+
+    [Fact]
+    public async Task Pedidos_le_secoes_por_canal_com_filtros_na_query_e_paginacao_propria()
+    {
+        var stub = new Stub(() => Json(HttpStatusCode.OK, """
+            {"data":[{"channel":"store","failure":null,"meta":{"page":2,"per_page":20,"total":41,"last_page":3},
+              "items":[{"id":"77","number":"LV-77","customer":"Maria","total_cents":15990,"status":"Pago","payment":"Pix","delivery":null,
+                        "requires_attention":true,"created_at":"2026-09-29T10:00:00-03:00","updated_at":"2026-09-29T10:05:00-03:00"}]},
+             {"channel":"mercadolivre","failure":"Fonte indisponível","meta":null,"items":[]}]}
+            """));
+
+        var result = await Client(stub).OrdersAsync("tok", new CwOrdersQuery("all", "paid", "joão silva", 2, 20), Ct);
+
+        var (store, ml) = (result.Value![0], result.Value[1]);
+        Assert.Equal(new CwPageMeta(2, 20, 41, 3), store.Meta);
+        Assert.Equal(new CwOrderItem("77", "LV-77", "Maria", 15_990, "Pago", "Pix", null, true, "2026-09-29T10:00:00-03:00", "2026-09-29T10:05:00-03:00"), Assert.Single(store.Items));
+        Assert.Equal(("Fonte indisponível", null), (ml.Failure, ml.Meta));
+        Assert.Equal("https://cw.test/api/mobile/v1/orders?source=all&page=2&per_page=20&status=paid&search=jo%C3%A3o%20silva", Assert.Single(stub.Received).Request.RequestUri!.AbsoluteUri);
+    }
+
+    [Fact]
+    public async Task Pedido_de_marketplace_le_itens_e_datas()
+    {
+        var stub = new Stub(() => Json(HttpStatusCode.OK, """
+            {"data":{"id":9,"channel":"mercadolivre","external_order_id":"2000009","status":"Pago","external_status":"paid","total_cents":9990,
+                     "buyer_name":"João","placed_at":"2026-09-29T09:00:00-03:00",
+                     "items":[{"title":"Camiseta","seller_sku":null,"product_id":null,"quantity":2,"unit_price_cents":4995}]}}
+            """));
+
+        var order = (await Client(stub).MarketplaceOrderAsync("tok", 9, Ct)).Value!;
+
+        Assert.Equal(("mercadolivre", "2000009", 9_990), (order.Channel, order.ExternalOrderId, order.TotalCents));
+        Assert.Equal(new CwMarketplaceOrderItem("Camiseta", null, null, 2, 4_995), Assert.Single(order.Items));
     }
 
     [Fact]

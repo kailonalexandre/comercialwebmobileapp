@@ -64,13 +64,18 @@ public static class PermissionEndpointExtensions
 {
     /// <summary>Exige sessão válida e a permissão no tenant da sessão. Sem permissão: 403 genérico.</summary>
     public static RouteHandlerBuilder RequirePermission(this RouteHandlerBuilder builder, string permission) =>
+        builder.RequireAnyPermission(permission);
+
+    /// <summary>Como <see cref="RequirePermission"/>, mas basta uma das permissões (o "a|b" do middleware do Laravel).</summary>
+    public static RouteHandlerBuilder RequireAnyPermission(this RouteHandlerBuilder builder, params string[] permissions) =>
         builder.RequireAuthorization().AddEndpointFilter(async (ctx, next) =>
         {
             var http = ctx.HttpContext;
             var ids = SessionIds.From(http.User);
             var checker = http.RequestServices.GetRequiredService<IPermissionChecker>();
-            if (ids is null || !await checker.HasAsync(ids.UserId, ids.BusinessId, permission, http.RequestAborted))
-                return Results.Problem(statusCode: StatusCodes.Status403Forbidden);
-            return await next(ctx);
+            if (ids is null) return Results.Problem(statusCode: StatusCodes.Status403Forbidden);
+            foreach (var permission in permissions)
+                if (await checker.HasAsync(ids.UserId, ids.BusinessId, permission, http.RequestAborted)) return await next(ctx);
+            return Results.Problem(statusCode: StatusCodes.Status403Forbidden);
         });
 }

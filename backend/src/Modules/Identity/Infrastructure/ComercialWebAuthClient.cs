@@ -19,6 +19,23 @@ public sealed record CwBootstrap(long UserId, long BusinessId, string? MinAppVer
 /// <summary>Saldo do produto na unidade do aparelho (a regra de saldo é do ComercialWeb, não daqui).</summary>
 public sealed record CwStock(long? UnitId, long TotalMilli);
 
+public sealed record CwPageMeta(int Page, int PerPage, long Total, int LastPage);
+
+public sealed record CwOrderItem(
+    string Id, string Number, string Customer, long TotalCents, string Status, string? Payment, string? Delivery,
+    bool RequiresAttention, string CreatedAt, string UpdatedAt);
+
+/// <summary>Uma seção do Monitor de Pedidos (um canal, paginação própria). `Failure` preenchido = a fonte externa estava fora.</summary>
+public sealed record CwOrderSection(string Channel, string? Failure, CwPageMeta? Meta, IReadOnlyList<CwOrderItem> Items);
+
+public sealed record CwOrdersQuery(string Source, string? Status, string? Search, int Page, int PageSize);
+
+public sealed record CwMarketplaceOrderItem(string Title, string? SellerSku, long? ProductId, decimal Quantity, long UnitPriceCents);
+
+public sealed record CwMarketplaceOrder(
+    long Id, string Channel, string? ExternalOrderId, string Status, string? ExternalStatus, long TotalCents, string? BuyerName,
+    string? PlacedAt, IReadOnlyList<CwMarketplaceOrderItem> Items);
+
 public enum CwStatus { Ok, TokenExpired, Rejected, Unavailable }
 
 public sealed record CwResult<T>(CwStatus Status, T? Value = default);
@@ -37,6 +54,11 @@ public interface IComercialWebAuth
 
     /// <summary>GET /products/{id}/stock com o token do aparelho (usar via DeviceLink.CallAsync, que renova o token).</summary>
     Task<CwResult<CwStock>> ProductStockAsync(string accessToken, long productId, CancellationToken ct);
+
+    /// <summary>GET /orders (Monitor de Pedidos, uma seção por canal). Mesmo uso do estoque: via DeviceLink.CallAsync.</summary>
+    Task<CwResult<IReadOnlyList<CwOrderSection>>> OrdersAsync(string accessToken, CwOrdersQuery query, CancellationToken ct);
+
+    Task<CwResult<CwMarketplaceOrder>> MarketplaceOrderAsync(string accessToken, long orderId, CancellationToken ct);
 }
 
 /// <summary>
@@ -74,6 +96,27 @@ public sealed partial class ComercialWebAuthClient(HttpClient http, IConfigurati
     {
         var (status, body) = await SendAsync<StockDto>(HttpMethod.Get, $"/products/{productId}/stock", accessToken, null, ct);
         return body?.Data is { } d ? new(status, new CwStock(d.UnitId, d.TotalMilli)) : new CwResult<CwStock>(status);
+    }
+
+    public async Task<CwResult<IReadOnlyList<CwOrderSection>>> OrdersAsync(string accessToken, CwOrdersQuery query, CancellationToken ct)
+    {
+        var qs = $"?source={Uri.EscapeDataString(query.Source)}&page={query.Page}&per_page={query.PageSize}"
+            + (string.IsNullOrEmpty(query.Status) ? "" : $"&status={Uri.EscapeDataString(query.Status)}")
+            + (string.IsNullOrEmpty(query.Search) ? "" : $"&search={Uri.EscapeDataString(query.Search)}");
+        var (status, body) = await SendAsync<OrdersDto>(HttpMethod.Get, "/orders" + qs, accessToken, null, ct);
+        if (body?.Data is not { } sections) return new CwResult<IReadOnlyList<CwOrderSection>>(status);
+        return new(status, [.. sections.Select(s => new CwOrderSection(
+            s.Channel, s.Failure, s.Meta is { } m ? new CwPageMeta(m.Page, m.PerPage, m.Total, m.LastPage) : null,
+            [.. (s.Items ?? []).Select(i => new CwOrderItem(i.Id, i.Number, i.Customer, i.TotalCents, i.Status, i.Payment, i.Delivery, i.RequiresAttention, i.CreatedAt, i.UpdatedAt))]))]);
+    }
+
+    public async Task<CwResult<CwMarketplaceOrder>> MarketplaceOrderAsync(string accessToken, long orderId, CancellationToken ct)
+    {
+        var (status, body) = await SendAsync<MarketplaceOrderDto>(HttpMethod.Get, $"/orders/marketplace/{orderId}", accessToken, null, ct);
+        return body?.Data is not { } o
+            ? new CwResult<CwMarketplaceOrder>(status)
+            : new(status, new CwMarketplaceOrder(o.Id, o.Channel, o.ExternalOrderId, o.Status, o.ExternalStatus, o.TotalCents, o.BuyerName, o.PlacedAt,
+                [.. (o.Items ?? []).Select(i => new CwMarketplaceOrderItem(i.Title, i.SellerSku, i.ProductId, i.Quantity, i.UnitPriceCents))]));
     }
 
     private async Task<(CwStatus, T?)> SendAsync<T>(
@@ -156,6 +199,20 @@ public sealed partial class ComercialWebAuthClient(HttpClient http, IConfigurati
         DeviceDto? Device);
     private sealed record StockData([property: JsonPropertyName("unit_id")] long? UnitId, [property: JsonPropertyName("total_milli")] long TotalMilli);
     private sealed record StockDto(StockData? Data);
+    private sealed record MetaDto(int Page, [property: JsonPropertyName("per_page")] int PerPage, long Total, [property: JsonPropertyName("last_page")] int LastPage);
+    private sealed record OrderItemDto(
+        string Id, string Number, string Customer, [property: JsonPropertyName("total_cents")] long TotalCents, string Status, string? Payment, string? Delivery,
+        [property: JsonPropertyName("requires_attention")] bool RequiresAttention, [property: JsonPropertyName("created_at")] string CreatedAt,
+        [property: JsonPropertyName("updated_at")] string UpdatedAt);
+    private sealed record SectionDto(string Channel, string? Failure, MetaDto? Meta, List<OrderItemDto>? Items);
+    private sealed record OrdersDto(List<SectionDto>? Data);
+    private sealed record MpItemDto(string Title, [property: JsonPropertyName("seller_sku")] string? SellerSku, [property: JsonPropertyName("product_id")] long? ProductId,
+        decimal Quantity, [property: JsonPropertyName("unit_price_cents")] long UnitPriceCents);
+    private sealed record MpOrderData(
+        long Id, string Channel, [property: JsonPropertyName("external_order_id")] string? ExternalOrderId, string Status,
+        [property: JsonPropertyName("external_status")] string? ExternalStatus, [property: JsonPropertyName("total_cents")] long TotalCents,
+        [property: JsonPropertyName("buyer_name")] string? BuyerName, [property: JsonPropertyName("placed_at")] string? PlacedAt, List<MpItemDto>? Items);
+    private sealed record MarketplaceOrderDto(MpOrderData? Data);
     private sealed record IdDto(long Id);
     private sealed record ApiDto([property: JsonPropertyName("min_app_version")] string? MinAppVersion);
     private sealed record BootstrapDto(IdDto User, IdDto Business, ApiDto? Api);

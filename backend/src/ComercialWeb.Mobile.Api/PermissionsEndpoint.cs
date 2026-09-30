@@ -5,6 +5,7 @@ using ComercialWeb.Mobile.Dashboard;
 using ComercialWeb.Mobile.Identity;
 using ComercialWeb.Mobile.Identity.Authorization;
 using ComercialWeb.Mobile.Sales;
+using ComercialWeb.Mobile.Sales.Orders;
 using ComercialWeb.Mobile.Sales.Pdv;
 using ComercialWeb.Mobile.Sales.PreSales;
 
@@ -26,6 +27,8 @@ internal static class PermissionsEndpoint
         PdvEndpoints.UsePdv,
         DashboardModule.ViewReceivables,
         DashboardModule.ViewInventory,
+        OrdersEndpoints.StoreOrders,
+        OrdersEndpoints.MarketplaceOrders,
     ];
 
     public static IEndpointRouteBuilder MapPermissionsEndpoint(this IEndpointRouteBuilder app)
