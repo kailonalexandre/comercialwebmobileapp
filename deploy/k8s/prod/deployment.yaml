@@ -16,7 +16,7 @@ spec:
       labels: { app.kubernetes.io/name: mobile-api }
     spec:
       imagePullSecrets:
-        - name: ghcr-pull
+        - name: ghcr-pull-mobile   # próprio da API (GHCR do kailonalexandre); não reutiliza o ghcr-pull do ComercialWeb
       securityContext:
         runAsNonRoot: true
         runAsUser: 1654

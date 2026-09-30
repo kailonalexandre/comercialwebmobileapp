@@ -11,10 +11,12 @@ Estado e decisões (2026-09-30). **Nada aqui foi aplicado em servidor**: é o ro
 | Borda / rate limit | Traefik (`Middleware` em `deploy/k8s/prod/middlewares.yaml`) | nginx (`deploy/dev/nginx-mobile-api.conf`) |
 | Arquivos | `deploy/k8s/prod/`, `deploy/k8s/cluster/` | `deploy/dev/` |
 
+Decisões de implantação: primeiro deploy com `kubectl apply` **manual**; a automação por ServiceAccount (como o `github-deployer` do ComercialWeb) fica para depois. Usuário MySQL **`mobile_api` separado** em dev e em prod, cada ambiente com os seus segredos.
+
 Regras: **a API não limita requisições** (rate limit é da borda); **uma única réplica** (push e renovação de token são por instância); **segredos só no ambiente do servidor**, nunca no git; deploy e rollback **sempre pelo SHA completo** da imagem.
 
 ## 0. Antes de tudo
-1. **GHCR:** o workflow `.github/workflows/backend-image.yml` publica `ghcr.io/<dono do repo>/comercialweb-mobile-api:<sha>`. O cluster baixa com o Secret `ghcr-pull`, que hoje autoriza o dono das imagens do ComercialWeb. Se o dono do repositório for outro, ou se troca o dono da imagem (no workflow, `deployment.yaml`, `migrate-job.yaml` e `compose.mobile-api.yaml`) ou se cria um `ghcr-pull` com um token de leitura de pacotes do novo dono.
+1. **GHCR (decidido):** a imagem fica em `ghcr.io/kailonalexandre/comercialweb-mobile-api:<sha>`, publicada pelo workflow `backend-image.yml` com o `GITHUB_TOKEN` do próprio repositório. O cluster usa um pull secret **próprio**, `ghcr-pull-mobile` (nunca o `ghcr-pull` do ComercialWeb): token clássico com **só** `read:packages`, de uma conta com acesso ao pacote. Depois do primeiro push, em GitHub > Packages > `comercialweb-mobile-api` > Package settings, conferir que o pacote está ligado ao repositório (herda o acesso) e, se o pull falhar com `unauthorized`, dar acesso de leitura à conta do token. Criar o secret: comando em `deploy/k8s/prod/secret.example.yaml`. Em dev (Compose): `echo <TOKEN> | docker login ghcr.io -u kailonalexandre --password-stdin` com o usuário do deploy no host (vale só para esse usuário do Docker).
 2. **Commit de referência:** a imagem de um PR só é construída (valida o Dockerfile); só `dev`/`main` publicam.
 
 ## 1. MySQL (prod e dev)

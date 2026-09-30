@@ -12,7 +12,7 @@ spec:
   template:
     spec:
       restartPolicy: Never
-      imagePullSecrets: [{ name: ghcr-pull }]
+      imagePullSecrets: [{ name: ghcr-pull-mobile }]
       securityContext: { runAsNonRoot: true, runAsUser: 1654, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: migrate
