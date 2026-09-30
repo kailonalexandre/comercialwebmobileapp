@@ -149,6 +149,28 @@ public sealed class PairingTests
     }
 
     [Fact]
+    public async Task Versao_minima_do_app_vai_no_pareamento_e_em_cada_refresh_quando_o_comercialweb_informa()
+    {
+        _cw.Bootstrap = _ => new(CwStatus.Ok, new CwBootstrap(1, 10, "1.2.0"));
+        var paired = (await _auth.PairAsync(Code, null, null, Ct)).Session!;
+        Assert.Equal("1.2.0", paired.MinAppVersion);
+
+        _cw.Bootstrap = _ => new(CwStatus.Ok, new CwBootstrap(1, 10, "1.3.0"));
+        Assert.Equal("1.3.0", (await _auth.RefreshAsync(paired.RefreshToken, Ct)).Session!.MinAppVersion);
+    }
+
+    [Fact]
+    public async Task Sem_resposta_do_comercialweb_o_refresh_nao_inventa_versao_minima()
+    {
+        var refresh = (await _auth.PairAsync(Code, null, null, Ct)).Session!.RefreshToken;
+        _cw.Bootstrap = _ => new(CwStatus.Unavailable);
+
+        var session = (await _auth.RefreshAsync(refresh, Ct)).Session!;
+
+        Assert.Null(session.MinAppVersion);
+    }
+
+    [Fact]
     public async Task Access_do_comercialweb_expirado_renova_com_o_refresh_dele_e_guarda_o_novo_par()
     {
         var refresh = (await _auth.PairAsync(Code, null, null, Ct)).Session!.RefreshToken;
@@ -161,7 +183,7 @@ public sealed class PairingTests
         // Na próxima checagem já usa o par novo.
         _cw.Calls.Clear();
         _cw.Bootstrap = _ => new(CwStatus.Ok, new CwBootstrap(1, 10));
-        Assert.True(await _link.IsStillPairedAsync(_store.Sessions.Keys.Single(), 1, 10, Ct));
+        Assert.True((await _link.IsStillPairedAsync(_store.Sessions.Keys.Single(), 1, 10, Ct)).Paired);
         Assert.Equal(["bootstrap:cw-access-2"], _cw.Calls);
     }
 
@@ -199,7 +221,7 @@ public sealed class PairingTests
         var id = Guid.NewGuid();
         await _store.CreateSessionAsync(new NewSession(id, 1, 10, null, _clock.Now, _clock.Now.AddDays(1)), new NewRefreshToken(new byte[32], id, _clock.Now, _clock.Now.AddDays(1)), Ct);
 
-        Assert.True(await _link.IsStillPairedAsync(id, 1, 10, Ct));
+        Assert.True((await _link.IsStillPairedAsync(id, 1, 10, Ct)).Paired);
         Assert.Empty(_cw.Calls);
     }
 

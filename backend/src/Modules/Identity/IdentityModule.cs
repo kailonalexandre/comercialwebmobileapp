@@ -156,7 +156,7 @@ public static class IdentityModule
 
     private static IResult ToHttp(AuthResult result, HttpContext http)
     {
-        if (result.Session is { } s) return Results.Ok(new { s.AccessToken, s.RefreshToken, expiresAt = s.ExpiresAt });
+        if (result.Session is { } s) return Results.Ok(new { s.AccessToken, s.RefreshToken, expiresAt = s.ExpiresAt, minAppVersion = s.MinAppVersion });
         if (result.Failure == AuthFailure.LockedOut)
         {
             http.Response.Headers.RetryAfter = ((int)Math.Ceiling(result.RetryAfter!.Value.TotalSeconds)).ToString(CultureInfo.InvariantCulture);

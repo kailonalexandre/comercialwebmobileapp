@@ -17,18 +17,20 @@ public sealed class DeviceLink(IIdentityStore store, IComercialWebAuth cw, IData
 
     public string Protect(CwTokens tokens) => Protector.Protect(JsonSerializer.Serialize(tokens));
 
-    /// <summary>False = o ComercialWeb não reconhece mais este aparelho/usuário/empresa: revogar a sessão.</summary>
-    public async Task<bool> IsStillPairedAsync(Guid sessionId, long userId, long businessId, CancellationToken ct)
+    /// <summary>Paired=false: o ComercialWeb não reconhece mais este aparelho/usuário/empresa e a sessão deve ser revogada.</summary>
+    public sealed record PairingCheck(bool Paired, string? MinAppVersion = null);
+
+    public async Task<PairingCheck> IsStillPairedAsync(Guid sessionId, long userId, long businessId, CancellationToken ct)
     {
         var (linked, tokens) = await Load(sessionId, ct);
-        if (!linked) return true; // sessão sem vínculo (login antigo)
-        if (tokens is null) return false; // dado ilegível (chave de proteção trocada): sem como validar, revoga
+        if (!linked) return new(true); // sessão sem vínculo (login antigo)
+        if (tokens is null) return new(false); // dado ilegível (chave de proteção trocada): sem como validar, revoga
         var result = await Call(sessionId, tokens, (a, c) => cw.BootstrapAsync(a, c), ct);
         return result.Status switch
         {
-            CwStatus.Ok => result.Value!.UserId == userId && result.Value.BusinessId == businessId,
-            CwStatus.Unavailable => true,
-            _ => false,
+            CwStatus.Ok => new(result.Value!.UserId == userId && result.Value.BusinessId == businessId, result.Value.MinAppVersion),
+            CwStatus.Unavailable => new(true),
+            _ => new(false),
         };
     }
 

@@ -14,7 +14,7 @@ public sealed record CwTokens(string AccessToken, string RefreshToken);
 public sealed record CwPairing(CwTokens Tokens, string DeviceId);
 
 /// <summary>Quem o ComercialWeb diz que é o dono do aparelho (fonte da verdade de usuário, empresa e permissão mobile.access).</summary>
-public sealed record CwBootstrap(long UserId, long BusinessId);
+public sealed record CwBootstrap(long UserId, long BusinessId, string? MinAppVersion = null);
 
 public enum CwStatus { Ok, TokenExpired, Rejected, Unavailable }
 
@@ -52,7 +52,7 @@ public sealed partial class ComercialWebAuthClient(HttpClient http, IConfigurati
     public async Task<CwResult<CwBootstrap>> BootstrapAsync(string accessToken, CancellationToken ct)
     {
         var (status, body) = await SendAsync<BootstrapDto>(HttpMethod.Get, "/bootstrap", accessToken, null, ct);
-        return body is null ? new CwResult<CwBootstrap>(status) : new(status, new CwBootstrap(body.User.Id, body.Business.Id));
+        return body is null ? new CwResult<CwBootstrap>(status) : new(status, new CwBootstrap(body.User.Id, body.Business.Id, body.Api?.MinAppVersion));
     }
 
     public async Task<CwResult<CwTokens>> RefreshAsync(string refreshToken, CancellationToken ct)
@@ -143,7 +143,8 @@ public sealed partial class ComercialWebAuthClient(HttpClient http, IConfigurati
         [property: JsonPropertyName("refresh_token")] string RefreshToken,
         DeviceDto? Device);
     private sealed record IdDto(long Id);
-    private sealed record BootstrapDto(IdDto User, IdDto Business);
+    private sealed record ApiDto([property: JsonPropertyName("min_app_version")] string? MinAppVersion);
+    private sealed record BootstrapDto(IdDto User, IdDto Business, ApiDto? Api);
     private sealed record ErrorBody(string? Code);
     private sealed record ErrorDto(ErrorBody? Error);
 
