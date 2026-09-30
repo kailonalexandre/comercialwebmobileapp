@@ -3,7 +3,7 @@ import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
 
 import { Icon, type IconName } from '@/shared/components/icon';
 import { Text } from '@/shared/components/text';
-import { colors, radius, spacing, touchTarget, typography } from '@/shared/theme/tokens';
+import { colors, maxFontScale, radius, spacing, touchTarget, typography } from '@/shared/theme/tokens';
 
 type Props = TextInputProps & {
   label?: string;
@@ -21,6 +21,7 @@ export function TextField({ label, icon, trailing, error, style, onFocus, onBlur
       <View style={[styles.box, focused && styles.focused, !!error && styles.invalid]}>
         {icon && <Icon name={icon} size={20} color={focused ? colors.primary : colors.textMuted} />}
         <TextInput
+          maxFontSizeMultiplier={maxFontScale}
           accessibilityLabel={label ?? rest.placeholder}
           placeholderTextColor={colors.textMuted}
           style={[styles.input, style]}

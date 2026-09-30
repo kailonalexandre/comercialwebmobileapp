@@ -12,7 +12,7 @@ import { Icon, type IconName } from '@/shared/components/icon';
 import { StateView } from '@/shared/components/state-view';
 import { StatusPill } from '@/shared/components/status-pill';
 import { Text } from '@/shared/components/text';
-import { colors, fonts, radius, shadow, spacing, tones, type Tone } from '@/shared/theme/tokens';
+import { colors, fonts, layout, radius, shadow, spacing, tones, type Tone } from '@/shared/theme/tokens';
 import { formatCents } from '@/shared/utils/format';
 
 const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
@@ -117,7 +117,7 @@ export function DashboardScreen() {
                 </Text>
               </View>
             </View>
-            <Text style={styles.heroValue}>{formatCents(sales.totalCents)}</Text>
+            <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{formatCents(sales.totalCents)}</Text>
             <Text variant="caption" color="textInverseMuted">
               {sales.count} {sales.count === 1 ? 'venda finalizada' : 'vendas finalizadas'}
             </Text>
@@ -231,7 +231,7 @@ export function DashboardScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.page },
-  content: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxl * 2 },
+  content: { ...layout.content, padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxl * 2 },
   flex: { flex: 1 },
   shrink: { flexShrink: 1 },
   pressed: { opacity: 0.7 },

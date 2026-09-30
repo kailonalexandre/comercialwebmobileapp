@@ -9,7 +9,7 @@ import { StateView } from '@/shared/components/state-view';
 import { Text } from '@/shared/components/text';
 import { TextField } from '@/shared/components/text-field';
 import { usePagedList, type PageFetcher } from '@/shared/hooks/use-paged-list';
-import { colors, radius, spacing, touchTarget } from '@/shared/theme/tokens';
+import { colors, layout, radius, spacing, touchTarget } from '@/shared/theme/tokens';
 import { userMessage } from '@/shared/utils/error-message';
 
 export type ListControls<T> = { patch: (change: (items: T[]) => T[]) => void; reload: () => void };
@@ -101,7 +101,7 @@ export function ListScreen<T>({ title, subtitle, searchPlaceholder, emptyMessage
                 </Pressable>
               )}
               <View style={styles.flex}>
-                <Text variant="title">{title}</Text>
+                <Text variant="title" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{title}</Text>
                 {subtitle && <Text color="textMuted">{subtitle}</Text>}
               </View>
               {action}
@@ -144,7 +144,7 @@ const Separator = () => <View style={styles.separator} />;
 const styles = StyleSheet.create({
   section: { marginTop: spacing.md, marginBottom: spacing.sm },
   root: { flex: 1, backgroundColor: colors.page },
-  content: { padding: spacing.lg, paddingBottom: spacing.xxl * 2, flexGrow: 1 },
+  content: { ...layout.content, padding: spacing.lg, paddingBottom: spacing.xxl * 2, flexGrow: 1 },
   headerBlock: { gap: spacing.md, marginBottom: spacing.md },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   flex: { flex: 1 },

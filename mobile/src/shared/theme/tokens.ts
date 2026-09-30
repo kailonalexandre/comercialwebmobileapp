@@ -106,5 +106,12 @@ export const shadow = {
   },
 } as const;
 
+// Adaptação a telas e fontes: a fonte do sistema escala até este teto (acima disso o layout quebra),
+// e em telas largas (tablet, dobrável) o conteúdo fica centralizado com largura limitada.
+export const maxFontScale = 1.3;
+export const layout = {
+  content: { width: '100%', maxWidth: 640, alignSelf: 'center' },
+} as const;
+
 // Área de toque mínima recomendada (Material 48dp / Apple 44pt).
 export const touchTarget = 48;

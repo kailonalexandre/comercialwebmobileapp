@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DraftEditor } from '@/features/presale/draft-editor';
 import { canSend, estimateCents } from '@/features/presale/draft-model';
@@ -9,11 +9,12 @@ import { ReceiptActions } from '@/features/sales/receipt-actions';
 import { Button } from '@/shared/components/button';
 import { Icon } from '@/shared/components/icon';
 import { Text } from '@/shared/components/text';
-import { colors, fonts, radius, shadow, spacing, touchTarget } from '@/shared/theme/tokens';
+import { colors, fonts, layout, radius, shadow, spacing, touchTarget } from '@/shared/theme/tokens';
 import { formatCents } from '@/shared/utils/format';
 
 export function NewSaleScreen() {
   const store = usePreSaleDraft();
+  const insets = useSafeAreaInsets();
   const { draft, phase, send, reset } = store;
   const locked = phase.name !== 'editing';
 
@@ -48,7 +49,7 @@ export function NewSaleScreen() {
         <Pressable accessibilityRole="button" accessibilityLabel="Voltar" onPress={() => router.back()} style={styles.back}>
           <Icon name="chevron-back" size={26} color={colors.text} />
         </Pressable>
-        <Text variant="title">Nova pré-venda</Text>
+        <Text variant="title" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={{ flex: 1 }}>Nova pré-venda</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -75,12 +76,12 @@ export function NewSaleScreen() {
       </ScrollView>
 
       {phase.name !== 'uncertain' && (
-        <View style={styles.footer}>
+        <View style={[styles.footer, { paddingBottom: spacing.lg + insets.bottom }]}>
           <View style={styles.flex}>
             <Text variant="caption" color="textMuted">
               Total estimado
             </Text>
-            <Text style={styles.footerTotal}>{formatCents(estimateCents(draft.items, draft.saleDiscount))}</Text>
+            <Text style={styles.footerTotal} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{formatCents(estimateCents(draft.items, draft.saleDiscount))}</Text>
           </View>
           <View style={styles.footerButton}>
             <Button label="Enviar" onPress={send} loading={phase.name === 'sending'} disabled={!canSend(draft)} />
@@ -95,7 +96,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.page },
   top: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
   back: { width: touchTarget, height: touchTarget, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', marginLeft: -spacing.sm },
-  content: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl * 2 },
+  content: { ...layout.content, padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl * 2 },
   card: { gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.background, ...shadow.card },
   between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
   flex: { flex: 1 },

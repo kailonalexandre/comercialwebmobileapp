@@ -10,7 +10,7 @@ import { IconTile } from '@/shared/components/icon-tile';
 import { StateView } from '@/shared/components/state-view';
 import { Text } from '@/shared/components/text';
 import { TextField } from '@/shared/components/text-field';
-import { colors, radius, shadow, spacing, type Tone } from '@/shared/theme/tokens';
+import { colors, layout, radius, shadow, spacing, type Tone } from '@/shared/theme/tokens';
 import { normalizeSearch } from '@/shared/utils/format';
 
 type Module = { title: string; description: string; icon: IconName; tone: Tone; href?: '/configuracoes' | '/pedidos' };
@@ -84,7 +84,7 @@ export function MenuScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.page },
-  content: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl * 2 },
+  content: { ...layout.content, padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl * 2 },
   flex: { flex: 1 },
   user: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.background, ...shadow.card },
   avatar: { width: 48, height: 48, borderRadius: radius.pill, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },

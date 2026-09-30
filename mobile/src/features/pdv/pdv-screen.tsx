@@ -14,7 +14,7 @@ import { Button } from '@/shared/components/button';
 import { Icon } from '@/shared/components/icon';
 import { Text } from '@/shared/components/text';
 import { TextField } from '@/shared/components/text-field';
-import { colors, radius, shadow, spacing } from '@/shared/theme/tokens';
+import { colors, layout, radius, shadow, spacing } from '@/shared/theme/tokens';
 import { formatCents } from '@/shared/utils/format';
 
 export function PdvScreen() {
@@ -216,7 +216,7 @@ export function PdvScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.page },
-  content: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl * 3 },
+  content: { ...layout.content, padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl * 3 },
   card: { gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.background, ...shadow.card },
   between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },

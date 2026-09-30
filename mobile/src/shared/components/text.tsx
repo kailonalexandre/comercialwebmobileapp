@@ -1,6 +1,6 @@
 import { Text as RNText, type TextProps } from 'react-native';
 
-import { colors, typography } from '@/shared/theme/tokens';
+import { colors, maxFontScale, typography } from '@/shared/theme/tokens';
 
 type Variant = keyof typeof typography;
 
@@ -10,5 +10,5 @@ type Props = TextProps & {
 };
 
 export function Text({ variant = 'body', color = 'text', style, ...rest }: Props) {
-  return <RNText style={[typography[variant], { color: colors[color] }, style]} {...rest} />;
+  return <RNText maxFontSizeMultiplier={maxFontScale} style={[typography[variant], { color: colors[color] }, style]} {...rest} />;
 }

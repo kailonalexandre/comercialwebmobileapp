@@ -35,7 +35,7 @@ export function SaleDetailScreen() {
         <>
           <View style={styles.hero}>
             <StatusPill label={statusLabel(sale.status)} tone={statusTone(sale.status)} />
-            <Text style={styles.heroTotal}>{formatCents(sale.totalCents)}</Text>
+            <Text style={styles.heroTotal} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{formatCents(sale.totalCents)}</Text>
             <Text variant="mono" color="textMuted">
               {sale.number} · {formatLocal(sale.createdAt)}
             </Text>

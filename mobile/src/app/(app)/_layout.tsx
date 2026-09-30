@@ -20,6 +20,7 @@ export default function AppTabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
+        tabBarAllowFontScaling: false,
         tabBarLabelStyle: { fontFamily: fonts.semibold, fontSize: typography.caption.fontSize - 2 },
         tabBarStyle: styles.bar,
         tabBarItemStyle: styles.item,

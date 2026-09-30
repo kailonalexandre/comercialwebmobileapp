@@ -7,7 +7,7 @@ import { Icon } from '@/shared/components/icon';
 import { StateView } from '@/shared/components/state-view';
 import { Text } from '@/shared/components/text';
 import type { DetailFailure } from '@/shared/hooks/use-detail';
-import { colors, radius, shadow, spacing, touchTarget } from '@/shared/theme/tokens';
+import { colors, layout, radius, shadow, spacing, touchTarget } from '@/shared/theme/tokens';
 import { userMessage } from '@/shared/utils/error-message';
 
 type Props = {
@@ -48,5 +48,5 @@ const styles = StyleSheet.create({
   backFilled: { backgroundColor: colors.background, ...shadow.card },
   // O botão da direita é só um espaço para manter o título centralizado.
   back: { width: touchTarget, height: touchTarget, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
-  content: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl * 2 },
+  content: { ...layout.content, padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl * 2 },
 });
