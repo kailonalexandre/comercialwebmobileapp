@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <UserSecretsId>92d8b291-9962-41ad-a9a4-99ed929f3d71</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Modules\Identity\ComercialWeb.Mobile.Identity.csproj" />
+    <ProjectReference Include="..\Modules\Catalog\ComercialWeb.Mobile.Catalog.csproj" />
+    <ProjectReference Include="..\Modules\Customers\ComercialWeb.Mobile.Customers.csproj" />
+    <ProjectReference Include="..\Modules\Dashboard\ComercialWeb.Mobile.Dashboard.csproj" />
+    <ProjectReference Include="..\Modules\Notifications\ComercialWeb.Mobile.Notifications.csproj" />
+    <ProjectReference Include="..\Modules\Push\ComercialWeb.Mobile.Push.csproj" />
+    <ProjectReference Include="..\Modules\Sales\ComercialWeb.Mobile.Sales.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\db\migrations\*.sql" LinkBase="migrations" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ComercialWeb.Mobile.Tests" />
+  </ItemGroup>
+
+</Project>

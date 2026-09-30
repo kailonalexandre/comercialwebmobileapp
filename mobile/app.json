@@ -1,14 +1,14 @@
 {
   "expo": {
-    "name": "ComercialWeb",
-    "slug": "comercialweb-mobile",
-    "version": "0.1.0",
+    "name": "Infinit Comercial",
+    "slug": "infinit-comercial",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "br.com.comercialweb.mobile"
+      "bundleIdentifier": "br.com.infinitsolucoesweb.comercial"
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +18,7 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "br.com.comercialweb.mobile",
+      "package": "br.com.infinitsolucoesweb.comercial",
       "allowBackup": false
     },
     "web": {
@@ -26,11 +26,29 @@
     },
     "plugins": [
       "expo-router",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-notifications",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "A câmera é usada apenas para ler o QR Code de pareamento e o código de barras dos produtos.",
+          "recordAudioAndroid": false
+        }
+      ]
     ],
-    "scheme": "comercialweb",
+    "scheme": [
+      "infinitcomercial",
+      "comercialweb"
+    ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "8288de84-7a34-496c-b1df-02ad00d05880"
+      }
+    },
+    "owner": "kailons-team"
   }
 }

@@ -1,174 +1,185 @@
-import * as Linking from 'expo-linking';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { LoginWave } from '@/features/auth/login-wave';
+import { defaultDeviceName } from '@/features/auth/auth-api';
 import { useSession } from '@/features/auth/session-context';
-import { webBaseUrl } from '@/infrastructure/config';
+import { parsePairingLink, type PairingLink } from '@/features/auth/pairing';
+import { ApiError } from '@/infrastructure/api/client';
+import { appEnv } from '@/infrastructure/config';
+import { BrandMark } from '@/shared/components/brand-mark';
 import { Button } from '@/shared/components/button';
-import { Checkbox } from '@/shared/components/checkbox';
-import { Icon } from '@/shared/components/icon';
+import { CodeScanner } from '@/shared/components/code-scanner';
+import { EnvBadge } from '@/shared/components/env-badge';
 import { Text } from '@/shared/components/text';
 import { TextField } from '@/shared/components/text-field';
-import { colors, radius, spacing, touchTarget } from '@/shared/theme/tokens';
+import { radius, shadow, spacing } from '@/shared/theme/tokens';
+import { makeStyles, useTheme } from '@/shared/theme/theme-context';
 
-// Páginas públicas do ComercialWeb web, abertas no navegador do sistema (sem WebView).
-function openWeb(path: string) {
-  if (webBaseUrl) Linking.openURL(`${webBaseUrl}${path}`).catch(() => undefined);
+const STEPS = ['No ComercialWeb, abra Configurações → Aplicativo Mobile', 'Clique em Gerar QR Code', 'Aponte a câmera do celular para o código'];
+
+function messageFor(e: unknown): string {
+  if (e instanceof ApiError) {
+    if (e.kind === 'network' || e.kind === 'timeout') return 'Sem conexão com o servidor. Verifique a internet e tente de novo.';
+    if (e.status === 429) {
+      return e.retryAfterSeconds
+        ? `Muitas tentativas. Aguarde ${e.retryAfterSeconds} s e tente de novo.`
+        : 'Muitas tentativas. Aguarde um minuto e tente de novo.';
+    }
+    if (e.kind === 'server') return 'O servidor não conseguiu falar com o ComercialWeb. Tente de novo em instantes.';
+    if (e.kind === 'validation') return 'Código inválido ou expirado. Gere um novo QR Code no sistema.';
+  }
+  return 'Não foi possível conectar. Gere um novo QR Code e tente de novo.';
 }
 
-export function LoginScreen() {
-  const { signIn } = useSession();
-  const [login, setLogin] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [remember, setRemember] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export function LoginScreen({ deepLink }: { deepLink?: string }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
+  const { connect } = useSession();
+  const [scanning, setScanning] = useState(false);
+  const [link, setLink] = useState('');
+  const [deviceName, setDeviceName] = useState(defaultDeviceName);
+  // Link vindo de fora do app (câmera do sistema): só conecta após confirmação do usuário.
+  const [fromLink] = useState(() => (deepLink ? parsePairingLink(deepLink, appEnv) : null));
+  const [pending, setPending] = useState<PairingLink | null>(fromLink?.ok ? fromLink.link : null);
+  const [error, setError] = useState<string | null>(fromLink && !fromLink.ok ? fromLink.message : null);
   const [submitting, setSubmitting] = useState(false);
 
-  async function submit() {
-    if (login.trim().length === 0 || password.length === 0) {
-      setError('Informe e-mail ou usuário e senha.');
-      return;
-    }
+  async function connectWith({ code }: PairingLink) {
     setError(null);
     setSubmitting(true);
     try {
-      await signIn({ login: login.trim(), password }, remember);
-    } catch {
-      // Mensagem única: não revela se o usuário existe.
-      setError('Usuário ou senha incorretos.');
+      await connect(code, deviceName.trim() || defaultDeviceName);
+    } catch (e) {
+      setError(messageFor(e));
       setSubmitting(false);
     }
   }
+
+  async function pairWith(raw: string) {
+    if (submitting) return; // Enter repetido não pode gastar o código de uso único duas vezes
+    const parsed = parsePairingLink(raw, appEnv);
+    if (parsed.ok) await connectWith(parsed.link);
+    else setError(parsed.message);
+  }
+
+  function onScanned(raw: string) {
+    setScanning(false);
+    void pairWith(raw);
+  }
+
+  if (scanning) return <CodeScanner types={['qr']} purpose="ler o QR Code de pareamento" onScanned={onScanned} onCancel={() => setScanning(false)} />;
 
   return (
     <View style={styles.root}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <SafeAreaView edges={['top']} style={styles.content}>
-            {webBaseUrl && (
-              <View style={styles.signup}>
-                <Text variant="caption">Não tem uma conta?</Text>
-                <Pressable accessibilityRole="link" onPress={() => openWeb('/register')} hitSlop={spacing.md}>
-                  <Text variant="label" color="primary" style={styles.link}>
-                    Registre-se
-                  </Text>
-                </Pressable>
+            <View style={styles.logo}>
+              <BrandMark size={52} color={colors.onPrimary} />
+            </View>
+            <View style={styles.badgeRow}>
+              <EnvBadge />
+            </View>
+            <View style={styles.titleBlock}>
+              <Text variant="title" style={[styles.brand, styles.center]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                Infinit Comercial
+              </Text>
+              <Text color="textMuted" style={styles.center}>
+                Conecte este aparelho ao ComercialWeb em menos de um minuto.
+              </Text>
+            </View>
+
+            {!pending && (
+              <View style={styles.steps}>
+                {STEPS.map((step, i) => (
+                  <View key={step} style={styles.step}>
+                    <View style={styles.stepNumber}>
+                      <Text variant="label" color="primary">
+                        {i + 1}
+                      </Text>
+                    </View>
+                    <Text style={styles.flex}>{step}</Text>
+                  </View>
+                ))}
               </View>
             )}
 
-            <LinearGradient colors={[colors.gradientStart, colors.gradientEnd]} style={styles.logo}>
-              <Icon name="cube-outline" size={40} color={colors.onPrimary} />
-            </LinearGradient>
-            <View style={styles.titleBlock}>
-              <Text variant="title" style={styles.brand}>
-                ComercialWeb
-              </Text>
-              <Text color="textMuted">Sua operação, mais simples.</Text>
-            </View>
+            {pending ? (
+              <View style={styles.form}>
+                <Text style={styles.center}>{`Conectar este aparelho ao ComercialWeb ${new URL(pending.server).host}?`}</Text>
+                {error && (
+                  <Text variant="caption" color="danger" accessibilityLiveRegion="polite">
+                    {error}
+                  </Text>
+                )}
+                <Button label="Conectar" onPress={() => connectWith(pending)} loading={submitting} />
+                <Button label="Cancelar" variant="outline" onPress={() => setPending(null)} disabled={submitting} />
+              </View>
+            ) : (
+              <View style={styles.form}>
+                <TextField
+                  label="Nome do aparelho"
+                  icon="phone-portrait-outline"
+                  value={deviceName}
+                  onChangeText={setDeviceName}
+                  maxLength={100}
+                  autoCorrect={false}
+                />
+                <Button label="Ler QR Code" icon="qr-code-outline" onPress={() => setScanning(true)} loading={submitting} />
 
-            <View style={styles.form}>
-              <TextField
-                label="E-mail ou usuário"
-                icon="mail-outline"
-                placeholder="Digite seu e-mail ou usuário"
-                value={login}
-                onChangeText={setLogin}
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoComplete="username"
-                textContentType="username"
-                returnKeyType="next"
-              />
-              <TextField
-                label="Senha"
-                icon="lock-closed-outline"
-                placeholder="Digite sua senha"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                autoComplete="current-password"
-                textContentType="password"
-                returnKeyType="go"
-                onSubmitEditing={submit}
-                trailing={
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
-                    onPress={() => setShowPassword((v) => !v)}
-                    style={styles.eye}
-                  >
-                    <Icon name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color={colors.text} />
-                  </Pressable>
-                }
-              />
+                {appEnv.allowManualPairing && (
+                  <>
+                    <View style={styles.divider}>
+                      <View style={styles.line} />
+                      <Text variant="caption" color="textMuted">
+                        ou cole o link
+                      </Text>
+                      <View style={styles.line} />
+                    </View>
 
-              <View style={styles.options}>
-                <Checkbox label="Lembrar de mim" checked={remember} onChange={setRemember} />
-                {webBaseUrl && (
-                  <Pressable accessibilityRole="link" onPress={() => openWeb('/forgot-password')} hitSlop={spacing.md}>
-                    <Text variant="caption" color="primary" style={styles.link}>
-                      Esqueceu sua senha?
-                    </Text>
-                  </Pressable>
+                    <TextField
+                      label="Link de pareamento"
+                      icon="link-outline"
+                      placeholder="comercialweb://pair?code=…"
+                      value={link}
+                      onChangeText={setLink}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      returnKeyType="go"
+                      onSubmitEditing={() => pairWith(link)}
+                    />
+                    <Button label="Conectar" variant="outline" onPress={() => pairWith(link)} disabled={link.trim() === '' || submitting} />
+                  </>
+                )}
+                {error && (
+                  <Text variant="caption" color="danger" accessibilityLiveRegion="polite">
+                    {error}
+                  </Text>
                 )}
               </View>
-
-              {error && (
-                <Text variant="caption" color="danger" accessibilityLiveRegion="polite">
-                  {error}
-                </Text>
-              )}
-
-              <Button label="Entrar" trailingIcon="arrow-forward" onPress={submit} loading={submitting} />
-
-              <View style={styles.divider}>
-                <View style={styles.line} />
-                <Text variant="caption" color="textMuted">
-                  ou
-                </Text>
-                <View style={styles.line} />
-              </View>
-
-              {/* Login por QR exige token temporário de uso único validado no servidor (seção 7.11). */}
-              <Button
-                label="Entrar com QR Code"
-                variant="outline"
-                icon="qr-code-outline"
-                onPress={() => Alert.alert('Entrar com QR Code', 'Em breve.')}
-              />
-            </View>
+            )}
           </SafeAreaView>
-          <LoginWave />
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.background },
+const useStyles = makeStyles((colors) => ({
+  root: { flex: 1, backgroundColor: colors.page },
   flex: { flex: 1 },
   scroll: { flexGrow: 1, justifyContent: 'space-between' },
   content: { paddingHorizontal: spacing.xl, gap: spacing.lg },
-  signup: { alignItems: 'flex-end', gap: spacing.xs, paddingTop: spacing.lg },
-  link: { textDecorationLine: 'underline' },
-  logo: {
-    width: 88,
-    height: 88,
-    borderRadius: radius.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: spacing.xl,
-  },
-  titleBlock: { gap: spacing.xs },
+  logo: { width: 88, height: 88, borderRadius: radius.xl, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginTop: spacing.xl, alignSelf: 'center' },
+  titleBlock: { gap: spacing.xs, alignItems: 'center' },
   brand: { fontSize: 32, lineHeight: 40 },
+  steps: { gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.background, ...shadow.card },
+  step: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  stepNumber: { width: 32, height: 32, borderRadius: radius.pill, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  center: { textAlign: 'center' },
+  badgeRow: { alignItems: 'center' },
   form: { gap: spacing.lg, marginTop: spacing.xl },
-  eye: { width: touchTarget, height: touchTarget, alignItems: 'center', justifyContent: 'center', marginRight: -spacing.md },
-  options: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   divider: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   line: { flex: 1, height: 1, backgroundColor: colors.border },
-});
+}));

@@ -12,14 +12,24 @@ export type ApiErrorKind =
   | 'unknown';
 
 // Erro tipado. `message` é sempre genérica; detalhes técnicos ficam no servidor, rastreáveis pelo correlationId.
+export type Refusal = { code?: string; message?: string; reason?: string; totalCents?: number; remainingCents?: number };
+
 export class ApiError extends Error {
   constructor(
     readonly kind: ApiErrorKind,
     readonly status?: number,
     readonly correlationId?: string,
+    // Recusa de regra de negócio (422): código estável, mensagem pronta para o usuário e, quando houver, totais.
+    readonly refusal?: Refusal,
+    // 429: segundos pedidos pelo servidor (Retry-After), para a tela orientar o usuário.
+    readonly retryAfterSeconds?: number,
   ) {
     super('Não foi possível concluir a operação.');
     this.name = 'ApiError';
+  }
+
+  get serverMessage(): string | undefined {
+    return this.refusal?.message;
   }
 }
 
@@ -32,18 +42,31 @@ export type RequestOptions = {
   timeoutMs?: number;
   // Obrigatório em operações com efeito financeiro/estoque: o servidor deduplica pelo valor.
   idempotencyKey?: string;
+  // Rotas sem sessão (login, refresh): não envia token e 401 significa credencial inválida.
+  anonymous?: boolean;
+  // A resposta é um arquivo (ex.: PDF): devolve os bytes em vez de JSON.
+  binary?: boolean;
 };
+
+// Resultado da renovação: 'network' não derruba a sessão (usuário pode estar só offline).
+export type RefreshOutcome = 'ok' | 'rejected' | 'network';
 
 type ClientDeps = {
   baseUrl: string;
   getAccessToken: () => Promise<string | null>;
   onUnauthorized: () => void;
+  refreshSession?: () => Promise<RefreshOutcome>;
   fetchImpl?: typeof fetch;
   newId?: () => string;
+  sleep?: (ms: number) => Promise<void>;
+  // Linha de diagnóstico (método, caminho, status, tempo): nunca recebe token nem query string.
+  log?: (line: string) => void;
 };
 
-const DEFAULT_TIMEOUT_MS = 15_000;
+// fetch não separa conexão de leitura: 30 s cobrem a requisição inteira.
+const DEFAULT_TIMEOUT_MS = 30_000;
 const MAX_ATTEMPTS = 3;
+const BACKOFF_BASE_MS = 500;
 
 export function kindFromStatus(status: number): ApiErrorKind {
   if (status === 401) return 'unauthorized';
@@ -64,34 +87,56 @@ export function kindFromStatus(status: number): ApiErrorKind {
  * @returns true para repetir (até MAX_ATTEMPTS no total)
  */
 export function shouldRetry(method: HttpMethod, error: ApiError, hasIdempotencyKey: boolean): boolean {
-  // TODO(usuário): definir a política de retry. Padrão seguro atual: nunca repetir.
-  void method;
-  void error;
-  void hasIdempotencyKey;
-  return false;
+  // Só falha transitória (5xx, rede, timeout) e só onde repetir é seguro: leitura, ou escrita com
+  // Idempotency-Key (o servidor deduplica). POST sem chave nunca é repetido.
+  const transient = error.kind === 'server' || error.kind === 'network' || error.kind === 'timeout';
+  return transient && (method === 'GET' || hasIdempotencyKey);
+}
+
+async function readRefusal(response: Response): Promise<Refusal | undefined> {
+  try {
+    const b = (await response.json()) as Record<string, unknown>;
+    const text = (v: unknown) => (typeof v === 'string' && v.length <= 300 ? v : undefined);
+    const cents = (v: unknown) => (typeof v === 'number' && Number.isSafeInteger(v) ? v : undefined);
+    return { code: text(b.code), message: text(b.message), reason: text(b.reason), totalCents: cents(b.totalCents), remainingCents: cents(b.remainingCents) };
+  } catch {
+    return undefined;
+  }
 }
 
 export function createApiClient({
   baseUrl,
   getAccessToken,
   onUnauthorized,
+  refreshSession = async () => 'rejected',
   fetchImpl = fetch,
   newId = randomUUID,
+  sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  log,
 }: ClientDeps) {
+  // Várias requisições com 401 ao mesmo tempo compartilham uma única renovação:
+  // o servidor aceita cada refresh token uma vez só e trataria a segunda como reuso (roubo).
+  let refreshing: Promise<RefreshOutcome> | null = null;
+  const refreshOnce = () => (refreshing ??= refreshSession().finally(() => (refreshing = null)));
+
   async function attempt<T>(path: string, options: RequestOptions, correlationId: string): Promise<T> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
-    options.signal?.addEventListener('abort', () => controller.abort());
+    // Sinal do chamador já cancelado (ou cancelado depois) aborta esta tentativa; o listener some junto com ela.
+    if (options.signal?.aborted) controller.abort();
+    else options.signal?.addEventListener('abort', () => controller.abort(), { once: true });
 
     const headers: Record<string, string> = {
       Accept: 'application/json',
       'X-Correlation-ID': correlationId,
     };
-    const token = await getAccessToken();
+    const token = options.anonymous ? null : await getAccessToken();
     if (token) headers.Authorization = `Bearer ${token}`;
     if (options.body !== undefined) headers['Content-Type'] = 'application/json';
     if (options.idempotencyKey) headers['Idempotency-Key'] = options.idempotencyKey;
 
+    const startedAt = Date.now();
+    const route = `${options.method ?? 'GET'} ${path.split('?')[0]}`;
     let response: Response;
     try {
       response = await fetchImpl(`${baseUrl}${path}`, {
@@ -102,17 +147,27 @@ export function createApiClient({
       });
     } catch {
       const cancelledByCaller = options.signal?.aborted ?? false;
-      throw new ApiError(controller.signal.aborted && !cancelledByCaller ? 'timeout' : 'network', undefined, correlationId);
+      const kind = controller.signal.aborted && !cancelledByCaller ? 'timeout' : 'network';
+      log?.(`${route} -> ${kind} ${Date.now() - startedAt}ms [${correlationId}]`);
+      throw new ApiError(kind, undefined, correlationId);
     } finally {
       clearTimeout(timer);
     }
 
+    log?.(`${route} -> ${response.status} ${Date.now() - startedAt}ms [${correlationId}]`);
     if (!response.ok) {
-      const error = new ApiError(kindFromStatus(response.status), response.status, correlationId);
-      if (error.kind === 'unauthorized') onUnauthorized();
-      throw error;
+      const refusal = response.status === 422 ? await readRefusal(response) : undefined;
+      const wait = response.status === 429 ? Number(response.headers?.get('Retry-After')) : NaN;
+      throw new ApiError(
+        kindFromStatus(response.status),
+        response.status,
+        correlationId,
+        refusal,
+        Number.isFinite(wait) && wait > 0 ? wait : undefined,
+      );
     }
     if (response.status === 204) return undefined as T;
+    if (options.binary) return new Uint8Array(await response.arrayBuffer()) as T;
     return (await response.json()) as T;
   }
 
@@ -120,14 +175,29 @@ export function createApiClient({
     async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
       const method = options.method ?? 'GET';
       const correlationId = newId();
+      let refreshed = false;
       for (let n = 1; ; n++) {
         try {
           return await attempt<T>(path, options, correlationId);
         } catch (e) {
           const error = e instanceof ApiError ? e : new ApiError('unknown', undefined, correlationId);
+          // Access token expirado: renova uma vez e repete. Seguro mesmo em POST, pois o 401
+          // vem da autenticação, antes de o servidor executar a operação.
+          if (error.kind === 'unauthorized' && !options.anonymous) {
+            const outcome = refreshed ? 'rejected' : await refreshOnce();
+            if (outcome === 'ok') {
+              refreshed = true;
+              n--;
+              continue;
+            }
+            if (outcome === 'network') throw new ApiError('network', undefined, correlationId);
+            onUnauthorized();
+            throw error;
+          }
           if (n >= MAX_ATTEMPTS || options.signal?.aborted || !shouldRetry(method, error, !!options.idempotencyKey)) {
             throw error;
           }
+          await sleep(BACKOFF_BASE_MS * 2 ** (n - 1));
         }
       }
     },

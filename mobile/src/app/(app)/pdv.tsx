@@ -1,5 +1,3 @@
-import { ComingSoonScreen } from '@/shared/components/coming-soon-screen';
+import { PdvScreen } from '@/features/pdv/pdv-screen';
 
-export default function PdvRoute() {
-  return <ComingSoonScreen title="PDV" />;
-}
+export default PdvScreen;

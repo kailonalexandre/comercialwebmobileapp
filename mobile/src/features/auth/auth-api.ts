@@ -1,12 +1,31 @@
+import Constants from 'expo-constants';
+import * as Device from 'expo-device';
+import { Platform } from 'react-native';
+
 import { api } from '@/infrastructure/api';
 import type { Session } from '@/infrastructure/security/session-store';
 
-// `login` aceita e-mail ou usuário, como no ComercialWeb web (LoginRequest).
-export type Credentials = { login: string; password: string };
+// Empresa ativa vem do servidor (sessão), nunca de um valor enviado pelo app.
+export type Profile = { userName: string; businessId: number; businessName: string; permissions: string[] };
 
-// Contrato provisório: será alinhado ao backend quando o endpoint existir.
-export async function login(credentials: Credentials): Promise<Session> {
-  if (api) return api.request<Session>('/v1/auth/login', { method: 'POST', body: credentials });
+// Sugestão inicial do nome do aparelho na lista de dispositivos (modelo, não o nome pessoal); o usuário pode editar.
+export const defaultDeviceName = Device.modelName ?? 'Aplicativo';
+
+const devProfile: Profile = {
+  userName: 'Administrador',
+  businessId: 0,
+  businessName: 'Empresa Demonstração',
+  permissions: ['products.view', 'people.view', 'sales.view', 'sales.create', 'loja-virtual.access', 'marketplaces.view', 'pdv.access', 'pdv.discount'],
+};
+
+// Troca o código do QR (uso único, 2 min) pela sessão da API. O código não é guardado.
+// A API valida o código no ComercialWeb; empresa e usuário vêm de lá, nunca do app.
+export async function pair(code: string, deviceName: string): Promise<Session> {
+  if (api) {
+    return api.request<Session>('/v1/auth/pair', { method: 'POST', body: { code, deviceName, platform: Platform.OS === 'ios' ? 'ios' : 'android', appVersion: Constants.expoConfig?.version },
+      anonymous: true,
+    });
+  }
 
   // Sem API configurada: sessão fictícia apenas em desenvolvimento, para validar telas.
   if (__DEV__) {
@@ -17,6 +36,16 @@ export async function login(credentials: Credentials): Promise<Session> {
     };
   }
   throw new Error('API não configurada.');
+}
+
+export async function fetchProfile(): Promise<Profile> {
+  if (!api) return devProfile;
+  const [me, granted] = await Promise.all([
+    api.request<Omit<Profile, 'permissions'>>('/v1/me'),
+    api.request<{ permissions: string[] }>('/v1/me/permissions'),
+  ]);
+  // Só decide o que mostrar; cada rota do servidor confere a permissão de novo.
+  return { ...me, permissions: granted.permissions };
 }
 
 export async function logout(): Promise<void> {

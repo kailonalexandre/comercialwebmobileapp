@@ -1,0 +1,31 @@
+import { View } from 'react-native';
+
+import { Text } from '@/shared/components/text';
+import { radius, shadow, spacing } from '@/shared/theme/tokens';
+import { makeStyles } from '@/shared/theme/theme-context';
+
+type Row = { label: string; value: string | null | undefined };
+
+// Cartão de rótulo/valor; linhas sem valor não aparecem.
+export function InfoCard({ rows }: { rows: Row[] }) {
+  const styles = useStyles();
+  const visible = rows.filter((r): r is { label: string; value: string } => !!r.value);
+  if (visible.length === 0) return null;
+  return (
+    <View style={styles.card}>
+      {visible.map((r) => (
+        <View key={r.label} style={styles.row}>
+          <Text variant="caption" color="textMuted">
+            {r.label}
+          </Text>
+          <Text>{r.value}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const useStyles = makeStyles((colors) => ({
+  card: { gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.background, ...shadow.card },
+  row: { gap: 2 },
+}));

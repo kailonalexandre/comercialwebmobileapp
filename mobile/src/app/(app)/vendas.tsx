@@ -1,5 +1,3 @@
-import { ComingSoonScreen } from '@/shared/components/coming-soon-screen';
+import { SalesScreen } from '@/features/sales/sales-screen';
 
-export default function VendasRoute() {
-  return <ComingSoonScreen title="Vendas" />;
-}
+export default SalesScreen;

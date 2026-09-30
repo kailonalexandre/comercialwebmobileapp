@@ -1,0 +1,32 @@
+# Rate limit da borda (decisão: a API não limita por conta própria; ver docs/ARCHITECTURE.md, "Borda").
+# Traefik v3 (K3s 1.31). `average` = requisições por `period`; `burst` = rajada tolerada.
+# IMPORTANTE: só vale por IP de cliente depois de cluster/traefik-real-ip.yaml (externalTrafficPolicy: Local);
+# sem ele o Traefik enxerga o IP de um pod e todo mundo divide o mesmo balde.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata: { name: mobile-rl-pair, namespace: comercial-prod }
+spec:
+  rateLimit: { average: 10, period: 1m, burst: 5 }
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata: { name: mobile-rl-refresh, namespace: comercial-prod }
+spec:
+  rateLimit: { average: 30, period: 1m, burst: 10 }
+---
+# Comprovante: uma sessão (token de acesso) não dispara WhatsApp em massa pelo número da empresa.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata: { name: mobile-rl-receipt, namespace: comercial-prod }
+spec:
+  rateLimit:
+    average: 20
+    period: 1m
+    burst: 5
+    sourceCriterion: { requestHeaderName: Authorization }
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata: { name: mobile-rl-default, namespace: comercial-prod }
+spec:
+  rateLimit: { average: 120, period: 1m, burst: 40 }

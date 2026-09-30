@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ComercialWeb.Mobile.Api/ComercialWeb.Mobile.Api.csproj" />
+    <Project Path="src/Modules/Catalog/ComercialWeb.Mobile.Catalog.csproj" />
+    <Project Path="src/Modules/Customers/ComercialWeb.Mobile.Customers.csproj" />
+    <Project Path="src/Modules/Dashboard/ComercialWeb.Mobile.Dashboard.csproj" />
+    <Project Path="src/Modules/Notifications/ComercialWeb.Mobile.Notifications.csproj" />
+    <Project Path="src/Modules/Push/ComercialWeb.Mobile.Push.csproj" />
+    <Project Path="src/Common/ComercialWeb.Mobile.Common.csproj" />
+    <Project Path="src/Modules/Identity/ComercialWeb.Mobile.Identity.csproj" />
+    <Project Path="src/Modules/Sales/ComercialWeb.Mobile.Sales.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ComercialWeb.Mobile.Tests/ComercialWeb.Mobile.Tests.csproj" />
+  </Folder>
+</Solution>

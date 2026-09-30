@@ -4,14 +4,17 @@ export type Session = {
   accessToken: string;
   refreshToken: string;
   expiresAt: string; // ISO-8601
+  // api.min_app_version do ComercialWeb, repassada pela API no pareamento e em cada refresh.
+  minAppVersion?: string | null;
 };
 
 const KEY = 'cw.session';
 
 // Cópia em memória evita ler o Keychain/Keystore a cada requisição.
 let current: Session | null = null;
+let persisted = false;
 
-function isSession(value: unknown): value is Session {
+export function isSession(value: unknown): value is Session {
   const v = value as Partial<Session> | null;
   return (
     typeof v?.accessToken === 'string' && typeof v.refreshToken === 'string' && typeof v.expiresAt === 'string'
@@ -24,6 +27,7 @@ export async function loadSession(): Promise<Session | null> {
   try {
     const parsed: unknown = JSON.parse(raw);
     current = isSession(parsed) ? parsed : null;
+    persisted = current !== null;
   } catch {
     current = null;
   }
@@ -36,10 +40,21 @@ export async function saveSession(session: Session, persist = true): Promise<voi
   if (persist) await secureStorage.set(KEY, JSON.stringify(session));
   else await secureStorage.remove(KEY);
   current = session;
+  persisted = persist;
+}
+
+// Troca os tokens após refresh mantendo a escolha original de "Lembrar de mim".
+export function replaceSession(session: Session): Promise<void> {
+  return saveSession(session, persisted);
+}
+
+export function getRefreshToken(): string | null {
+  return current?.refreshToken ?? null;
 }
 
 export async function clearSession(): Promise<void> {
   current = null;
+  persisted = false;
   await secureStorage.remove(KEY);
 }
 
