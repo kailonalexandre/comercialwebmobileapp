@@ -9,7 +9,7 @@ has() { command -v "$1" >/dev/null 2>&1 && echo "OK   $1: $(command -v "$1")" ||
 
 sec "Sistema"
 . /etc/os-release 2>/dev/null; echo "${PRETTY_NAME:-?} | kernel $(uname -r)"; echo "usuário: $(id -un) (uid $(id -u)); sudo sem senha: $(sudo -n true 2>/dev/null && echo sim || echo não)"
-df -h / /srv 2>/dev/null | sed -n '1,3p'; free -h | sed -n '1,2p'
+df -h / /root/Projetos 2>/dev/null | sed -n '1,3p'; free -h | sed -n '1,2p'
 echo "relógio sincronizado: $(timedatectl show -p NTPSynchronized --value 2>/dev/null || echo '?')  ($(date -u +%FT%TZ))"
 
 sec "Ferramentas (só o que o deploy da API precisa)"
@@ -28,7 +28,8 @@ sec "Docker: já existe algo do app mobile?"
 docker ps -a --format '{{.Names}}' 2>/dev/null | grep -i mobile || echo "nenhum container mobile"
 docker volume ls --format '{{.Name}}' 2>/dev/null | grep -i mobile || echo "nenhum volume mobile"
 docker images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep -i 'comercialweb-mobile' || echo "nenhuma imagem da API"
-ls -la /srv 2>/dev/null
+echo "projetos de dev em /root/Projetos:"; ls -la /root/Projetos 2>/dev/null | head -30
+echo "pasta do app mobile já existe? $(ls -d /root/Projetos/mobile-api 2>/dev/null || echo não)"
 
 sec "Portas em escuta (80, 443, 3306, 8088)"
 ss -ltnp 2>/dev/null | awk 'NR==1 || /:(80|443|3306|8088) /' | sed 's/users:(("//; s/",pid=[0-9]*,fd=[0-9]*))//' 

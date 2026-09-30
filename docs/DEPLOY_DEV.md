@@ -6,7 +6,7 @@ sub-rede da API `172.29.250.0/24` (fixa no Compose). Contexto e regras: [DEPLOY.
 
 ## Regra de ouro
 **Não instalar nem alterar nada que não seja do app mobile.** Este roteiro só cria, e nada mais:
-- a pasta `/srv/mobile-api-dev` e um projeto Compose próprio (`mobile-api-dev`: 2 containers, 1 rede `172.29.250.0/24`, 1 volume);
+- a pasta `/root/Projetos/mobile-api` (mesmo padrão dos outros projetos de dev, que ficam em `/root/Projetos/`) e um projeto Compose próprio (`mobile-api-dev`: 2 containers, 1 rede `172.29.250.0/24`, 1 volume);
 - 2 usuários MySQL (`mobile_api`, e `mobile_deploy` que é apagado no fim) e as tabelas `mobile_*` no banco de dev;
 - 1 vhost do Apache (`api-dev`) e 1 certificado para `api.dev.infinitsolucoesweb.com.br`;
 - 1 regra de firewall (MySQL só para a sub-rede da API), se o `ufw` estiver ativo.
@@ -28,9 +28,9 @@ scp deploy/dev/compose.mobile-api.yaml deploy/dev/nginx-mobile-api.conf deploy/d
 
 ## 1. Na VPS de dev: pasta e checagens
 ```bash
-sudo mkdir -p /srv/mobile-api-dev && sudo chown "$USER" /srv/mobile-api-dev
-mv /tmp/compose.mobile-api.yaml /tmp/nginx-mobile-api.conf /tmp/apache-vhost.api-dev.conf /srv/mobile-api-dev/
-cd /srv/mobile-api-dev
+mkdir -p /root/Projetos/mobile-api
+mv /tmp/compose.mobile-api.yaml /tmp/nginx-mobile-api.conf /tmp/apache-vhost.api-dev.conf /root/Projetos/mobile-api/
+cd /root/Projetos/mobile-api
 docker compose version | head -1
 ```
 (Já mapeado no passo zero: `8088` livre, sem conflito de rede, `certbot` presente.)
