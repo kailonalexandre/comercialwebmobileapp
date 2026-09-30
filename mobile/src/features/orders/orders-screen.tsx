@@ -6,7 +6,7 @@ import { useSession } from '@/features/auth/session-context';
 import { formatLocal } from '@/features/dashboard/dashboard-model';
 import { fetchOrders, type Order, type OrderChannel } from '@/features/orders/orders-api';
 import { ListScreen } from '@/features/shell/list-screen';
-import { ChipRow } from '@/shared/components/chip-row';
+import { Segmented } from '@/shared/components/segmented';
 import { ListRow } from '@/shared/components/list-row';
 import { StateView } from '@/shared/components/state-view';
 import { StatusPill } from '@/shared/components/status-pill';
@@ -23,8 +23,13 @@ const CHANNELS: { key: OrderChannel; label: string; permission: string }[] = [
 function OrderRow({ order, channel }: { order: Order; channel: OrderChannel }) {
   return (
     <ListRow
-      title={`${order.number} · ${order.customer}`}
-      lines={[formatLocal(order.createdAt), [order.payment, order.delivery].filter(Boolean).join(' · ')].filter(Boolean)}
+      title={order.customer}
+      subtitle={
+        <Text variant="mono" color="textMuted" style={styles.mono}>
+          {order.number} · {formatLocal(order.createdAt)}
+        </Text>
+      }
+      lines={[[order.payment, order.delivery].filter(Boolean).join(' · ')].filter(Boolean)}
       // Só pedido de marketplace tem detalhe na API; o da Loja Virtual ainda não.
       onPress={channel === 'mercadolivre' ? () => router.push({ pathname: '/pedido/[id]', params: { id: order.id } }) : undefined}
       trailing={
@@ -65,7 +70,10 @@ export function OrdersScreen() {
 
   const channel = chosen ?? available[0]!.key;
   // `key`: trocar de canal recomeça a lista na página 1.
-  return <OrdersList key={channel} channel={channel} chips={<ChipRow options={available} selected={channel} onSelect={setChosen} />} />;
+  return <OrdersList key={channel} channel={channel} chips={<Segmented options={available} selected={channel} onSelect={setChosen} />} />;
 }
 
-const styles = StyleSheet.create({ trailing: { alignItems: 'flex-end', gap: spacing.xs } });
+const styles = StyleSheet.create({
+  trailing: { alignItems: 'flex-end', gap: spacing.xs },
+  mono: { fontSize: 12, lineHeight: 16 },
+});

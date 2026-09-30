@@ -14,7 +14,7 @@ import { Button } from '@/shared/components/button';
 import { Icon } from '@/shared/components/icon';
 import { Text } from '@/shared/components/text';
 import { TextField } from '@/shared/components/text-field';
-import { colors, layout, radius, shadow, spacing } from '@/shared/theme/tokens';
+import { colors, fonts, layout, radius, shadow, spacing } from '@/shared/theme/tokens';
 import { formatCents } from '@/shared/utils/format';
 
 export function PdvScreen() {
@@ -206,10 +206,24 @@ export function PdvScreen() {
               Se descartar, confira em Vendas se a venda anterior chegou a ser registrada.
             </Text>
           </View>
-        ) : (
-          <Button label="Finalizar venda" onPress={send} loading={phase.name === 'sending'} disabled={!canFinalize} />
-        )}
+        ) : null}
       </ScrollView>
+
+      {phase.name !== 'uncertain' && (
+        <View style={styles.footer}>
+          <View style={styles.flex}>
+            <Text variant="caption" color="textMuted">
+              Total · {draft.items.length} {draft.items.length === 1 ? 'item' : 'itens'}
+            </Text>
+            <Text style={styles.footerTotal} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+              {total === null ? '—' : formatCents(total)}
+            </Text>
+          </View>
+          <View style={styles.flex}>
+            <Button label="Cobrar" onPress={send} loading={phase.name === 'sending'} disabled={!canFinalize} />
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -224,6 +238,8 @@ const styles = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chip: { paddingHorizontal: spacing.md, minHeight: 40, justifyContent: 'center', borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border },
   chipActive: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
+  footer: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, padding: spacing.lg, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border },
+  footerTotal: { fontFamily: fonts.bold, fontSize: 24, lineHeight: 30, color: colors.text },
   doneBlock: { flex: 1, justifyContent: 'center', gap: spacing.lg, padding: spacing.xl },
   doneIcon: { width: 72, height: 72, borderRadius: radius.pill, backgroundColor: colors.successSoft, alignItems: 'center', justifyContent: 'center' },
 });
