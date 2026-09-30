@@ -1,11 +1,9 @@
-import Constants from 'expo-constants';
+import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { useSession } from '@/features/auth/session-context';
 import { AppHeader } from '@/features/shell/app-header';
-import { appEnv } from '@/infrastructure/config';
 import { Icon, type IconName } from '@/shared/components/icon';
 import { IconTile } from '@/shared/components/icon-tile';
 import { StateView } from '@/shared/components/state-view';
@@ -14,7 +12,7 @@ import { TextField } from '@/shared/components/text-field';
 import { colors, radius, spacing, touchTarget, type Tone } from '@/shared/theme/tokens';
 import { normalizeSearch } from '@/shared/utils/format';
 
-type Module = { title: string; description: string; icon: IconName; tone: Tone };
+type Module = { title: string; description: string; icon: IconName; tone: Tone; href?: '/configuracoes' };
 
 // Espelha os módulos do ComercialWeb (app/Modules). Cada item vira rota quando a feature existir.
 const modules: Module[] = [
@@ -25,11 +23,10 @@ const modules: Module[] = [
   { title: 'Compras e Entradas', description: 'Pedidos, entradas e notas fiscais', icon: 'bus-outline', tone: 'primary' },
   { title: 'Relatórios', description: 'Vendas, estoque, financeiro e mais', icon: 'bar-chart-outline', tone: 'primary' },
   { title: 'Loja Virtual', description: 'Produtos, pedidos e configurações', icon: 'storefront-outline', tone: 'accent' },
-  { title: 'Configurações', description: 'Empresa, usuários e preferências', icon: 'settings-outline', tone: 'info' },
+  { title: 'Configurações', description: 'Empresa, usuários e preferências', icon: 'settings-outline', tone: 'info', href: '/configuracoes' },
 ];
 
 export function MenuScreen() {
-  const { signOut } = useSession();
   const [query, setQuery] = useState('');
 
   const visible = useMemo(() => {
@@ -62,7 +59,7 @@ export function MenuScreen() {
             key={m.title}
             accessibilityRole="button"
             accessibilityLabel={`${m.title}. ${m.description}`}
-            onPress={() => Alert.alert(m.title, 'Em breve.')}
+            onPress={() => (m.href ? router.push(m.href) : Alert.alert(m.title, 'Em breve.'))}
             style={({ pressed }) => [styles.item, pressed && styles.pressed]}
           >
             <IconTile icon={m.icon} tone={m.tone} size={52} />
@@ -78,19 +75,6 @@ export function MenuScreen() {
           </Pressable>
         ))}
 
-        <Pressable
-          accessibilityRole="button"
-          onPress={signOut}
-          style={({ pressed }) => [styles.logout, pressed && styles.pressed]}
-        >
-          <Icon name="log-out-outline" size={22} color={colors.danger} />
-          <Text variant="label" color="danger">
-            Desconectar
-          </Text>
-        </Pressable>
-        <Text variant="caption" color="textMuted" style={styles.about}>
-          {`Infinit Comercial ${Constants.expoConfig?.version ?? ''} · ambiente ${appEnv.name.toUpperCase()}`}
-        </Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -114,13 +98,4 @@ const styles = StyleSheet.create({
   },
   itemTitle: { fontSize: 17, lineHeight: 22 },
   pressed: { opacity: 0.7 },
-  logout: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    minHeight: touchTarget,
-    marginTop: spacing.sm,
-  },
-  about: { textAlign: 'center' },
 });
