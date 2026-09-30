@@ -6,7 +6,7 @@ import { useUnreadCount } from '@/features/shell/use-unread-count';
 import { BrandMark } from '@/shared/components/brand-mark';
 import { Icon } from '@/shared/components/icon';
 import { Text } from '@/shared/components/text';
-import { colors, radius, spacing, touchTarget } from '@/shared/theme/tokens';
+import { colors, radius, spacing, touchTarget, fonts } from '@/shared/theme/tokens';
 
 // Cabeçalho das telas principais: marca, notificações e avatar do usuário da sessão.
 export function AppHeader() {
@@ -67,7 +67,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badgeText: { color: colors.onPrimary, fontSize: 11, lineHeight: 13, fontWeight: '700' },
+  badgeText: { color: colors.onPrimary, fontFamily: fonts.bold, fontSize: 11, lineHeight: 13 },
   avatar: {
     width: touchTarget,
     height: touchTarget,

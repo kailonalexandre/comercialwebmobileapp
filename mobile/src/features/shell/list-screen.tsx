@@ -22,6 +22,10 @@ type Props<T> = {
   fetchPage: PageFetcher<T>;
   keyOf: (item: T) => string;
   renderRow: (item: T, controls: ListControls<T>) => ReactElement;
+  // Botão à direita do título (ex.: "+ Pré-venda").
+  action?: ReactElement;
+  // Agrupa a lista: um cabeçalho aparece quando o valor muda em relação ao item anterior.
+  sectionOf?: (item: T) => string;
   onBack?: () => void;
   header?: ReactElement;
   // Controles logo abaixo da busca (filtros, ações em lote).
@@ -35,7 +39,7 @@ type Props<T> = {
 const BARCODES = ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'itf14'] as const;
 
 // Tela de lista padrão: busca, paginação por rolagem, puxar para atualizar e estados de carga/erro/vazio.
-export function ListScreen<T>({ title, subtitle, searchPlaceholder, emptyMessage, fetchPage, keyOf, renderRow, onBack, header, filters, tabScreen, scanBarcode }: Props<T>) {
+export function ListScreen<T>({ title, subtitle, searchPlaceholder, emptyMessage, fetchPage, keyOf, renderRow, onBack, header, filters, tabScreen, scanBarcode, action, sectionOf }: Props<T>) {
   const [search, setSearch] = useState('');
   const [scanning, setScanning] = useState(false);
   const list = usePagedList(fetchPage, search.trim());
@@ -68,7 +72,20 @@ export function ListScreen<T>({ title, subtitle, searchPlaceholder, emptyMessage
         ref={scroller}
         data={list.items}
         keyExtractor={keyOf}
-        renderItem={({ item }) => renderRow(item, { patch: list.patch, reload: list.reload })}
+        renderItem={({ item, index }) => {
+          const section = sectionOf?.(item);
+          const newSection = section !== undefined && (index === 0 || sectionOf?.(list.items[index - 1] as T) !== section);
+          return (
+            <View>
+              {newSection && (
+                <Text variant="mono" color="textMuted" style={styles.section}>
+                  {section}
+                </Text>
+              )}
+              {renderRow(item, { patch: list.patch, reload: list.reload })}
+            </View>
+          );
+        }}
         refreshing={false}
         onRefresh={list.reload}
         keyboardShouldPersistTaps="handled"
@@ -87,6 +104,7 @@ export function ListScreen<T>({ title, subtitle, searchPlaceholder, emptyMessage
                 <Text variant="title">{title}</Text>
                 {subtitle && <Text color="textMuted">{subtitle}</Text>}
               </View>
+              {action}
             </View>
             <TextField
               icon="search-outline"
@@ -124,7 +142,8 @@ export function ListScreen<T>({ title, subtitle, searchPlaceholder, emptyMessage
 const Separator = () => <View style={styles.separator} />;
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.background },
+  section: { marginTop: spacing.md, marginBottom: spacing.sm },
+  root: { flex: 1, backgroundColor: colors.page },
   content: { padding: spacing.lg, paddingBottom: spacing.xxl * 2, flexGrow: 1 },
   headerBlock: { gap: spacing.md, marginBottom: spacing.md },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },

@@ -1,3 +1,6 @@
+import { IBMPlexMono_400Regular, IBMPlexMono_500Medium } from '@expo-google-fonts/ibm-plex-mono';
+import { InterTight_400Regular, InterTight_500Medium, InterTight_600SemiBold, InterTight_700Bold } from '@expo-google-fonts/inter-tight';
+import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import type { ReactNode } from 'react';
 import { StatusBar } from 'expo-status-bar';
@@ -32,7 +35,6 @@ function RootNavigator() {
           <Stack.Screen name="clientes" />
           <Stack.Screen name="notificacoes" />
           <Stack.Screen name="configuracoes" />
-          <Stack.Screen name="pedidos" />
           <Stack.Screen name="pedido/[id]" />
           <Stack.Screen name="nova-venda" />
           <Stack.Screen name="selecionar-produto" />
@@ -63,6 +65,17 @@ function SessionScopedDraft({ children }: { children: ReactNode }) {
 }
 
 export default function RootLayout() {
+  const [fontsLoaded, fontError] = useFonts({
+    InterTight_400Regular,
+    InterTight_500Medium,
+    InterTight_600SemiBold,
+    InterTight_700Bold,
+    IBMPlexMono_400Regular,
+    IBMPlexMono_500Medium,
+  });
+  // Falha ao carregar fonte não pode travar o app: cai na fonte do sistema.
+  if (!fontsLoaded && !fontError) return <StateView kind="loading" />;
+
   return (
     <OnboardingProvider>
       <SessionProvider>

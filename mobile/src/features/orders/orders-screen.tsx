@@ -49,8 +49,8 @@ function OrdersList({ channel, chips }: { channel: OrderChannel; chips: React.Re
       fetchPage={fetchPage}
       keyOf={(o) => o.id}
       renderRow={(o) => <OrderRow order={o} channel={channel} />}
-      onBack={() => router.back()}
       filters={chips}
+      tabScreen
     />
   );
 }

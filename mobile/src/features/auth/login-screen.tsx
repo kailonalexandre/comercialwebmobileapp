@@ -148,7 +148,7 @@ export function LoginScreen({ deepLink }: { deepLink?: string }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.background },
+  root: { flex: 1, backgroundColor: colors.page },
   flex: { flex: 1 },
   scroll: { flexGrow: 1, justifyContent: 'space-between' },
   content: { paddingHorizontal: spacing.xl, gap: spacing.lg },

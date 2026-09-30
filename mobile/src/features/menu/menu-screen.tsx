@@ -81,7 +81,7 @@ export function MenuScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.background },
+  root: { flex: 1, backgroundColor: colors.page },
   content: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl * 2 },
   flex: { flex: 1, gap: 2 },
   titleBlock: { gap: spacing.xs, marginVertical: spacing.sm },

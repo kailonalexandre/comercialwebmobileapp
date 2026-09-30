@@ -20,6 +20,6 @@ export function ComingSoonScreen({ title }: { title: string }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.background },
+  root: { flex: 1, backgroundColor: colors.page },
   content: { padding: spacing.lg, gap: spacing.lg },
 });

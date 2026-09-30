@@ -1,19 +1,22 @@
 // Única fonte de valores visuais do app. Telas e componentes não usam valores literais.
 
 export const colors = {
-  primary: '#6D3AED',
-  primaryPressed: '#5B2BD4',
-  primarySoft: '#EFEAFF',
-  gradientStart: '#8B5CF6',
-  gradientEnd: '#6D3AED',
+  primary: '#6A2DE8',
+  primaryPressed: '#5A22CC',
+  primarySoft: '#F0EBFE',
+  gradientStart: '#7C4DFF',
+  gradientEnd: '#6A2DE8',
   onPrimary: '#FFFFFF',
 
+  // `page` é o fundo das telas; `background` é a superfície branca dos cartões e campos.
+  page: '#F4F5F8',
   background: '#FFFFFF',
   surface: '#F8F7FD',
-  border: '#E9E5F5',
+  border: '#E6E9F0',
+  chip: '#EEF0F4',
 
-  text: '#1B1830',
-  textMuted: '#6B6782',
+  text: '#1C1F26',
+  textMuted: '#6D7488',
   textInverse: '#FFFFFF',
   textInverseMuted: 'rgba(255,255,255,0.82)',
 
@@ -21,12 +24,12 @@ export const colors = {
   overlay: 'rgba(255,255,255,0.12)',
   overlayBorder: 'rgba(255,255,255,0.22)',
 
-  success: '#15803D',
-  successSoft: '#DCFCE7',
-  warning: '#B45309',
-  warningSoft: '#FEF3C7',
-  danger: '#DC2626',
-  dangerSoft: '#FEE2E2',
+  success: '#1F8A4C',
+  successSoft: '#E3F5EA',
+  warning: '#B4561A',
+  warningSoft: '#FDF0E4',
+  danger: '#C8354A',
+  dangerSoft: '#FBE9EC',
   info: '#2563EB',
   infoSoft: '#E0EAFF',
   accent: '#DB2777',
@@ -38,6 +41,7 @@ export const colors = {
 export const tones = {
   primary: { fg: colors.primary, bg: colors.primarySoft, tint: '#FBF9FF', border: '#E7DFFD' },
   success: { fg: colors.success, bg: colors.successSoft, tint: '#F5FCF7', border: '#D3F0DC' },
+  warning: { fg: colors.warning, bg: colors.warningSoft, tint: '#FFFAF5', border: '#F6DFC9' },
   danger: { fg: colors.danger, bg: colors.dangerSoft, tint: '#FFF8F7', border: '#FBDCDC' },
   info: { fg: colors.info, bg: colors.infoSoft, tint: '#F7F9FF', border: '#DCE5FB' },
   accent: { fg: colors.accent, bg: colors.accentSoft, tint: '#FFF7FB', border: '#F8D9E8' },
@@ -62,27 +66,39 @@ export const radius = {
   pill: 999,
 } as const;
 
+// Famílias carregadas em src/app/_layout.tsx (Inter Tight para texto, IBM Plex Mono para códigos, datas e números de venda).
+// Cada peso é uma família própria: no Android `fontWeight` não escolhe o arquivo de uma fonte customizada.
+export const fonts = {
+  regular: 'InterTight_400Regular',
+  medium: 'InterTight_500Medium',
+  semibold: 'InterTight_600SemiBold',
+  bold: 'InterTight_700Bold',
+  mono: 'IBMPlexMono_400Regular',
+  monoMedium: 'IBMPlexMono_500Medium',
+} as const;
+
 // Tamanho mínimo 14 para legibilidade; corpo em 16.
 export const typography = {
-  display: { fontSize: 34, lineHeight: 42, fontWeight: '700' },
-  title: { fontSize: 26, lineHeight: 34, fontWeight: '700' },
-  heading: { fontSize: 19, lineHeight: 26, fontWeight: '600' },
-  value: { fontSize: 22, lineHeight: 28, fontWeight: '700' },
-  body: { fontSize: 16, lineHeight: 24, fontWeight: '400' },
-  label: { fontSize: 15, lineHeight: 20, fontWeight: '600' },
-  caption: { fontSize: 14, lineHeight: 20, fontWeight: '400' },
+  display: { fontFamily: fonts.bold, fontSize: 34, lineHeight: 42 },
+  title: { fontFamily: fonts.bold, fontSize: 26, lineHeight: 34 },
+  heading: { fontFamily: fonts.semibold, fontSize: 19, lineHeight: 26 },
+  value: { fontFamily: fonts.bold, fontSize: 22, lineHeight: 28 },
+  body: { fontFamily: fonts.regular, fontSize: 16, lineHeight: 24 },
+  label: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
+  caption: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
+  mono: { fontFamily: fonts.mono, fontSize: 14, lineHeight: 20 },
 } as const;
 
 export const shadow = {
   card: {
-    shadowColor: '#1B1830',
+    shadowColor: '#1C1F26',
     shadowOpacity: 0.05,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
     elevation: 1,
   },
   raised: {
-    shadowColor: '#6D3AED',
+    shadowColor: '#6A2DE8',
     shadowOpacity: 0.3,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
