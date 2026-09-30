@@ -73,14 +73,18 @@ export function LoginScreen({ deepLink }: { deepLink?: string }) {
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <SafeAreaView edges={['top']} style={styles.content}>
             <View style={styles.logo}>
-              <BrandMark size={34} color={colors.onPrimary} />
+              <BrandMark size={52} color={colors.onPrimary} />
             </View>
-            <EnvBadge />
+            <View style={styles.badgeRow}>
+              <EnvBadge />
+            </View>
             <View style={styles.titleBlock}>
-              <Text variant="title" style={styles.brand}>
-                Conectar ao ComercialWeb
+              <Text variant="title" style={[styles.brand, styles.center]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                Infinit Comercial
               </Text>
-              <Text color="textMuted">Pareie este aparelho em menos de um minuto.</Text>
+              <Text color="textMuted" style={styles.center}>
+                Conecte este aparelho ao ComercialWeb em menos de um minuto.
+              </Text>
             </View>
 
             {!pending && (
@@ -164,13 +168,14 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   scroll: { flexGrow: 1, justifyContent: 'space-between' },
   content: { paddingHorizontal: spacing.xl, gap: spacing.lg },
-  logo: { width: 64, height: 64, borderRadius: radius.lg, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginTop: spacing.xl },
-  titleBlock: { gap: spacing.xs },
+  logo: { width: 88, height: 88, borderRadius: radius.xl, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginTop: spacing.xl, alignSelf: 'center' },
+  titleBlock: { gap: spacing.xs, alignItems: 'center' },
   brand: { fontSize: 32, lineHeight: 40 },
   steps: { gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.background, ...shadow.card },
   step: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   stepNumber: { width: 32, height: 32, borderRadius: radius.pill, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   center: { textAlign: 'center' },
+  badgeRow: { alignItems: 'center' },
   form: { gap: spacing.lg, marginTop: spacing.xl },
   divider: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   line: { flex: 1, height: 1, backgroundColor: colors.border },
