@@ -1,0 +1,8 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: comercial-prod
+resources:
+  - deployment.yaml
+  - middlewares.yaml
+  - ingressroute.yaml
+# migrate-job.yaml e secret.example.yaml ficam de fora: o Job é aplicado à parte a cada release e o exemplo não é um recurso.

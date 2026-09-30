@@ -1,0 +1,36 @@
+# Migrations mobile_* (db/migrations). Roda UMA vez por release, ANTES de trocar a imagem da API, com a conta de DEPLOY
+# (DDL em mobile_*), nunca com a conta mobile_api de execução. Aplicar com: kubectl apply -f migrate-job.yaml
+# (troque MOBILE_API_IMAGE_TAG pelo SHA) e acompanhar: kubectl -n comercial-prod logs job/mobile-api-migrate
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mobile-api-migrate
+  namespace: comercial-prod
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      imagePullSecrets: [{ name: ghcr-pull }]
+      securityContext: { runAsNonRoot: true, runAsUser: 1654, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: migrate
+          image: ghcr.io/kailonalexandre/comercialweb-mobile-api:MOBILE_API_IMAGE_TAG
+          args: ["migrate"]
+          env:
+            - { name: ASPNETCORE_ENVIRONMENT, value: Production }
+            - { name: DataProtection__KeysPath, value: /tmp/dp }
+            - { name: Jwt__SigningKeyPath, value: /jwt/jwt.pem }
+          envFrom:
+            # Só a chave ConnectionStrings__ComercialWeb, com a conta de deploy. Ver secret.example.yaml.
+            - secretRef: { name: mobile-api-migrate-env }
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
+          volumeMounts:
+            - { name: jwt, mountPath: /jwt, readOnly: true }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: jwt
+          secret: { secretName: mobile-api-jwt, defaultMode: 0440 }
+        - name: tmp
+          emptyDir: {}

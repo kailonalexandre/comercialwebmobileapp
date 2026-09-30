@@ -1,0 +1,55 @@
+# API .NET na VPS de DEV (Docker Compose). Projeto à parte do ComercialWeb (não mexe no blue/green dele):
+#   docker compose -p mobile-api-dev -f compose.mobile-api.yaml --env-file mobile-api.env up -d
+# mobile-api.env fica FORA do git (chmod 600) com:
+#   MOBILE_API_IMAGE_TAG=<sha completo>   ConnectionStrings__ComercialWeb=...   ComercialWeb__MobileApiSecret=...
+# Fluxo do tráfego: Apache do host (TLS, api.dev.infinitsolucoesweb.com.br) -> 127.0.0.1:8088 (nginx com limit_req)
+# -> mobile-api:8080. Rate limit é do nginx (borda), nunca da API.
+name: mobile-api-dev
+services:
+  mobile-api:
+    image: ghcr.io/kailonalexandre/comercialweb-mobile-api:${MOBILE_API_IMAGE_TAG:?defina MOBILE_API_IMAGE_TAG}
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ComercialWeb__BaseUrl: https://dev.infinitsolucoesweb.com.br
+      ComercialWeb__TimeZone: America/Sao_Paulo
+      DataProtection__KeysPath: /keys/dp
+      Jwt__SigningKeyPath: /run/secrets/jwt_pem
+      # Só o container do nginx (sub-rede fixa abaixo) pode informar o IP do cliente.
+      ForwardedHeaders__KnownNetworks: 172.29.250.0/24
+      Push__Enabled: "false"
+      ConnectionStrings__ComercialWeb: ${ConnectionStrings__ComercialWeb:?}
+      ComercialWeb__MobileApiSecret: ${ComercialWeb__MobileApiSecret:?}
+    secrets: [jwt_pem]
+    volumes:
+      - mobile_api_keys:/keys
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks: [mobile]
+
+  mobile-api-edge:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on: [mobile-api]
+    ports:
+      - "127.0.0.1:8088:80"
+    volumes:
+      - ./nginx-mobile-api.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      mobile:
+        ipv4_address: 172.29.250.10
+
+secrets:
+  jwt_pem:
+    file: ./jwt.pem   # openssl ecparam -name prime256v1 -genkey -noout -out jwt.pem ; chmod 600 (fora do git)
+
+volumes:
+  mobile_api_keys:
+
+networks:
+  mobile:
+    ipam:
+      config:
+        - subnet: 172.29.250.0/24

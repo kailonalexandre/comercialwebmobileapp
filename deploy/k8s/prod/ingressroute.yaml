@@ -1,0 +1,43 @@
+# api.infinitsolucoesweb.com.br -> Service mobile-api, com rate limit por grupo de rotas.
+# IngressRoute (e não Ingress) porque cada grupo precisa do seu Middleware. Como o ingress-shim do cert-manager não
+# enxerga IngressRoute, o certificado é pedido explicitamente em Certificate (abaixo).
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: mobile-api
+  namespace: comercial-prod
+spec:
+  entryPoints: [websecure]
+  routes:
+    - kind: Rule
+      priority: 30
+      match: Host(`api.infinitsolucoesweb.com.br`) && Path(`/api/v1/auth/pair`)
+      middlewares: [{ name: mobile-rl-pair }]
+      services: [{ name: mobile-api, port: http }]
+    - kind: Rule
+      priority: 30
+      match: Host(`api.infinitsolucoesweb.com.br`) && Path(`/api/v1/auth/refresh`)
+      middlewares: [{ name: mobile-rl-refresh }]
+      services: [{ name: mobile-api, port: http }]
+    - kind: Rule
+      priority: 30
+      match: Host(`api.infinitsolucoesweb.com.br`) && PathRegexp(`^/api/v1/sales/[0-9]+/receipt/(whatsapp|pdf)$`)
+      middlewares: [{ name: mobile-rl-receipt }]
+      services: [{ name: mobile-api, port: http }]
+    - kind: Rule
+      priority: 1
+      match: Host(`api.infinitsolucoesweb.com.br`)
+      middlewares: [{ name: mobile-rl-default }]
+      services: [{ name: mobile-api, port: http }]
+  tls:
+    secretName: mobile-api-tls
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mobile-api-tls
+  namespace: comercial-prod
+spec:
+  secretName: mobile-api-tls
+  dnsNames: [api.infinitsolucoesweb.com.br]
+  issuerRef: { kind: ClusterIssuer, name: letsencrypt-prod }
