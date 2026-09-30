@@ -83,17 +83,12 @@ export function DashboardScreen() {
     <SafeAreaView edges={['top']} style={styles.root}>
       <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={false} onRefresh={reload} />}>
         <View style={styles.header}>
-          <View style={styles.flex}>
-            <Pressable accessibilityRole="button" accessibilityLabel={`Empresa atual: ${profile?.businessName ?? ''}. Trocar empresa`} onPress={soon('Trocar empresa')} style={styles.company}>
-              <Text variant="caption" color="textMuted" numberOfLines={1} style={styles.shrink}>
-                {profile?.businessName ?? '…'}
-              </Text>
-              <Icon name="chevron-down" size={14} color={colors.textMuted} />
-            </Pressable>
-            <Text variant="title" numberOfLines={1}>
-              {firstName ? `${greeting(now.getHours())}, ${firstName}` : greeting(now.getHours())}
+          <Pressable accessibilityRole="button" accessibilityLabel={`Empresa atual: ${profile?.businessName ?? ''}. Trocar empresa`} onPress={soon('Trocar empresa')} style={[styles.company, styles.flex]}>
+            <Text variant="caption" color="textMuted" numberOfLines={1} style={styles.shrink}>
+              {profile?.businessName ?? '…'}
             </Text>
-          </View>
+            <Icon name="chevron-down" size={14} color={colors.textMuted} />
+          </Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel={`Notificações, ${unread} não lidas`} onPress={() => router.push('/notificacoes')} style={styles.roundButton}>
             <Icon name="notifications-outline" size={22} color={colors.text} />
             {unread > 0 && <View style={styles.dot} />}
@@ -104,6 +99,10 @@ export function DashboardScreen() {
             </Text>
           </Pressable>
         </View>
+        {/* Linha própria: o nome nunca disputa espaço com os botões; nome muito longo encolhe em vez de cortar. */}
+        <Text variant="title" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={styles.greetingTitle}>
+          {firstName ? `${greeting(now.getHours())}, ${firstName}` : greeting(now.getHours())}
+        </Text>
 
         <EnvBadge />
 
@@ -238,6 +237,7 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.7 },
   between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  greetingTitle: { marginTop: -spacing.sm },
   company: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   roundButton: { width: 44, height: 44, borderRadius: radius.pill, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' },
   avatar: { backgroundColor: colors.primary },
