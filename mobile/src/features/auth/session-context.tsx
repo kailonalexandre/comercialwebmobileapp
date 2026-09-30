@@ -1,14 +1,20 @@
+import Constants from 'expo-constants';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { fetchProfile, logout, pair, type Profile } from '@/features/auth/auth-api';
 import { unregisterPush } from '@/features/push/register-push';
-import { setUnauthorizedHandler } from '@/infrastructure/api';
+import { setMinVersionHandler, setUnauthorizedHandler } from '@/infrastructure/api';
+import { isOutdated } from '@/infrastructure/app-version';
 import { clearSession, loadSession, saveSession } from '@/infrastructure/security/session-store';
 
 type Status = 'loading' | 'signedOut' | 'signedIn';
 
+const appVersion = Constants.expoConfig?.version ?? '0.0.0';
+
 type SessionValue = {
   status: Status;
+  // Versão do app abaixo da mínima do servidor: a navegação mostra só a tela de atualização.
+  updateRequired: boolean;
   // null enquanto carrega ou se a consulta falhar; telas mostram marcador neutro.
   profile: Profile | null;
   // Entra com o código lido do QR; falha (inválido/expirado/rede) chega ao chamador.
@@ -21,10 +27,14 @@ const SessionContext = createContext<SessionValue | null>(null);
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>('loading');
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [updateRequired, setUpdateRequired] = useState(false);
 
   useEffect(() => {
     loadSession()
-      .then((session) => setStatus(session ? 'signedIn' : 'signedOut'))
+      .then((session) => {
+        setUpdateRequired(isOutdated(appVersion, session?.minAppVersion));
+        setStatus(session ? 'signedIn' : 'signedOut');
+      })
       .catch(() => setStatus('signedOut'));
   }, []);
 
@@ -44,21 +54,31 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     await unregisterPush(); // ainda autenticado; melhor esforço
     await logout();
     await clearSession();
+    setUpdateRequired(false);
     setStatus('signedOut');
   }, []);
 
   useEffect(() => {
     setUnauthorizedHandler(() => {
-      clearSession().finally(() => setStatus('signedOut'));
+      clearSession().finally(() => {
+        setUpdateRequired(false);
+        setStatus('signedOut');
+      });
     });
   }, []);
 
+  useEffect(() => {
+    setMinVersionHandler((minimum) => setUpdateRequired(isOutdated(appVersion, minimum)));
+  }, []);
+
   const connect = useCallback(async (code: string, deviceName: string) => {
-    await saveSession(await pair(code, deviceName));
+    const session = await pair(code, deviceName);
+    await saveSession(session);
+    setUpdateRequired(isOutdated(appVersion, session.minAppVersion));
     setStatus('signedIn');
   }, []);
 
-  const value = useMemo(() => ({ status, profile, connect, signOut }), [status, profile, connect, signOut]);
+  const value = useMemo(() => ({ status, updateRequired, profile, connect, signOut }), [status, updateRequired, profile, connect, signOut]);
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
 

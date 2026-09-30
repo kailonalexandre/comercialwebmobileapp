@@ -4,6 +4,13 @@ import { getAccessToken, getRefreshToken, isSession, replaceSession } from '@/in
 
 let unauthorizedHandler = () => {};
 
+let minVersionHandler: (minimum?: string | null) => void = () => {};
+
+// A sessão registra aqui o aviso de versão mínima que chega a cada renovação de token.
+export function setMinVersionHandler(handler: (minimum?: string | null) => void) {
+  minVersionHandler = handler;
+}
+
 // A sessão registra aqui o logout forçado quando a renovação é recusada.
 export function setUnauthorizedHandler(handler: () => void) {
   unauthorizedHandler = handler;
@@ -20,6 +27,7 @@ async function refreshSession(): Promise<RefreshOutcome> {
     });
     if (!isSession(session)) return 'rejected';
     await replaceSession(session);
+    minVersionHandler(session.minAppVersion);
     return 'ok';
   } catch (e) {
     // Só 401/422 derrubam a sessão; rede, 5xx e 429 são transitórios e mantêm o par de tokens.

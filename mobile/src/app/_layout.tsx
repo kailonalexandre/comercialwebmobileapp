@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { StatusBar } from 'expo-status-bar';
 
 import { SessionProvider, useSession } from '@/features/auth/session-context';
+import { UpdateRequiredScreen } from '@/features/auth/update-required-screen';
 import { PdvDraftProvider } from '@/features/pdv/pdv-draft';
 import { PreSaleDraftProvider } from '@/features/presale/presale-draft';
 import { PushBridge } from '@/features/push/push-bridge';
@@ -10,9 +11,10 @@ import { OnboardingProvider, useOnboarding } from '@/features/onboarding/onboard
 import { StateView } from '@/shared/components/state-view';
 
 function RootNavigator() {
-  const { status } = useSession();
+  const { status, updateRequired } = useSession();
   const { seen } = useOnboarding();
   if (status === 'loading' || seen === null) return <StateView kind="loading" />;
+  if (status === 'signedIn' && updateRequired) return <UpdateRequiredScreen />;
 
   const signedOut = status === 'signedOut';
 
