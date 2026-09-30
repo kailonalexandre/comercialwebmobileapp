@@ -108,7 +108,7 @@ Paginação, `PagedResult` e escape de LIKE ficam em `src/Common` (compartilhado
 
 - `GET /api/v1/orders?source=all|store|mercadolivre&status=&search=&page=&pageSize=` (`loja-virtual.access` **ou** `marketplaces.view`) e `GET /api/v1/orders/marketplace/{id}` (`marketplaces.view`).
 - É o Monitor de Pedidos da web: a API não tem regra própria, só repassa `GET /api/mobile/v1/orders` e `/orders/marketplace/{id}` com o token do aparelho (`DeviceLink.CallAsync`). Resposta `{sections: [{channel, failure, meta, items}]}`, uma seção por canal com paginação própria; `failure` preenchido = a fonte externa estava fora (o app mostra erro com "tentar de novo", não lista vazia).
-- Parâmetro inválido: 422 sem consultar o ComercialWeb. ComercialWeb fora: 503. Recusa dele na lista: 403; no detalhe: 404 (a permissão já foi conferida aqui).
+- Cada canal exige a própria permissão também na API (`source=store` → `loja-virtual.access`, `mercadolivre` → `marketplaces.view`, `all` → as duas): não confiamos que o ComercialWeb filtre as seções por permissão. Parâmetro inválido: 422 sem consultar o ComercialWeb. ComercialWeb fora: 503. Recusa dele na lista: 403; no detalhe: 404 (a permissão já foi conferida aqui).
 - App: aba de canais conforme as permissões do usuário (`/me/permissions` agora inclui as duas). Só pedido de marketplace tem detalhe; o da Loja Virtual ainda não existe na API do ComercialWeb.
 
 ### Módulo Dashboard
@@ -174,6 +174,16 @@ App ──POST /api/v1/pre-sales (Idempotency-Key)──► API .NET ──POST 
 - Rate limit e bloqueio progressivo no login. Mensagem de erro única (não revela se o e-mail existe).
 
 No app: tokens em `expo-secure-store` com `WHEN_UNLOCKED_THIS_DEVICE_ONLY`; `android.allowBackup=false`; 401 força logout; retry automático desabilitado por padrão; `Idempotency-Key` em operações com efeito financeiro/estoque.
+
+## Riscos conhecidos e decisões (revisão de 2026-09-29)
+
+- **MySQL em dev:** o usuário `mobile_api` com privilégio mínimo é o correto. Em desenvolvimento local (container sem acesso root) a API usou temporariamente o usuário do próprio Laravel (privilégio total no banco dele). **Só dev**: produção e homologação usam `mobile_api`, e o `migrate` roda com uma conta de deploy separada.
+- **Scheme `comercialweb://` não é exclusivo:** outro app instalado no aparelho pode registrá-lo e receber o `code` quando o QR é lido pela **câmera do sistema** (o leitor dentro do app não é afetado). O código é de uso único e vale 2 min, e o pareamento por deep link pede confirmação, mas o risco existe. Mitigação de longo prazo: App Links/Universal Links verificados (`https://<domínio>/pair?...`), o que depende do formato do QR gerado pelo ComercialWeb.
+- **Rate limit por IP e deploy:** o IP do cliente vem do `ForwardedHeaders`. Ao definir o deploy, configure `KnownProxies` com o IP exato do proxy (nunca uma rede larga). Com a API em container atrás de um nginx no host, sem isso todos os aparelhos caem no mesmo balde (10 pareamentos/min para todos).
+- **`X-Mobile-Client-Ip` fora da assinatura HMAC:** a assinatura cobre timestamp, método, caminho e corpo. Incluir o IP exige mudar o contrato do lado Laravel; hoje o risco é teórico (TLS entre os servidores, código de uso único).
+- **Bloqueio por versão:** o `minAppVersion` só é reavaliado no pareamento e a cada refresh. Com a tela "Atualização necessária" aberta o app não faz requisições; se o administrador baixar a versão mínima, o aparelho sai do bloqueio ao desconectar e parear de novo (ou ao instalar a atualização).
+- **Renovação do token do ComercialWeb:** serializada por sessão dentro de uma instância da API (`DeviceLink`); com várias instâncias seria preciso lock no banco (`GET_LOCK`).
+- **429 do ComercialWeb nos repasses** (`/stock`, `/orders`) chega ao app como 503, e o app repete GET com backoff; um `Retry-After` repassado seria melhor.
 
 ## Threat model inicial
 

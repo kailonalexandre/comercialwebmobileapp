@@ -23,7 +23,7 @@ public sealed class FakeComercialWebAuth : IComercialWebAuth
         new CwMarketplaceOrder(id, "mercadolivre", "2000001", "Pago", "paid", 9_990, "João", "2026-09-29T09:00:00-03:00", [new CwMarketplaceOrderItem("Camiseta", "CAM-01", 100, 2, 4_995)]));
     public List<string> Calls { get; } = [];
 
-    public Task<CwResult<CwPairing>> PairAsync(string code, string? deviceName, string? clientIp, CancellationToken ct)
+    public Task<CwResult<CwPairing>> PairAsync(string code, string? deviceName, string? clientIp, CancellationToken ct, DeviceInfo? device = null)
     {
         Calls.Add($"pair:{code}");
         return Task.FromResult(Pair);
@@ -41,10 +41,11 @@ public sealed class FakeComercialWebAuth : IComercialWebAuth
         return Task.FromResult(Refresh);
     }
 
-    public Task<CwResult<CwStock>> ProductStockAsync(string accessToken, long productId, CancellationToken ct)
+    public async Task<CwResult<CwStock>> ProductStockAsync(string accessToken, long productId, CancellationToken ct)
     {
         Calls.Add($"stock:{accessToken}:{productId}");
-        return Task.FromResult(Stock(accessToken, productId));
+        await Task.Yield(); // deixa chamadas concorrentes se intercalarem
+        return Stock(accessToken, productId);
     }
 
     public Task<CwResult<IReadOnlyList<CwOrderSection>>> OrdersAsync(string accessToken, CwOrdersQuery query, CancellationToken ct)
@@ -192,6 +193,34 @@ public sealed class PairingTests
         var session = (await _auth.RefreshAsync(refresh, Ct)).Session!;
 
         Assert.Null(session.MinAppVersion);
+    }
+
+    [Fact]
+    public async Task Duas_chamadas_com_token_expirado_ao_mesmo_tempo_renovam_o_par_uma_so_vez()
+    {
+        await _auth.PairAsync(Code, null, null, Ct);
+        var id = _store.Sessions.Keys.Single();
+        _cw.Stock = (access, _) => access == "cw-access-1" ? new(CwStatus.TokenExpired) : new(CwStatus.Ok, new CwStock(7, 1_000));
+        _cw.Calls.Clear();
+
+        var results = await Task.WhenAll(
+            _link.CallAsync(id, (a, c) => _cw.ProductStockAsync(a, 1, c), Ct),
+            _link.CallAsync(id, (a, c) => _cw.ProductStockAsync(a, 2, c), Ct));
+
+        Assert.All(results, r => Assert.Equal(CwStatus.Ok, r.Status));
+        Assert.Single(_cw.Calls, c => c.StartsWith("refresh:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Token_ainda_expirado_depois_de_renovar_vira_recusa_e_nao_expirado()
+    {
+        await _auth.PairAsync(Code, null, null, Ct);
+        var id = _store.Sessions.Keys.Single();
+        _cw.Stock = (_, _) => new(CwStatus.TokenExpired);
+
+        var result = await _link.CallAsync(id, (a, c) => _cw.ProductStockAsync(a, 1, c), Ct);
+
+        Assert.Equal(CwStatus.Rejected, result.Status);
     }
 
     [Fact]
@@ -399,6 +428,21 @@ public sealed class ComercialWebAuthClientTests
 
         Assert.Equal(("mercadolivre", "2000009", 9_990), (order.Channel, order.ExternalOrderId, order.TotalCents));
         Assert.Equal(new CwMarketplaceOrderItem("Camiseta", null, null, 2, 4_995), Assert.Single(order.Items));
+    }
+
+    [Fact]
+    public async Task Pair_envia_plataforma_e_versao_validas_e_troca_lixo_pelo_padrao()
+    {
+        var stub = new Stub(() => Json(HttpStatusCode.Created, PairJson));
+        var client = Client(stub);
+
+        await client.PairAsync("c", null, null, Ct, DeviceInfo.From("ios", "1.4.2"));
+        await client.PairAsync("c", null, null, Ct, DeviceInfo.From("<script>", "1.0.0'; DROP"));
+        await client.PairAsync("c", null, null, Ct);
+
+        var bodies = stub.Received.Select(r => System.Text.Json.JsonElement.Parse(r.Body)).ToList();
+        Assert.Equal(("ios", "1.4.2"), (bodies[0].GetProperty("platform").GetString(), bodies[0].GetProperty("app_version").GetString()));
+        Assert.All(bodies.Skip(1), b => Assert.Equal(("other", "0.0.0"), (b.GetProperty("platform").GetString(), b.GetProperty("app_version").GetString())));
     }
 
     [Fact]

@@ -1,4 +1,6 @@
+import Constants from 'expo-constants';
 import * as Device from 'expo-device';
+import { Platform } from 'react-native';
 
 import { api } from '@/infrastructure/api';
 import type { Session } from '@/infrastructure/security/session-store';
@@ -13,14 +15,16 @@ const devProfile: Profile = {
   userName: 'Administrador',
   businessId: 0,
   businessName: 'Empresa Demonstração',
-  permissions: ['products.view', 'people.view', 'sales.view', 'sales.create'],
+  permissions: ['products.view', 'people.view', 'sales.view', 'sales.create', 'loja-virtual.access', 'marketplaces.view'],
 };
 
 // Troca o código do QR (uso único, 2 min) pela sessão da API. O código não é guardado.
 // A API valida o código no ComercialWeb; empresa e usuário vêm de lá, nunca do app.
 export async function pair(code: string, deviceName: string): Promise<Session> {
   if (api) {
-    return api.request<Session>('/v1/auth/pair', { method: 'POST', body: { code, deviceName }, anonymous: true });
+    return api.request<Session>('/v1/auth/pair', { method: 'POST', body: { code, deviceName, platform: Platform.OS === 'ios' ? 'ios' : 'android', appVersion: Constants.expoConfig?.version },
+      anonymous: true,
+    });
   }
 
   // Sem API configurada: sessão fictícia apenas em desenvolvimento, para validar telas.

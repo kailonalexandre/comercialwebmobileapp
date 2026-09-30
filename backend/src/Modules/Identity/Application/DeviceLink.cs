@@ -64,14 +64,37 @@ public sealed class DeviceLink(IIdentityStore store, IComercialWebAuth cw, IData
         }
     }
 
+    // O refresh do ComercialWeb gira a cada uso: duas renovações do mesmo par fariam a segunda falhar (e o app cair por
+    // "aparelho revogado"). Um portão por sessão (faixas de locks, sem vazar memória) serializa; ponytail: vale para uma
+    // instância da API, com várias seria preciso lock no banco (GET_LOCK).
+    private static readonly SemaphoreSlim[] Gates = [.. Enumerable.Range(0, 64).Select(_ => new SemaphoreSlim(1, 1))];
+
     private async Task<CwResult<T>> Call<T>(Guid sessionId, CwTokens tokens, Func<string, CancellationToken, Task<CwResult<T>>> op, CancellationToken ct)
     {
         var result = await op(tokens.AccessToken, ct);
         if (result.Status != CwStatus.TokenExpired) return result;
 
-        var renewed = await cw.RefreshAsync(tokens.RefreshToken, ct);
-        if (renewed.Status != CwStatus.Ok) return new CwResult<T>(renewed.Status == CwStatus.Unavailable ? CwStatus.Unavailable : CwStatus.Rejected);
-        await store.SaveCwTokensAsync(sessionId, Protect(renewed.Value!), ct);
-        return await op(renewed.Value!.AccessToken, ct);
+        var gate = Gates[(sessionId.GetHashCode() & int.MaxValue) % Gates.Length];
+        await gate.WaitAsync(ct);
+        try
+        {
+            // Quem chegou antes pode já ter renovado: usa o par novo em vez de gastar o refresh de novo.
+            var (_, current) = await Load(sessionId, ct);
+            if (current is null) return new CwResult<T>(CwStatus.Rejected);
+            if (current.RefreshToken == tokens.RefreshToken)
+            {
+                var renewed = await cw.RefreshAsync(tokens.RefreshToken, ct);
+                if (renewed.Status != CwStatus.Ok) return new CwResult<T>(renewed.Status == CwStatus.Unavailable ? CwStatus.Unavailable : CwStatus.Rejected);
+                await store.SaveCwTokensAsync(sessionId, Protect(renewed.Value!), ct);
+                current = renewed.Value!;
+            }
+            result = await op(current.AccessToken, ct);
+        }
+        finally
+        {
+            gate.Release();
+        }
+        // Expirado logo após renovar não é "sessão expirada": o ComercialWeb não aceitou o par novo.
+        return result.Status == CwStatus.TokenExpired ? new CwResult<T>(CwStatus.Rejected) : result;
     }
 }

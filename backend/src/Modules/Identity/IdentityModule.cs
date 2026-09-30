@@ -22,7 +22,7 @@ public sealed record LoginRequest(string? Login, string? Password, string? Devic
 
 public sealed record RefreshRequest(string? RefreshToken);
 
-public sealed record PairRequest(string? Code, string? DeviceName);
+public sealed record PairRequest(string? Code, string? DeviceName, string? Platform = null, string? AppVersion = null);
 
 public static class IdentityModule
 {
@@ -121,7 +121,7 @@ public static class IdentityModule
         auth.MapPost("/pair", async (PairRequest body, HttpContext http, AuthService service, CancellationToken ct) =>
         {
             if (!ValidCode(body.Code) || body.DeviceName?.Length > 100) return Results.Problem(statusCode: 422);
-            return ToHttp(await service.PairAsync(body.Code!, body.DeviceName?.Trim(), ClientIp(http), ct), http);
+            return ToHttp(await service.PairAsync(body.Code!, body.DeviceName?.Trim(), ClientIp(http), ct, DeviceInfo.From(body.Platform, body.AppVersion)), http);
         }).RequireRateLimiting(PairPolicy);
 
         auth.MapPost("/refresh", async (RefreshRequest body, HttpContext http, AuthService service, CancellationToken ct) =>

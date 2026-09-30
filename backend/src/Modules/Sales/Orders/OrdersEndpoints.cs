@@ -27,15 +27,21 @@ public static class OrdersEndpoints
     {
         var orders = app.MapGroup("/api/v1/orders");
 
-        orders.MapGet("/", async (ClaimsPrincipal user, DeviceLink link, IComercialWebAuth cw, CancellationToken ct,
+        orders.MapGet("/", async (ClaimsPrincipal user, DeviceLink link, IComercialWebAuth cw, IPermissionChecker permissions, CancellationToken ct,
             string? source, string? status, string? search, int? page, int? pageSize) =>
         {
             source ??= "all";
             if (!Paging.TryCreate(page, pageSize, search, out var paging) || !Sources.Contains(source) || status?.Length > MaxStatus)
                 return Paging.Invalid();
 
+            // Cada canal exige a própria permissão (não confiamos que o ComercialWeb filtre as seções): "all" pede as duas.
+            var ids = SessionIds.From(user)!;
+            string[] needed = source switch { "store" => [StoreOrders], "mercadolivre" => [MarketplaceOrders], _ => [StoreOrders, MarketplaceOrders] };
+            foreach (var permission in needed)
+                if (!await permissions.HasAsync(ids.UserId, ids.BusinessId, permission, ct)) return Results.Problem(statusCode: StatusCodes.Status403Forbidden);
+
             var query = new CwOrdersQuery(source, status, search, paging.Page, paging.PageSize);
-            var result = await link.CallAsync(SessionIds.From(user)!.SessionId, (token, c) => cw.OrdersAsync(token, query, c), ct);
+            var result = await link.CallAsync(ids.SessionId, (token, c) => cw.OrdersAsync(token, query, c), ct);
             return result switch
             {
                 { Status: CwStatus.Ok, Value: { } sections } => Results.Ok(new { sections }),

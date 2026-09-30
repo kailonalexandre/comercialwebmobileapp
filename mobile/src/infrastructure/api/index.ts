@@ -27,12 +27,14 @@ async function refreshSession(): Promise<RefreshOutcome> {
     });
     if (!isSession(session)) return 'rejected';
     await replaceSession(session);
-    minVersionHandler(session.minAppVersion);
+    // Sem o campo (ComercialWeb fora do ar) mantém o estado anterior: instabilidade não desbloqueia app desatualizado.
+    if (session.minAppVersion) minVersionHandler(session.minAppVersion);
     return 'ok';
   } catch (e) {
-    // Só 401/422 derrubam a sessão; rede, 5xx e 429 são transitórios e mantêm o par de tokens.
-    const { kind, status } = e as { kind?: string; status?: number };
-    return kind === 'network' || kind === 'timeout' || kind === 'server' || status === 429 ? 'network' : 'rejected';
+    // Só 401/422 derrubam a sessão. Rede, 5xx, 429 e respostas estranhas (portal cativo, WAF, 403/404 de proxy)
+    // são transitórios: mantêm o par de tokens e o usuário tenta de novo.
+    const { status } = e as { status?: number };
+    return status === 401 || status === 422 ? 'rejected' : 'network';
   }
 }
 

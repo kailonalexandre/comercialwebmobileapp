@@ -13,6 +13,16 @@ public sealed record CwTokens(string AccessToken, string RefreshToken);
 
 public sealed record CwPairing(CwTokens Tokens, string DeviceId);
 
+/// <summary>Plataforma e versão informadas pelo app no pareamento, só para o painel do ComercialWeb (diagnóstico). Valores fora do formato viram o padrão.</summary>
+public sealed record DeviceInfo(string Platform, string AppVersion)
+{
+    public static readonly DeviceInfo Unknown = new("other", "0.0.0");
+
+    public static DeviceInfo From(string? platform, string? appVersion) => new(
+        platform is "android" or "ios" ? platform : Unknown.Platform,
+        appVersion is { Length: <= 20 } v && System.Text.RegularExpressions.Regex.IsMatch(v, @"^\d{1,4}(\.\d{1,4}){0,2}$") ? v : Unknown.AppVersion);
+}
+
 /// <summary>Quem o ComercialWeb diz que é o dono do aparelho (fonte da verdade de usuário, empresa e permissão mobile.access).</summary>
 public sealed record CwBootstrap(long UserId, long BusinessId, string? MinAppVersion = null);
 
@@ -44,7 +54,7 @@ public sealed record CwResult<T>(CwStatus Status, T? Value = default);
 public interface IComercialWebAuth
 {
     /// <param name="clientIp">IP do aparelho que chamou este servidor: define o balde do rate limit do /pair no ComercialWeb.</param>
-    Task<CwResult<CwPairing>> PairAsync(string code, string? deviceName, string? clientIp, CancellationToken ct);
+    Task<CwResult<CwPairing>> PairAsync(string code, string? deviceName, string? clientIp, CancellationToken ct, DeviceInfo? device = null);
 
     Task<CwResult<CwBootstrap>> BootstrapAsync(string accessToken, CancellationToken ct);
 
@@ -70,10 +80,11 @@ public sealed partial class ComercialWebAuthClient(HttpClient http, IConfigurati
 {
     private const string Prefix = "/api/mobile/v1";
 
-    public async Task<CwResult<CwPairing>> PairAsync(string code, string? deviceName, string? clientIp, CancellationToken ct)
+    public async Task<CwResult<CwPairing>> PairAsync(string code, string? deviceName, string? clientIp, CancellationToken ct, DeviceInfo? device = null)
     {
+        device ??= DeviceInfo.Unknown;
         var (status, body) = await SendAsync<PairDto>(HttpMethod.Post, "/pair", null,
-            new { code, device_name = deviceName ?? "Aplicativo", platform = "other", app_version = "1.0.0" }, ct, sign: true, clientIp);
+            new { code, device_name = deviceName ?? "Aplicativo", platform = device.Platform, app_version = device.AppVersion }, ct, sign: true, clientIp);
         return body is { Device: not null } ? new(status, new CwPairing(new CwTokens(body.AccessToken, body.RefreshToken), body.Device.Id)) : new CwResult<CwPairing>(status);
     }
 

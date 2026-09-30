@@ -54,6 +54,7 @@ export function LoginScreen({ deepLink }: { deepLink?: string }) {
   }
 
   async function pairWith(raw: string) {
+    if (submitting) return; // Enter repetido não pode gastar o código de uso único duas vezes
     const parsed = parsePairingLink(raw, appEnv);
     if (parsed.ok) await connectWith(parsed.link);
     else setError(parsed.message);
@@ -86,7 +87,7 @@ export function LoginScreen({ deepLink }: { deepLink?: string }) {
 
             {pending ? (
               <View style={styles.form}>
-                <Text style={styles.center}>{`Conectar este aparelho ao servidor ${new URL(pending.server).host}?`}</Text>
+                <Text style={styles.center}>{`Conectar este aparelho ao ComercialWeb ${new URL(pending.server).host}?`}</Text>
                 {error && (
                   <Text variant="caption" color="danger" accessibilityLiveRegion="polite">
                     {error}

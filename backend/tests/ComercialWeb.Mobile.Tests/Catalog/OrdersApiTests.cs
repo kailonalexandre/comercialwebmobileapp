@@ -65,6 +65,20 @@ public sealed class OrdersApiTests(OrdersFixture api) : IClassFixture<OrdersFixt
     }
 
     [Theory]
+    [InlineData("?source=mercadolivre")]
+    [InlineData("?source=all")]
+    [InlineData("")]
+    public async Task Canal_sem_a_permissao_dele_e_403_sem_consultar_o_comercialweb(string query)
+    {
+        TestDatabase.RequireMySql();
+        var client = await PairedAsync(); // ana só tem loja-virtual.access
+        api.ComercialWeb.Calls.Clear();
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync($"/api/v1/orders{query}", Ct)).StatusCode);
+        Assert.DoesNotContain(api.ComercialWeb.Calls, c => c.StartsWith("orders:", StringComparison.Ordinal));
+    }
+
+    [Theory]
     [InlineData("?source=shopee")]
     [InlineData("?pageSize=51")]
     [InlineData("?page=0")]

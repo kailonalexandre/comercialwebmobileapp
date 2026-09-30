@@ -120,7 +120,9 @@ export function createApiClient({
   async function attempt<T>(path: string, options: RequestOptions, correlationId: string): Promise<T> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
-    options.signal?.addEventListener('abort', () => controller.abort());
+    // Sinal do chamador já cancelado (ou cancelado depois) aborta esta tentativa; o listener some junto com ela.
+    if (options.signal?.aborted) controller.abort();
+    else options.signal?.addEventListener('abort', () => controller.abort(), { once: true });
 
     const headers: Record<string, string> = {
       Accept: 'application/json',

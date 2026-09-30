@@ -34,6 +34,10 @@ builder.Services.AddDashboardModule();
 builder.Services.AddNotificationsModule();
 builder.Services.AddPushModule();
 
+// Segredo HMAC compartilhado com o ComercialWeb: fora de dev, curto demais é erro de configuração (o contrato exige 32+).
+if (!builder.Environment.IsDevelopment() && builder.Configuration["ComercialWeb:MobileApiSecret"] is { Length: > 0 and < 32 })
+    throw new InvalidOperationException("ComercialWeb:MobileApiSecret deve ter 32 caracteres ou mais.");
+
 var app = builder.Build();
 
 if (args is ["migrate"])
