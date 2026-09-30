@@ -171,10 +171,65 @@ Não há WebSocket/broadcasting no ComercialWeb, e não foi introduzido. Estrat�
 - **Em primeiro plano:** consulte `GET /sync` (recursos de interesse) e `GET /notifications` a cada 30–60 s, respeitando o rate limit; use `dashboard.unread_notifications` do `/bootstrap` como sinal barato.
 - **Em segundo plano:** push (FCM/APNs) é uma etapa futura. A tabela `mobile_devices` já identifica cada aparelho; o token de push será uma coluna nova + envio pelo módulo de Notificações existente, sem mudar este contrato. Até lá, o app só recebe eventos quando aberto.
 
-## 7. Escrita e idempotência (pendente)
+## 7. Rotas de máquina (.NET → ComercialWeb): venda, desconto e comprovante
 
-Esta versão é **somente leitura**. Quando existir escrita (venda, cancelamento, movimentação de estoque), ela deve chamar os mesmos services do web e reutilizar a chave de idempotência que a venda já tem (`client_sale_uuid`, `UNIQUE(business_id, client_sale_uuid)`, como em `POST /api/pdv/v1/sales/commit`): o app gera o UUID **uma vez** por operação e o reutiliza em toda retentativa (`200 already_existed` em vez de duplicar). Preço, total, desconto, imposto e estoque serão sempre recalculados no servidor.
+Rotas **assinadas**, não usam Bearer: o .NET assina `{timestamp}\n{MÉTODO}\n{/caminho}\n{corpo}` com HMAC-SHA256 (`MOBILE_API_SECRET`) em `X-Mobile-Signature` (hex) e `X-Mobile-Timestamp` (unix, janela de 5 min). Todas são `POST`, com `user_id` e `business_id` **no corpo assinado**. Sem segredo configurado ou com assinatura inválida: `401 unauthenticated`. Limite: 120/min.
 
-## 8. Compatibilidade
+Envelope de erro: `{ "success": false, "error": { "code", "message", ...contexto } }`. `message` é para mostrar ao operador.
+
+| Rota | O que faz | Sucesso |
+| --- | --- | --- |
+| `POST /pre-sales` | grava pré-venda (`client_sale_uuid` idempotente) | 201 (200 se `already_existed`) |
+| `POST /pdv/payment-methods` | formas de pagamento liberadas | 200 |
+| `POST /pdv/quote` | total real sem gravar | 200 |
+| `POST /pdv/sales` | venda finalizada com pagamento (`client_sale_uuid` idempotente) | 201 (200 se `already_existed`) |
+| `POST /sales/{sale}/receipt/whatsapp` | enfileira o comprovante no WhatsApp da empresa | 202 |
+| `POST /sales/{sale}/receipt/pdf` | devolve o PDF do comprovante | 200 `application/pdf` |
+
+Preço, total e desconto são **sempre recalculados no servidor**; o app só envia a intenção.
+
+### Desconto (`/pre-sales`, `/pdv/quote`, `/pdv/sales`)
+
+Todos os campos são opcionais; sem eles nada muda.
+
+- Por item, em `items[]`: `discount_percent` (0–99,99, até 2 casas, ex.: `10.5`) **ou** `discount_cents` (inteiro, centavos).
+- Na venda: `sale_discount_percent` (0–99,99, 2 casas) **ou** `sale_discount_cents`.
+- Enviar os dois do mesmo par (mesmo com zero) → `422` de validação Laravel (`errors.items.N.discount_percent` / `errors.sale_discount_percent`). Desconto `0` é aceito e não faz nada.
+- `/pdv/quote` devolve `total_cents` e `discount_cents` já com o desconto (e `items[].discount_cents`). O limite do cliente também é checado na cotação.
+
+| HTTP | `error.code` | Quando |
+| --- | --- | --- |
+| 422 | `discount_limit_exceeded` | desconto acima do teto do cliente (`discount_limit`) e usuário sem `sales.override-discount-limit`. Só vale com cliente informado. |
+| 422 | `business_rule` | demais recusas: sem `pdv.discount` (PDV), desconto que zera o item/venda, "desconto sobre o total" desligado (pré-venda), cliente bloqueado, estoque… |
+| 422 | `cash_register_closed`, `payment_incomplete`, `payment_method_not_allowed` | PDV, como antes |
+| 403 | `forbidden` | usuário/empresa/permissão (`sales.access`+`sales.create` na pré-venda; `pdv.access` no PDV) |
+
+Permissões: no PDV, desconto exige `pdv.discount`; na pré-venda vale o que a tela web exige.
+
+### Comprovante: `POST /sales/{sale}/receipt/whatsapp`
+
+- **Corpo:** `{ "user_id", "business_id", "phone"? }`. `phone` opcional envia a outro número (validado como WhatsApp brasileiro com DDD; inválido → 422 de validação em `phone`). Sem ele, vai ao telefone do cliente (whatsapp → celular → telefone).
+- Mesmo `SaleReceiptWhatsAppService` e template da empresa da rota web `comercial/vendas/{sale}/comprovante/whatsapp`.
+- **Exige:** venda da `business_id` do corpo, uma das permissões `sales.view`, `sales.access` ou `pdv.access`, módulo WhatsApp liberado para a empresa e conexão WhatsApp (Baileys) conectada.
+- **Idempotência:** chave `sale:{id}:receipt-pdf` (reenviar não duplica). Com `phone`, a chave leva `:to:{número}`, então outro número envia de novo.
+
+| HTTP | Resposta |
+| --- | --- |
+| 202 | `{ "success": true, "message": "..." }` na fila |
+| 422 | `reason: "connection_missing"` (+ `error.code`): WhatsApp não conectado |
+| 422 | `reason: "customer_phone_missing"` (+ `error.code`): cliente sem telefone válido; reenvie com `phone` |
+| 422 | `error.code: business_rule`: demais recusas (ex.: template inválido) |
+| 403 | `forbidden`: usuário/empresa/permissão/módulo |
+| 404 | `not_found`: venda inexistente **ou de outra empresa** |
+
+### Comprovante em PDF: `POST /sales/{sale}/receipt/pdf`
+
+Corpo `{ "user_id", "business_id" }`. Devolve o binário `application/pdf` (`Content-Disposition: attachment; filename="comprovante-{numero}.pdf"`), o mesmo PDF enviado por WhatsApp, para o app compartilhar por outros apps. Mesmas checagens de empresa/permissão (não exige o módulo WhatsApp); 403 e 404 como acima. O .NET deve repassar o binário ao app sem reserializar.
+
+## 8. Escrita e idempotência
+
+As rotas de escrita da seção 7 chamam os mesmos services do web e usam `client_sale_uuid` (`UNIQUE(business_id, client_sale_uuid)`): o app gera o UUID **uma vez** por operação e o reutiliza em toda retentativa (`200 already_existed` em vez de duplicar). Preço, total, desconto, imposto e estoque são sempre recalculados no servidor. As rotas Bearer (seções anteriores) continuam somente leitura.
+
+## 9. Compatibilidade
 
 O contrato pertence ao prefixo `v1`. Campos novos podem ser **adicionados** a respostas existentes: ignore o que não conhecer. Mudança incompatível vira `v2` convivendo com `v1` até o último app migrar.

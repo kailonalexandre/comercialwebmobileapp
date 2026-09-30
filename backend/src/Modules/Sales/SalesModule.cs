@@ -5,6 +5,7 @@ using ComercialWeb.Mobile.Identity.Authorization;
 using ComercialWeb.Mobile.Identity.Tenancy;
 using ComercialWeb.Mobile.Sales.Orders;
 using ComercialWeb.Mobile.Sales.Pdv;
+using ComercialWeb.Mobile.Sales.Receipts;
 using ComercialWeb.Mobile.Sales.PreSales;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -28,6 +29,11 @@ public static class SalesModule
             http.Timeout = TimeSpan.FromSeconds(20);
         });
         services.AddHttpClient<PdvClient>(http =>
+        {
+            if (Uri.TryCreate(config["ComercialWeb:BaseUrl"], UriKind.Absolute, out var baseUrl)) http.BaseAddress = baseUrl;
+            http.Timeout = TimeSpan.FromSeconds(30);
+        });
+        services.AddHttpClient<ReceiptClient>(http =>
         {
             if (Uri.TryCreate(config["ComercialWeb:BaseUrl"], UriKind.Absolute, out var baseUrl)) http.BaseAddress = baseUrl;
             http.Timeout = TimeSpan.FromSeconds(30);
@@ -65,6 +71,7 @@ public static class SalesModule
         app.MapPreSaleEndpoints();
         app.MapPdvEndpoints();
         app.MapOrdersEndpoints();
+        app.MapReceiptEndpoints();
         return app;
     }
 

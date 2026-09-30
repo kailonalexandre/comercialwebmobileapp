@@ -194,3 +194,58 @@ public sealed class PreSaleApiTests(PreSaleFixture api) : IClassFixture<PreSaleF
         }
     }
 }
+
+public sealed class PreSaleDiscountApiTests(PreSaleFixture api) : IClassFixture<PreSaleFixture>
+{
+    private static CancellationToken Ct => TestContext.Current.CancellationToken;
+
+    private async Task<HttpResponseMessage> Post(object body)
+    {
+        api.ComercialWeb.Received.Clear();
+        var client = await api.SignedInAsync("ana");
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/pre-sales") { Content = JsonContent.Create(body) };
+        request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+        return await client.SendAsync(request, Ct);
+    }
+
+    [Fact]
+    public async Task Desconto_por_item_e_na_venda_e_encaminhado()
+    {
+        TestDatabase.RequireMySql();
+
+        var response = await Post(new { items = new[] { new { productId = 100, quantity = 2.5m, discountCents = 150L } }, saleDiscountPercent = 7.25m });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        using var sent = System.Text.Json.JsonDocument.Parse(Assert.Single(api.ComercialWeb.Received).Body);
+        Assert.Equal(150, sent.RootElement.GetProperty("items")[0].GetProperty("discount_cents").GetInt64());
+        Assert.Equal(7.25m, sent.RootElement.GetProperty("sale_discount_percent").GetDecimal());
+    }
+
+    [Fact]
+    public async Task Os_dois_do_mesmo_par_e_422_sem_chamar_o_comercialweb()
+    {
+        TestDatabase.RequireMySql();
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await Post(new { items = new[] { new { productId = 100, quantity = 1, discountPercent = 5, discountCents = 10L } } })).StatusCode);
+        Assert.Empty(api.ComercialWeb.Received);
+    }
+
+    [Fact]
+    public async Task Limite_do_cliente_chega_ao_app_com_codigo_e_mensagem()
+    {
+        TestDatabase.RequireMySql();
+        api.ComercialWeb.Reply = () => FakeComercialWeb.Json(HttpStatusCode.UnprocessableEntity, """{"success":false,"error":{"code":"discount_limit_exceeded","message":"Acima do limite."}}""");
+        try
+        {
+            var response = await Post(new { customerId = 7, items = new[] { new { productId = 100, quantity = 1, discountPercent = 30 } } });
+
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+            var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(Ct);
+            Assert.Equal(("discount_limit_exceeded", "Acima do limite."), (body.GetProperty("code").GetString(), body.GetProperty("message").GetString()));
+        }
+        finally
+        {
+            api.ComercialWeb.Reply = new FakeComercialWeb().Reply;
+        }
+    }
+}

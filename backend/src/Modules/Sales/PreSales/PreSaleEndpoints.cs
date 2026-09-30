@@ -7,9 +7,11 @@ using Microsoft.AspNetCore.Routing;
 
 namespace ComercialWeb.Mobile.Sales.PreSales;
 
-public sealed record PreSaleItemRequest(long ProductId, decimal Quantity);
+public sealed record PreSaleItemRequest(long ProductId, decimal Quantity, decimal? DiscountPercent = null, long? DiscountCents = null);
 
-public sealed record PreSaleRequest(long? CustomerId, long? SellerPersonId, string? Observation, IReadOnlyList<PreSaleItemRequest>? Items);
+public sealed record PreSaleRequest(
+    long? CustomerId, long? SellerPersonId, string? Observation, IReadOnlyList<PreSaleItemRequest>? Items,
+    decimal? SaleDiscountPercent = null, long? SaleDiscountCents = null);
 
 public static class PreSaleEndpoints
 {
@@ -27,7 +29,8 @@ public static class PreSaleEndpoints
             var ids = SessionIds.From(user)!;
             var outcome = await comercialWeb.SendPreSaleAsync(new PreSaleCommand(
                 ids.UserId, ids.BusinessId, key, body.CustomerId, body.SellerPersonId, body.Observation?.Trim(),
-                [.. body.Items!.Select(i => new PreSaleLine(i.ProductId, i.Quantity))]), ct);
+                [.. body.Items!.Select(i => new PreSaleLine(i.ProductId, i.Quantity, i.DiscountPercent, i.DiscountCents))],
+                body.SaleDiscountPercent, body.SaleDiscountCents), ct);
 
             return outcome switch
             {
@@ -35,7 +38,7 @@ public static class PreSaleEndpoints
                 { Created: { } sale } => Results.Json(sale, statusCode: StatusCodes.Status201Created),
                 { Failure: PreSaleFailure.Forbidden } => Results.Problem(statusCode: StatusCodes.Status403Forbidden),
                 { Failure: PreSaleFailure.BusinessRule } => Results.Problem(statusCode: StatusCodes.Status422UnprocessableEntity,
-                    extensions: outcome.Message is null ? null : new Dictionary<string, object?> { ["message"] = outcome.Message }),
+                    extensions: outcome.Message is null ? null : new Dictionary<string, object?> { ["code"] = outcome.Code, ["message"] = outcome.Message }),
                 _ => Results.Problem(statusCode: StatusCodes.Status503ServiceUnavailable),
             };
         }).RequirePermission(CreatePreSale);
@@ -46,7 +49,9 @@ public static class PreSaleEndpoints
     // Mesmos limites do FormRequest do ComercialWeb, para recusar aqui sem ida e volta.
     internal static bool IsValid(PreSaleRequest body) =>
         body.Items is { Count: >= 1 and <= 200 }
-        && body.Items.All(i => i.ProductId > 0 && i.Quantity > 0 && i.Quantity <= 99_999 && decimal.Round(i.Quantity, 3) == i.Quantity)
+        && body.Items.All(i => i.ProductId > 0 && i.Quantity > 0 && i.Quantity <= 99_999 && decimal.Round(i.Quantity, 3) == i.Quantity
+            && Discounts.IsValid(i.DiscountPercent, i.DiscountCents))
+        && Discounts.IsValid(body.SaleDiscountPercent, body.SaleDiscountCents)
         && body.CustomerId is null or > 0
         && body.SellerPersonId is null or > 0
         && (body.Observation?.Length ?? 0) <= 1000;

@@ -7,15 +7,18 @@ using Microsoft.AspNetCore.Routing;
 
 namespace ComercialWeb.Mobile.Sales.Pdv;
 
-public sealed record PdvItemRequest(long ProductId, int Quantity);
+public sealed record PdvItemRequest(long ProductId, int Quantity, decimal? DiscountPercent = null, long? DiscountCents = null);
 
 public sealed record PdvPaymentRequest(string? Method, long AmountCents);
 
-public record PdvQuoteRequest(long? CustomerId, long? SellerPersonId, string? Observation, IReadOnlyList<PdvItemRequest>? Items);
+public record PdvQuoteRequest(
+    long? CustomerId, long? SellerPersonId, string? Observation, IReadOnlyList<PdvItemRequest>? Items,
+    decimal? SaleDiscountPercent = null, long? SaleDiscountCents = null);
 
 public sealed record PdvSaleRequest(
-    long? CustomerId, long? SellerPersonId, string? Observation, IReadOnlyList<PdvItemRequest>? Items, IReadOnlyList<PdvPaymentRequest>? Payments)
-    : PdvQuoteRequest(CustomerId, SellerPersonId, Observation, Items);
+    long? CustomerId, long? SellerPersonId, string? Observation, IReadOnlyList<PdvItemRequest>? Items, IReadOnlyList<PdvPaymentRequest>? Payments,
+    decimal? SaleDiscountPercent = null, long? SaleDiscountCents = null)
+    : PdvQuoteRequest(CustomerId, SellerPersonId, Observation, Items, SaleDiscountPercent, SaleDiscountCents);
 
 public static class PdvEndpoints
 {
@@ -35,7 +38,7 @@ public static class PdvEndpoints
 
         pdv.MapPost("/quote", async (PdvQuoteRequest body, ClaimsPrincipal user, PdvClient client, CancellationToken ct) =>
         {
-            if (!IsValid(body.Items, body.Observation)) return Results.Problem(statusCode: StatusCodes.Status422UnprocessableEntity);
+            if (!IsValid(body)) return Results.Problem(statusCode: StatusCodes.Status422UnprocessableEntity);
             var ids = SessionIds.From(user)!;
             var result = await client.QuoteAsync(Order(ids, null, body, null), ct);
             return result.Value is { } quote ? Results.Ok(quote) : Problem(result);
@@ -45,7 +48,7 @@ public static class PdvEndpoints
         {
             // A chave nasce no app ao montar a venda e se repete em todo reenvio: vira client_sale_uuid no ComercialWeb.
             if (!Guid.TryParse(http.Request.Headers["Idempotency-Key"].ToString(), out var key) || key == Guid.Empty
-                || !IsValid(body.Items, body.Observation) || !ValidPayments(body.Payments))
+                || !IsValid(body) || !ValidPayments(body.Payments))
                 return Results.Problem(statusCode: StatusCodes.Status422UnprocessableEntity);
 
             var ids = SessionIds.From(user)!;
@@ -64,13 +67,15 @@ public static class PdvEndpoints
 
     private static PdvOrder Order(SessionIds ids, Guid? key, PdvQuoteRequest body, IReadOnlyList<PdvPayment>? payments) =>
         new(ids.UserId, ids.BusinessId, key, body.CustomerId, body.SellerPersonId, body.Observation?.Trim(),
-            [.. body.Items!.Select(i => new PdvItem(i.ProductId, i.Quantity))], payments);
+            [.. body.Items!.Select(i => new PdvItem(i.ProductId, i.Quantity, i.DiscountPercent, i.DiscountCents))], payments,
+            body.SaleDiscountPercent, body.SaleDiscountCents);
 
     // Mesmos limites do FormRequest do ComercialWeb, para recusar aqui sem ida e volta.
-    internal static bool IsValid(IReadOnlyList<PdvItemRequest>? items, string? observation) =>
-        items is { Count: >= 1 and <= 200 }
-        && items.All(i => i.ProductId > 0 && i.Quantity is >= 1 and <= 99_999)
-        && (observation?.Length ?? 0) <= 1000;
+    internal static bool IsValid(PdvQuoteRequest body) =>
+        body.Items is { Count: >= 1 and <= 200 }
+        && body.Items.All(i => i.ProductId > 0 && i.Quantity is >= 1 and <= 99_999 && Discounts.IsValid(i.DiscountPercent, i.DiscountCents))
+        && Discounts.IsValid(body.SaleDiscountPercent, body.SaleDiscountCents)
+        && (body.Observation?.Length ?? 0) <= 1000;
 
     internal static bool ValidPayments(IReadOnlyList<PdvPaymentRequest>? payments) =>
         payments is { Count: >= 1 and <= 8 }

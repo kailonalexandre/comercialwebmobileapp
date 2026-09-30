@@ -111,6 +111,11 @@ Paginação, `PagedResult` e escape de LIKE ficam em `src/Common` (compartilhado
 - Cada canal exige a própria permissão também na API (`source=store` → `loja-virtual.access`, `mercadolivre` → `marketplaces.view`, `all` → as duas): não confiamos que o ComercialWeb filtre as seções por permissão. Parâmetro inválido: 422 sem consultar o ComercialWeb. ComercialWeb fora: 503. Recusa dele na lista: 403; no detalhe: 404 (a permissão já foi conferida aqui).
 - App: aba de canais conforme as permissões do usuário (`/me/permissions` agora inclui as duas). Só pedido de marketplace tem detalhe; o da Loja Virtual ainda não existe na API do ComercialWeb.
 
+### Desconto e comprovante (venda)
+
+- **Desconto:** `POST /api/v1/pre-sales` e `/api/v1/pdv/quote|sales` aceitam por item `discountPercent` (0 a 99,99, até 2 casas) **ou** `discountCents`, e na venda `saleDiscountPercent` **ou** `saleDiscountCents`; nunca os dois do mesmo par (422 sem chamar o ComercialWeb). O app só envia a intenção: o ComercialWeb recalcula tudo, aplica `pdv.discount` e o limite de desconto do cliente e responde `discount_limit_exceeded` (com a mensagem para o operador) ou `business_rule`. O total mostrado vem do `/pdv/quote` (que devolve `discountCents` total e por item), nunca calculado no aparelho.
+- **Comprovante:** `POST /api/v1/sales/{id}/receipt/whatsapp` (corpo opcional `{phone}`) pede ao ComercialWeb que envie o PDF pelo WhatsApp da empresa, com o template configurado lá; 202 na fila; 422 com `reason` `connection_missing` ou `customer_phone_missing`. `POST /api/v1/sales/{id}/receipt/pdf` devolve o PDF (só se o ComercialWeb responder `application/pdf`, até 15 MB; nome do arquivo sanitizado) para o app compartilhar por outros apps. Basta uma destas permissões: `sales.view`, `sales.access`, `pdv.access`; empresa e usuário vêm da sessão e o ComercialWeb confere de novo (venda de outra empresa: 404).
+
 ### Módulo Dashboard
 
 - `GET /api/v1/dashboard`: mesmos cards e consultas do `DashboardRepository` da web. Cada bloco só vem se o usuário tiver a permissão do card na web (senão `null`): vendas de hoje e condicionais abertos (`sales.view`), contas a receber (`financial.receivables.view`), estoque baixo (`inventory.view`), últimas 8 vendas (`sales.view`).

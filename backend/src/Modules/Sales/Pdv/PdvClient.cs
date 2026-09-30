@@ -9,16 +9,16 @@ using Microsoft.Extensions.Logging;
 
 namespace ComercialWeb.Mobile.Sales.Pdv;
 
-public sealed record PdvItem(long ProductId, int Quantity);
+public sealed record PdvItem(long ProductId, int Quantity, decimal? DiscountPercent = null, long? DiscountCents = null);
 
 public sealed record PdvPayment(string Method, long AmountCents);
 
 /// <summary>Pedido já validado; usuário e empresa vêm da sessão, nunca do app.</summary>
 public sealed record PdvOrder(
     long UserId, long BusinessId, Guid? ClientSaleUuid, long? CustomerId, long? SellerPersonId, string? Observation,
-    IReadOnlyList<PdvItem> Items, IReadOnlyList<PdvPayment>? Payments);
+    IReadOnlyList<PdvItem> Items, IReadOnlyList<PdvPayment>? Payments, decimal? SaleDiscountPercent = null, long? SaleDiscountCents = null);
 
-public sealed record PdvQuoteLine(long ProductId, string Name, int Quantity, long UnitPriceCents, long TotalCents);
+public sealed record PdvQuoteLine(long ProductId, string Name, int Quantity, long UnitPriceCents, long TotalCents, long DiscountCents = 0);
 
 public sealed record PdvQuote(long SubtotalCents, long DiscountCents, long TotalCents, IReadOnlyList<PdvQuoteLine> Items);
 
@@ -68,7 +68,7 @@ public sealed partial class PdvClient(HttpClient http, IConfiguration config, Ti
         return dto?.Items is null
             ? new PdvResult<PdvQuote>(default, PdvFailure.Unavailable)
             : new PdvResult<PdvQuote>(new PdvQuote(dto.SubtotalCents, dto.DiscountCents, dto.TotalCents,
-                [.. dto.Items.Select(i => new PdvQuoteLine(i.ProductId, i.Name, i.Quantity, i.UnitPriceCents, i.TotalCents))]));
+                [.. dto.Items.Select(i => new PdvQuoteLine(i.ProductId, i.Name, i.Quantity, i.UnitPriceCents, i.TotalCents, i.DiscountCents))]));
     }
 
     public async Task<PdvResult<PdvSaleCreated>> SendSaleAsync(PdvOrder order, CancellationToken ct)
@@ -89,7 +89,9 @@ public sealed partial class PdvClient(HttpClient http, IConfiguration config, Ti
         customer_id = o.CustomerId,
         seller_person_id = o.SellerPersonId,
         observation = o.Observation,
-        items = o.Items.Select(i => new { product_id = i.ProductId, quantity = i.Quantity }),
+        items = o.Items.Select(i => new { product_id = i.ProductId, quantity = i.Quantity, discount_percent = i.DiscountPercent, discount_cents = i.DiscountCents }),
+        sale_discount_percent = o.SaleDiscountPercent,
+        sale_discount_cents = o.SaleDiscountCents,
         payments = includePayments ? o.Payments?.Select(p => new { method = p.Method, amount_cents = p.AmountCents }) : null,
     };
 
@@ -154,7 +156,7 @@ public sealed partial class PdvClient(HttpClient http, IConfiguration config, Ti
 
     private sealed record MethodDto(string Code, string Name);
     private sealed record MethodsDto(List<MethodDto>? Methods);
-    private sealed record QuoteItemDto(long ProductId, string Name, int Quantity, long UnitPriceCents, long TotalCents);
+    private sealed record QuoteItemDto(long ProductId, string Name, int Quantity, long UnitPriceCents, long TotalCents, long DiscountCents = 0);
     private sealed record QuoteDto(long SubtotalCents, long DiscountCents, long TotalCents, List<QuoteItemDto>? Items);
     private sealed record SaleDto(long SaleId, string Number, string Status, long TotalCents, long ChangeCents, bool AlreadyExisted);
     private sealed record ErrorBody(string? Code, string? Message, long? TotalCents, long? RemainingCents);
