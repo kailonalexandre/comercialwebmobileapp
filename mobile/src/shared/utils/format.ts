@@ -5,6 +5,13 @@ export function formatCents(cents: number): string {
   return brl.format(cents / 100);
 }
 
+const quantity = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 3 });
+
+// Estoque trafega em milésimos (inteiro): 12500 = 12,5. Sem zeros à direita.
+export function formatMilli(milli: number): string {
+  return quantity.format(milli / 1000);
+}
+
 // Normaliza texto para busca: sem acento, minúsculo. Hermes sem ICU completo cai no texto original.
 export function normalizeSearch(value: string): string {
   const lower = value.trim().toLowerCase();
