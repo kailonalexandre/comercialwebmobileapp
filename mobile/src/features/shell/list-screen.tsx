@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactElement } from 'react';
-import { FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { FlatList, Pressable, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CodeScanner } from '@/shared/components/code-scanner';
@@ -9,7 +9,8 @@ import { StateView } from '@/shared/components/state-view';
 import { Text } from '@/shared/components/text';
 import { TextField } from '@/shared/components/text-field';
 import { usePagedList, type PageFetcher } from '@/shared/hooks/use-paged-list';
-import { colors, layout, radius, spacing, touchTarget } from '@/shared/theme/tokens';
+import { layout, radius, spacing, touchTarget } from '@/shared/theme/tokens';
+import { makeStyles, useTheme } from '@/shared/theme/theme-context';
 import { userMessage } from '@/shared/utils/error-message';
 
 export type ListControls<T> = { patch: (change: (items: T[]) => T[]) => void; reload: () => void };
@@ -40,6 +41,8 @@ const BARCODES = ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'itf14
 
 // Tela de lista padrão: busca, paginação por rolagem, puxar para atualizar e estados de carga/erro/vazio.
 export function ListScreen<T>({ title, subtitle, searchPlaceholder, emptyMessage, fetchPage, keyOf, renderRow, onBack, header, filters, tabScreen, scanBarcode, action, sectionOf }: Props<T>) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const [search, setSearch] = useState('');
   const [scanning, setScanning] = useState(false);
   const list = usePagedList(fetchPage, search.trim());
@@ -139,9 +142,12 @@ export function ListScreen<T>({ title, subtitle, searchPlaceholder, emptyMessage
   );
 }
 
-const Separator = () => <View style={styles.separator} />;
+function Separator() {
+  const styles = useStyles();
+  return <View style={styles.separator} />;
+}
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   section: { marginTop: spacing.md, marginBottom: spacing.sm },
   root: { flex: 1, backgroundColor: colors.page },
   content: { ...layout.content, padding: spacing.lg, paddingBottom: spacing.xxl * 2, flexGrow: 1 },
@@ -150,4 +156,4 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   back: { width: touchTarget, height: touchTarget, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', marginLeft: -spacing.sm },
   separator: { height: spacing.sm },
-});
+}));

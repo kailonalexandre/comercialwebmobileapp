@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useSession } from '@/features/auth/session-context';
@@ -10,7 +10,8 @@ import { IconTile } from '@/shared/components/icon-tile';
 import { StateView } from '@/shared/components/state-view';
 import { Text } from '@/shared/components/text';
 import { TextField } from '@/shared/components/text-field';
-import { colors, layout, radius, shadow, spacing, type Tone } from '@/shared/theme/tokens';
+import { layout, radius, shadow, spacing, type Tone } from '@/shared/theme/tokens';
+import { makeStyles } from '@/shared/theme/theme-context';
 import { normalizeSearch } from '@/shared/utils/format';
 
 type Module = { title: string; description: string; icon: IconName; tone: Tone; href?: '/configuracoes' | '/pedidos' };
@@ -28,6 +29,7 @@ const modules: Module[] = [
 ];
 
 export function MenuScreen() {
+  const styles = useStyles();
   const { profile } = useSession();
   const [query, setQuery] = useState('');
 
@@ -82,7 +84,7 @@ export function MenuScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.page },
   content: { ...layout.content, padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl * 2 },
   flex: { flex: 1 },
@@ -91,4 +93,4 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
   item: { flexBasis: '47%', flexGrow: 1, gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.background, ...shadow.card },
   pressed: { opacity: 0.7 },
-});
+}));

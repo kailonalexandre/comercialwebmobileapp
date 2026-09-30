@@ -1,12 +1,14 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { Text } from '@/shared/components/text';
-import { colors, radius, spacing, touchTarget } from '@/shared/theme/tokens';
+import { radius, spacing, touchTarget } from '@/shared/theme/tokens';
+import { makeStyles } from '@/shared/theme/theme-context';
 
 type Props<K extends string> = { options: { key: K; label: string }[]; selected: K; onSelect: (key: K) => void };
 
 // Filtro de escolha única (um botão por opção).
 export function ChipRow<K extends string>({ options, selected, onSelect }: Props<K>) {
+  const styles = useStyles();
   return (
     <View style={styles.row}>
       {options.map((o) => {
@@ -29,7 +31,7 @@ export function ChipRow<K extends string>({ options, selected, onSelect }: Props
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chip: {
     minHeight: touchTarget - spacing.sm,
@@ -41,4 +43,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   active: { backgroundColor: colors.primary, borderColor: colors.primary },
-});
+}));

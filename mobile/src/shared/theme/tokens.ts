@@ -1,6 +1,8 @@
 // Única fonte de valores visuais do app. Telas e componentes não usam valores literais.
 
-export const colors = {
+// Duas paletas com as mesmas chaves (claro e escuro). Telas nunca importam as paletas: usam `useTheme().colors`
+// ou `makeStyles`, de src/shared/theme/theme-context.tsx.
+export const lightColors = {
   primary: '#6A2DE8',
   primaryPressed: '#5A22CC',
   primarySoft: '#F0EBFE',
@@ -8,7 +10,7 @@ export const colors = {
   gradientEnd: '#6A2DE8',
   onPrimary: '#FFFFFF',
 
-  // `page` é o fundo das telas; `background` é a superfície branca dos cartões e campos.
+  // `page` é o fundo das telas; `background` é a superfície dos cartões e campos.
   page: '#F4F5F8',
   background: '#FFFFFF',
   surface: '#F8F7FD',
@@ -37,17 +39,56 @@ export const colors = {
   badge: '#EF4444',
 } as const;
 
-// Tons semânticos para ícones e cards tingidos (KPIs, módulos).
-export const tones = {
-  primary: { fg: colors.primary, bg: colors.primarySoft, tint: '#FBF9FF', border: '#E7DFFD' },
-  success: { fg: colors.success, bg: colors.successSoft, tint: '#F5FCF7', border: '#D3F0DC' },
-  warning: { fg: colors.warning, bg: colors.warningSoft, tint: '#FFFAF5', border: '#F6DFC9' },
-  danger: { fg: colors.danger, bg: colors.dangerSoft, tint: '#FFF8F7', border: '#FBDCDC' },
-  info: { fg: colors.info, bg: colors.infoSoft, tint: '#F7F9FF', border: '#DCE5FB' },
-  accent: { fg: colors.accent, bg: colors.accentSoft, tint: '#FFF7FB', border: '#F8D9E8' },
-} as const;
+export type Colors = { [K in keyof typeof lightColors]: string };
 
-export type Tone = keyof typeof tones;
+export const darkColors: Colors = {
+  primary: '#7C4DFF',
+  primaryPressed: '#6A3DE6',
+  primarySoft: '#2A2144',
+  gradientStart: '#8B66FF',
+  gradientEnd: '#7C4DFF',
+  onPrimary: '#FFFFFF',
+
+  page: '#0F1015',
+  background: '#181A21',
+  surface: '#1D1F27',
+  border: '#272A35',
+  chip: '#20232C',
+
+  text: '#EEF0F6',
+  textMuted: '#9AA1B3',
+  textInverse: '#FFFFFF',
+  textInverseMuted: 'rgba(255,255,255,0.82)',
+
+  overlay: 'rgba(255,255,255,0.12)',
+  overlayBorder: 'rgba(255,255,255,0.22)',
+
+  success: '#4ADE80',
+  successSoft: '#142B1D',
+  warning: '#F5A462',
+  warningSoft: '#35230F',
+  danger: '#F07083',
+  dangerSoft: '#3A1A21',
+  info: '#6EA0FF',
+  infoSoft: '#16233F',
+  accent: '#F472B6',
+  accentSoft: '#3A1830',
+  badge: '#EF4444',
+};
+
+// Tons semânticos para ícones e etiquetas tingidas (status, módulos).
+export function makeTones(c: Colors) {
+  return {
+    primary: { fg: c.primary, bg: c.primarySoft },
+    success: { fg: c.success, bg: c.successSoft },
+    warning: { fg: c.warning, bg: c.warningSoft },
+    danger: { fg: c.danger, bg: c.dangerSoft },
+    info: { fg: c.info, bg: c.infoSoft },
+    accent: { fg: c.accent, bg: c.accentSoft },
+  } as const;
+}
+
+export type Tone = keyof ReturnType<typeof makeTones>;
 
 export const spacing = {
   xs: 4,

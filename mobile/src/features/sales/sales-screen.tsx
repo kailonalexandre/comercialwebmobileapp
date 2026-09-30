@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { useSession } from '@/features/auth/session-context';
 import { formatLocal } from '@/features/dashboard/dashboard-model';
@@ -12,7 +12,8 @@ import { Icon } from '@/shared/components/icon';
 import { ListRow } from '@/shared/components/list-row';
 import { StatusPill } from '@/shared/components/status-pill';
 import { Text } from '@/shared/components/text';
-import { colors, radius, spacing } from '@/shared/theme/tokens';
+import { radius, spacing } from '@/shared/theme/tokens';
+import { makeStyles, useTheme } from '@/shared/theme/theme-context';
 import { formatCents } from '@/shared/utils/format';
 
 const FILTERS: { key: SaleStatusFilter; label: string }[] = [
@@ -23,6 +24,7 @@ const FILTERS: { key: SaleStatusFilter; label: string }[] = [
 ];
 
 function SaleRow({ sale }: { sale: SaleListItem }) {
+  const styles = useStyles();
   return (
     <ListRow
       title={sale.customerName ?? 'Consumidor final'}
@@ -45,6 +47,8 @@ function SaleRow({ sale }: { sale: SaleListItem }) {
 }
 
 export function SalesScreen() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const { profile } = useSession();
   const [filter, setFilter] = useState<SaleStatusFilter>('all');
   const fetchPage = useCallback((page: number, search: string) => fetchSales(page, search, filter), [filter]);
@@ -76,7 +80,7 @@ export function SalesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   trailing: { alignItems: 'flex-end', gap: spacing.xs },
   newButton: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.lg, minHeight: 44, borderRadius: radius.lg, backgroundColor: colors.primarySoft },
-});
+}));

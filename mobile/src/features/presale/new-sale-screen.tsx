@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DraftEditor } from '@/features/presale/draft-editor';
@@ -9,10 +9,13 @@ import { ReceiptActions } from '@/features/sales/receipt-actions';
 import { Button } from '@/shared/components/button';
 import { Icon } from '@/shared/components/icon';
 import { Text } from '@/shared/components/text';
-import { colors, layout, radius, shadow, spacing, touchTarget } from '@/shared/theme/tokens';
+import { layout, radius, shadow, spacing, touchTarget } from '@/shared/theme/tokens';
+import { makeStyles, useTheme } from '@/shared/theme/theme-context';
 import { formatCents } from '@/shared/utils/format';
 
 export function NewSaleScreen() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const store = usePreSaleDraft();
   const insets = useSafeAreaInsets();
   const { draft, phase, send, reset } = store;
@@ -92,7 +95,7 @@ export function NewSaleScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.page },
   top: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
   back: { width: touchTarget, height: touchTarget, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', marginLeft: -spacing.sm },
@@ -104,4 +107,4 @@ const styles = StyleSheet.create({
   footerButton: { flex: 1 },
   doneBlock: { flex: 1, justifyContent: 'center', gap: spacing.lg, padding: spacing.xl },
   doneIcon: { width: 72, height: 72, borderRadius: radius.pill, backgroundColor: colors.successSoft, alignItems: 'center', justifyContent: 'center' },
-});
+}));

@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import type { DraftValue } from '@/features/presale/draft-context';
 import { DiscountField } from '@/features/presale/discount-field';
@@ -9,12 +9,14 @@ import { Button } from '@/shared/components/button';
 import { Icon } from '@/shared/components/icon';
 import { Text } from '@/shared/components/text';
 import { TextField } from '@/shared/components/text-field';
-import { colors, radius, shadow, spacing, touchTarget } from '@/shared/theme/tokens';
+import { radius, shadow, spacing, touchTarget } from '@/shared/theme/tokens';
+import { makeStyles, useTheme } from '@/shared/theme/theme-context';
 import { formatCents } from '@/shared/utils/format';
 
 export type DraftMode = 'presale' | 'pdv';
 
 function QuantityField({ item, disabled, store, integer }: { item: DraftItem; disabled: boolean; store: DraftValue; integer: boolean }) {
+  const styles = useStyles();
   const [text, setText] = useState(String(item.quantity).replace('.', ','));
 
   // Cada valor válido vale na hora (o botão de envio pode ser tocado sem o campo perder o foco);
@@ -45,6 +47,8 @@ function QuantityField({ item, disabled, store, integer }: { item: DraftItem; di
 
 // Cliente, itens e observação: igual na pré-venda e no PDV. `mode` diz a qual rascunho os seletores devem responder.
 export function DraftEditor({ store, mode, locked, integerQuantity = false, canDiscount = true }: { store: DraftValue; mode: DraftMode; locked: boolean; integerQuantity?: boolean; canDiscount?: boolean }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const { draft, setDraft } = store;
   return (
     <>
@@ -120,10 +124,10 @@ export function DraftEditor({ store, mode, locked, integerQuantity = false, canD
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   card: { gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.background, ...shadow.card },
   between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
   flex: { flex: 1 },
   remove: { width: touchTarget, height: touchTarget, alignItems: 'center', justifyContent: 'center' },
   qty: { textAlign: 'right' },
-});
+}));

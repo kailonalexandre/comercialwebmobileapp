@@ -1,12 +1,14 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { Text } from '@/shared/components/text';
-import { colors, radius, shadow, spacing, touchTarget } from '@/shared/theme/tokens';
+import { radius, shadow, spacing, touchTarget } from '@/shared/theme/tokens';
+import { makeStyles } from '@/shared/theme/theme-context';
 
 type Props<K extends string> = { options: { key: K; label: string }[]; selected: K; onSelect: (key: K) => void };
 
 // Controle segmentado: uma faixa só, com o item ativo em destaque (troca de canal, aba).
 export function Segmented<K extends string>({ options, selected, onSelect }: Props<K>) {
+  const styles = useStyles();
   return (
     <View style={styles.track}>
       {options.map((o) => {
@@ -29,8 +31,8 @@ export function Segmented<K extends string>({ options, selected, onSelect }: Pro
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   track: { flexDirection: 'row', padding: spacing.xs, borderRadius: radius.lg, backgroundColor: colors.chip },
   item: { flex: 1, minHeight: touchTarget - spacing.sm, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.sm, borderRadius: radius.md },
   active: { backgroundColor: colors.background, ...shadow.card },
-});
+}));

@@ -1,9 +1,10 @@
 import { useState, type ReactNode } from 'react';
-import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
+import { TextInput, View, type TextInputProps } from 'react-native';
 
 import { Icon, type IconName } from '@/shared/components/icon';
 import { Text } from '@/shared/components/text';
-import { colors, maxFontScale, radius, spacing, touchTarget, typography } from '@/shared/theme/tokens';
+import { maxFontScale, radius, spacing, touchTarget, typography } from '@/shared/theme/tokens';
+import { makeStyles, useTheme } from '@/shared/theme/theme-context';
 
 type Props = TextInputProps & {
   label?: string;
@@ -13,6 +14,8 @@ type Props = TextInputProps & {
 };
 
 export function TextField({ label, icon, trailing, error, style, onFocus, onBlur, ...rest }: Props) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const [focused, setFocused] = useState(false);
 
   return (
@@ -46,7 +49,7 @@ export function TextField({ label, icon, trailing, error, style, onFocus, onBlur
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   container: { gap: spacing.sm },
   box: {
     minHeight: touchTarget + spacing.sm,
@@ -62,4 +65,4 @@ const styles = StyleSheet.create({
   input: { ...typography.body, flex: 1, color: colors.text, paddingVertical: spacing.md },
   focused: { borderColor: colors.primary },
   invalid: { borderColor: colors.danger },
-});
+}));

@@ -1,11 +1,13 @@
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 
 import { appEnv } from '@/infrastructure/config';
 import { Text } from '@/shared/components/text';
-import { colors, radius, spacing } from '@/shared/theme/tokens';
+import { radius, spacing } from '@/shared/theme/tokens';
+import { makeStyles } from '@/shared/theme/theme-context';
 
 // Selo visível só no flavor local, para ninguém confundir com produção.
 export function EnvBadge() {
+  const styles = useStyles();
   if (appEnv.name !== 'local') return null;
   return (
     <View style={styles.pill} accessibilityLabel="Ambiente local">
@@ -16,7 +18,7 @@ export function EnvBadge() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   pill: {
     alignSelf: 'flex-start',
     backgroundColor: colors.warningSoft,
@@ -24,4 +26,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
   },
-});
+}));

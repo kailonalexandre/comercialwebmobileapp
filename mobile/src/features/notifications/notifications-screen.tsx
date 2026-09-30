@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { formatLocal } from '@/features/dashboard/dashboard-model';
 import {
@@ -15,9 +15,12 @@ import { ListScreen, type ListControls } from '@/features/shell/list-screen';
 import { Icon } from '@/shared/components/icon';
 import { StatusPill } from '@/shared/components/status-pill';
 import { Text } from '@/shared/components/text';
-import { colors, radius, spacing, touchTarget } from '@/shared/theme/tokens';
+import { radius, spacing, touchTarget } from '@/shared/theme/tokens';
+import { makeStyles, useTheme } from '@/shared/theme/theme-context';
 
 function Row({ item, controls }: { item: NotificationItem; controls: ListControls<NotificationItem> }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const unread = isUnread(item);
 
   // Otimista: a linha muda na hora; se o servidor recusar, recarrega o estado real.
@@ -64,6 +67,7 @@ function Row({ item, controls }: { item: NotificationItem; controls: ListControl
 }
 
 export function NotificationsScreen() {
+  const styles = useStyles();
   const [unreadOnly, setUnreadOnly] = useState(false);
   // Trocar a função de busca (filtro) faz a lista recarregar; "marcar todas" força a troca.
   const [epoch, setEpoch] = useState(0);
@@ -102,6 +106,7 @@ export function NotificationsScreen() {
 }
 
 function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  const styles = useStyles();
   return (
     <Pressable
       accessibilityRole="button"
@@ -116,7 +121,7 @@ function Chip({ label, active, onPress }: { label: string; active: boolean; onPr
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   flex: { flex: 1 },
   row: {
     flexDirection: 'row',
@@ -137,4 +142,4 @@ const styles = StyleSheet.create({
   filters: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   chip: { paddingHorizontal: spacing.md, minHeight: 36, justifyContent: 'center', borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border },
   chipActive: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
-});
+}));

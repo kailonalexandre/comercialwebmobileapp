@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { defaultDeviceName } from '@/features/auth/auth-api';
@@ -13,7 +13,8 @@ import { CodeScanner } from '@/shared/components/code-scanner';
 import { EnvBadge } from '@/shared/components/env-badge';
 import { Text } from '@/shared/components/text';
 import { TextField } from '@/shared/components/text-field';
-import { colors, radius, shadow, spacing } from '@/shared/theme/tokens';
+import { radius, shadow, spacing } from '@/shared/theme/tokens';
+import { makeStyles, useTheme } from '@/shared/theme/theme-context';
 
 const STEPS = ['No ComercialWeb, abra Configurações → Aplicativo Mobile', 'Clique em Gerar QR Code', 'Aponte a câmera do celular para o código'];
 
@@ -32,6 +33,8 @@ function messageFor(e: unknown): string {
 }
 
 export function LoginScreen({ deepLink }: { deepLink?: string }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const { connect } = useSession();
   const [scanning, setScanning] = useState(false);
   const [link, setLink] = useState('');
@@ -163,7 +166,7 @@ export function LoginScreen({ deepLink }: { deepLink?: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.page },
   flex: { flex: 1 },
   scroll: { flexGrow: 1, justifyContent: 'space-between' },
@@ -179,4 +182,4 @@ const styles = StyleSheet.create({
   form: { gap: spacing.lg, marginTop: spacing.xl },
   divider: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   line: { flex: 1, height: 1, backgroundColor: colors.border },
-});
+}));

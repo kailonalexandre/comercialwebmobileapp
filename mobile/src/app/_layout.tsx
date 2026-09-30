@@ -12,10 +12,12 @@ import { PreSaleDraftProvider } from '@/features/presale/presale-draft';
 import { PushBridge } from '@/features/push/push-bridge';
 import { OnboardingProvider, useOnboarding } from '@/features/onboarding/onboarding-context';
 import { StateView } from '@/shared/components/state-view';
+import { ThemeProvider, useTheme } from '@/shared/theme/theme-context';
 
 function RootNavigator() {
   const { status, updateRequired } = useSession();
   const { seen } = useOnboarding();
+  const { colors, scheme } = useTheme();
   if (status === 'loading' || seen === null) return <StateView kind="loading" />;
   if (status === 'signedIn' && updateRequired) return <UpdateRequiredScreen />;
 
@@ -24,8 +26,8 @@ function RootNavigator() {
   // Guarda de navegação é UX; autorização real acontece na API.
   return (
     <>
-      <StatusBar style={signedOut && !seen ? 'light' : 'dark'} />
-      <Stack screenOptions={{ headerShown: false }}>
+      <StatusBar style={(signedOut && !seen) || scheme === 'dark' ? 'light' : 'dark'} />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.page } }}>
         <Stack.Protected guard={status === 'signedIn'}>
           <Stack.Screen name="(app)" />
           <Stack.Screen name="venda/[id]" />
@@ -74,16 +76,22 @@ export default function RootLayout() {
     IBMPlexMono_500Medium,
   });
   // Falha ao carregar fonte não pode travar o app: cai na fonte do sistema.
-  if (!fontsLoaded && !fontError) return <StateView kind="loading" />;
+  const ready = fontsLoaded || fontError;
 
   return (
-    <OnboardingProvider>
-      <SessionProvider>
-        <SessionScopedDraft>
-          <PushBridge />
-          <RootNavigator />
-        </SessionScopedDraft>
-      </SessionProvider>
-    </OnboardingProvider>
+    <ThemeProvider>
+      {ready ? (
+        <OnboardingProvider>
+          <SessionProvider>
+            <SessionScopedDraft>
+              <PushBridge />
+              <RootNavigator />
+            </SessionScopedDraft>
+          </SessionProvider>
+        </OnboardingProvider>
+      ) : (
+        <StateView kind="loading" />
+      )}
+    </ThemeProvider>
   );
 }

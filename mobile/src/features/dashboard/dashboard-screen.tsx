@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useSession } from '@/features/auth/session-context';
@@ -12,7 +12,8 @@ import { Icon, type IconName } from '@/shared/components/icon';
 import { StateView } from '@/shared/components/state-view';
 import { StatusPill } from '@/shared/components/status-pill';
 import { Text } from '@/shared/components/text';
-import { colors, fonts, layout, radius, shadow, spacing, tones, type Tone } from '@/shared/theme/tokens';
+import { fonts, layout, radius, shadow, spacing, type Tone } from '@/shared/theme/tokens';
+import { makeStyles, useTheme } from '@/shared/theme/theme-context';
 import { formatCents } from '@/shared/utils/format';
 
 const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
@@ -36,6 +37,7 @@ const quickActions: QuickAction[] = [
 ];
 
 function SectionHeader({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) {
+  const styles = useStyles();
   return (
     <View style={styles.sectionHeader}>
       <Text variant="heading">{title}</Text>
@@ -51,6 +53,8 @@ function SectionHeader({ title, action, onAction }: { title: string; action?: st
 }
 
 function AttentionCard({ icon, tone, title, detail, onPress }: { icon: IconName; tone: Tone; title: string; detail: string; onPress: () => void }) {
+  const styles = useStyles();
+  const { tones } = useTheme();
   const t = tones[tone];
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={`${title}. ${detail}`} onPress={onPress} style={({ pressed }) => [styles.attention, pressed && styles.pressed]}>
@@ -68,6 +72,8 @@ function AttentionCard({ icon, tone, title, detail, onPress }: { icon: IconName;
 }
 
 export function DashboardScreen() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const { data, failed, reload } = useDashboard();
   const { profile } = useSession();
   const unread = useUnreadCount();
@@ -229,7 +235,7 @@ export function DashboardScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.page },
   content: { ...layout.content, padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxl * 2 },
   flex: { flex: 1 },
@@ -259,4 +265,4 @@ const styles = StyleSheet.create({
   saleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.background, ...shadow.card },
   saleEnd: { alignItems: 'flex-end', gap: spacing.xs },
   empty: { paddingVertical: spacing.lg, textAlign: 'center' },
-});
+}));

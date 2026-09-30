@@ -1,13 +1,14 @@
-import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useSession } from '@/features/auth/session-context';
 import { Button } from '@/shared/components/button';
 import { Text } from '@/shared/components/text';
-import { colors, spacing } from '@/shared/theme/tokens';
+import { spacing } from '@/shared/theme/tokens';
+import { makeStyles } from '@/shared/theme/theme-context';
 
 // Versão abaixo da mínima do servidor: bloqueia o app até instalar a atualização.
 export function UpdateRequiredScreen() {
+  const styles = useStyles();
   const { signOut } = useSession();
   return (
     <SafeAreaView style={styles.root}>
@@ -22,7 +23,7 @@ export function UpdateRequiredScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, justifyContent: 'center', gap: spacing.lg, padding: spacing.xl, backgroundColor: colors.background },
   center: { textAlign: 'center' },
-});
+}));

@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useCallback } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 
 import { formatLocal } from '@/features/dashboard/dashboard-model';
 import { fetchSale } from '@/features/sales/sales-api';
@@ -10,10 +10,12 @@ import { DetailFrame } from '@/features/shell/detail-frame';
 import { StatusPill } from '@/shared/components/status-pill';
 import { Text } from '@/shared/components/text';
 import { useDetail } from '@/shared/hooks/use-detail';
-import { colors, radius, shadow, spacing } from '@/shared/theme/tokens';
+import { radius, shadow, spacing } from '@/shared/theme/tokens';
+import { makeStyles } from '@/shared/theme/theme-context';
 import { formatCents } from '@/shared/utils/format';
 
 function Line({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  const styles = useStyles();
   return (
     <View style={styles.line}>
       <Text variant={strong ? 'label' : 'body'} color={strong ? 'text' : 'textMuted'}>
@@ -25,6 +27,7 @@ function Line({ label, value, strong }: { label: string; value: string; strong?:
 }
 
 export function SaleDetailScreen() {
+  const styles = useStyles();
   const { id } = useLocalSearchParams<{ id: string }>();
   const fetcher = useCallback(() => fetchSale(Number(id)), [id]);
   const { data: sale, failure, error, reload } = useDetail(fetcher);
@@ -104,7 +107,7 @@ export function SaleDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   hero: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.lg },
   card: { gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.background, ...shadow.card },
   between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -112,4 +115,4 @@ const styles = StyleSheet.create({
   item: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.xs },
   divider: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.sm },
   flex: { flex: 1 },
-});
+}));

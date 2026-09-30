@@ -1,15 +1,18 @@
 import { router } from 'expo-router';
-import { Alert, Pressable, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, View } from 'react-native';
 
 import { useSession } from '@/features/auth/session-context';
 import { useUnreadCount } from '@/features/shell/use-unread-count';
 import { BrandMark } from '@/shared/components/brand-mark';
 import { Icon } from '@/shared/components/icon';
 import { Text } from '@/shared/components/text';
-import { colors, radius, spacing, touchTarget, fonts } from '@/shared/theme/tokens';
+import { radius, spacing, touchTarget, fonts } from '@/shared/theme/tokens';
+import { makeStyles, useTheme } from '@/shared/theme/theme-context';
 
 // Cabeçalho das telas principais: marca, notificações e avatar do usuário da sessão.
 export function AppHeader() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const userName = useSession().profile?.userName ?? '';
   const unreadNotifications = useUnreadCount();
   const badge = unreadNotifications > 9 ? '9+' : String(unreadNotifications);
@@ -49,7 +52,7 @@ export function AppHeader() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   brand: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   iconButton: { width: touchTarget, height: touchTarget, alignItems: 'center', justifyContent: 'center' },
@@ -76,4 +79,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-});
+}));

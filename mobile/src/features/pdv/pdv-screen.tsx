@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { fetchPaymentMethods, type PaymentMethod } from '@/features/pdv/pdv-api';
@@ -14,10 +14,13 @@ import { Button } from '@/shared/components/button';
 import { Icon } from '@/shared/components/icon';
 import { Text } from '@/shared/components/text';
 import { TextField } from '@/shared/components/text-field';
-import { colors, layout, radius, shadow, spacing } from '@/shared/theme/tokens';
+import { layout, radius, shadow, spacing } from '@/shared/theme/tokens';
+import { makeStyles, useTheme } from '@/shared/theme/theme-context';
 import { formatCents } from '@/shared/utils/format';
 
 export function PdvScreen() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const store = usePdvDraft();
   const { profile } = useSession();
   // Só esconde o campo; o ComercialWeb confere pdv.discount em cada venda.
@@ -228,7 +231,7 @@ export function PdvScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.page },
   content: { ...layout.content, padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl * 3 },
   card: { gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.background, ...shadow.card },
@@ -241,4 +244,4 @@ const styles = StyleSheet.create({
   footer: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, padding: spacing.lg, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border },
   doneBlock: { flex: 1, justifyContent: 'center', gap: spacing.lg, padding: spacing.xl },
   doneIcon: { width: 72, height: 72, borderRadius: radius.pill, backgroundColor: colors.successSoft, alignItems: 'center', justifyContent: 'center' },
-});
+}));

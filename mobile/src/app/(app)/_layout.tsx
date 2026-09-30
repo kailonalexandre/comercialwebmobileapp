@@ -1,10 +1,12 @@
 import { Tabs } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 
 import { Icon, type IconName } from '@/shared/components/icon';
-import { colors, fonts, radius, shadow, spacing, typography } from '@/shared/theme/tokens';
+import { fonts, radius, shadow, spacing, typography } from '@/shared/theme/tokens';
+import { makeStyles, useTheme } from '@/shared/theme/theme-context';
 
 function TabIcon({ name, focused }: { name: IconName; focused: boolean }) {
+  const { colors } = useTheme();
   return <Icon name={name} size={24} color={focused ? colors.primary : colors.textMuted} />;
 }
 
@@ -14,6 +16,8 @@ const tab = (title: string, icon: IconName, activeIcon: IconName) => ({
 });
 
 export default function AppTabsLayout() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   return (
     <Tabs
       screenOptions={{
@@ -50,7 +54,7 @@ export default function AppTabsLayout() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   bar: { paddingTop: spacing.sm, backgroundColor: colors.background, borderTopColor: colors.border },
   item: { gap: 2 },
   pdvIcon: { width: 56, height: 32, alignItems: 'center' },
@@ -67,4 +71,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...shadow.raised,
   },
-});
+}));

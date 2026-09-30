@@ -6,10 +6,18 @@ import { DetailFrame } from '@/features/shell/detail-frame';
 import { apiBaseUrl, appEnv } from '@/infrastructure/config';
 import { Button } from '@/shared/components/button';
 import { InfoCard } from '@/shared/components/info-card';
+import { Segmented } from '@/shared/components/segmented';
 import { Text } from '@/shared/components/text';
+import { useTheme, type ThemePreference } from '@/shared/theme/theme-context';
 import { spacing } from '@/shared/theme/tokens';
 
 const noop = () => undefined;
+
+const APPEARANCE: { key: ThemePreference; label: string }[] = [
+  { key: 'system', label: 'Automático' },
+  { key: 'light', label: 'Claro' },
+  { key: 'dark', label: 'Escuro' },
+];
 
 function confirmDisconnect(signOut: () => Promise<void>) {
   Alert.alert('Desconectar este aparelho?', 'Para entrar de novo será preciso gerar e ler um novo QR Code no ComercialWeb.', [
@@ -20,6 +28,7 @@ function confirmDisconnect(signOut: () => Promise<void>) {
 
 export function SettingsScreen() {
   const { profile, signOut } = useSession();
+  const { preference, setPreference } = useTheme();
 
   return (
     <DetailFrame title="Configurações" loading={false} failure={null} error={null} notFoundMessage="" onRetry={noop}>
@@ -33,6 +42,12 @@ export function SettingsScreen() {
             { label: 'Empresa', value: profile?.businessName ?? '…' },
           ]}
         />
+      </View>
+      <View style={styles.section}>
+        <Text variant="label" color="textMuted">
+          Aparência
+        </Text>
+        <Segmented options={APPEARANCE} selected={preference} onSelect={setPreference} />
       </View>
       <View style={styles.section}>
         <Text variant="label" color="textMuted">
