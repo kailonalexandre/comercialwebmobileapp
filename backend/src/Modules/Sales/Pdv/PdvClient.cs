@@ -3,7 +3,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using ComercialWeb.Mobile.Sales.PreSales;
+using ComercialWeb.Mobile.Identity.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -108,7 +108,7 @@ public sealed partial class PdvClient(HttpClient http, IConfiguration config, Ti
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         var timestamp = clock.GetUtcNow().ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
         request.Headers.Add("X-Mobile-Timestamp", timestamp);
-        request.Headers.Add("X-Mobile-Signature", ComercialWebClient.Sign(secret, timestamp, "POST", path, body));
+        request.Headers.Add("X-Mobile-Signature", MobileSignature.Sign(secret, timestamp, "POST", path, body));
 
         try
         {

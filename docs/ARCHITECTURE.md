@@ -57,6 +57,7 @@ Risco principal: regras de tenancy, permissão, preço, estoque e venda já vive
 GRANT SELECT ON <banco>.* TO 'mobile_api'@'%';
 GRANT INSERT, UPDATE, DELETE ON <banco>.mobile_sessions TO 'mobile_api'@'%';
 GRANT INSERT, UPDATE, DELETE ON <banco>.mobile_refresh_tokens TO 'mobile_api'@'%';
+GRANT INSERT, UPDATE, DELETE ON <banco>.mobile_push_tokens TO 'mobile_api'@'%';
 GRANT INSERT ON <banco>.mobile_schema_migrations TO 'mobile_api'@'%';       -- só para o comando migrate
 GRANT UPDATE (read_at, archived_at, updated_at) ON <banco>.notifications TO 'mobile_api'@'%';
 ```
@@ -206,7 +207,9 @@ App ──POST /api/v1/auth/pair {code}──► .NET ──POST /api/mobile/v1/
 - Logout do app chama `/auth/logout` do ComercialWeb (melhor esforço) e revoga a sessão local.
 - `/auth/pair` (10/min) e `/auth/refresh` (30/min) têm rate limit por IP. No refresh, só quem ganha a rotação do token consulta o ComercialWeb (evita corrida no refresh dele). Qualquer 4xx do ComercialWeb, exceto 429, conta como aparelho recusado; só 5xx, 429 e falha de rede são fail-open. `pair` que falha depois de criar o aparelho lá o desfaz com logout.
 - Configuração em produção: `ComercialWeb__BaseUrl` (HTTPS obrigatório fora de dev), `DataProtection__KeysPath` (obrigatório fora de dev; volume persistente, fora de backup do banco, permissão 700; chave perdida = sessões pareadas caem e exigem novo QR). Migration `0002` só adiciona colunas anuláveis (`cw_device_id`, `cw_tokens`).
-- Limitação: o rate limit do `/pair` no ComercialWeb (10/min) é por IP, e todos os pareamentos chegam do IP do .NET. Se virar gargalo, liberar o IP do .NET no ComercialWeb ou repassar o IP do app. Se alargar `KnownNetworks` de ForwardedHeaders, o rate limit por IP passa a ser falsificável via X-Forwarded-For.
+- **`/pair` assinado (contrato atual do ComercialWeb):** o .NET assina o corpo exato com HMAC-SHA256 (`X-Mobile-Timestamp`, `X-Mobile-Signature`, mesmo helper `MobileSignature` da pré-venda e do PDV) usando `ComercialWeb__MobileApiSecret` (= `MOBILE_API_SECRET` do Laravel, 32+ caracteres, nunca versionado). Sem segredo configurado o pareamento fica indisponível (503) sem chamar o ComercialWeb. 401 no `/pair` significa segredo ou relógio divergente (janela de 5 min): vira 503 com log de erro, nunca "código inválido".
+- **IP do aparelho:** o .NET envia `X-Mobile-Client-Ip` (IP resolvido pelo ForwardedHeaders, sem porta) para o rate limit do `/pair` ser por aparelho no ComercialWeb. Se alargar `KnownNetworks` de ForwardedHeaders, esse IP passa a ser falsificável via X-Forwarded-For.
+- Rate limit das demais rotas (bootstrap, sales, sync, refresh) é por aparelho no ComercialWeb; 429 no `/bootstrap` segue fail-open.
 - Pendente conhecido: `LoginThrottle` nunca remove chaves antigas (só importa com login por senha ligado); sessões de login por senha não têm vínculo com o ComercialWeb.
 - Leituras (vendas, produtos, clientes, notificações) seguem por SQL direto por enquanto; migrar módulo a módulo para `/api/mobile/v1` remove a duplicação de regras.
 

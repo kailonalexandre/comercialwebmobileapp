@@ -50,9 +50,9 @@ public sealed class AuthService(IIdentityStore store, TokenIssuer tokens, LoginT
     /// Login por QR: o ComercialWeb valida o código (uso único, 2 min), cria o aparelho no painel e diz quem é o usuário
     /// e a empresa. O app nunca informa usuário nem empresa. Código inválido/expirado/sem acesso: mesma resposta.
     /// </summary>
-    public async Task<AuthResult> PairAsync(string code, string? deviceName, CancellationToken ct)
+    public async Task<AuthResult> PairAsync(string code, string? deviceName, string? clientIp, CancellationToken ct)
     {
-        var paired = await cw.PairAsync(code, deviceName, ct);
+        var paired = await cw.PairAsync(code, deviceName, clientIp, ct);
         if (paired is not { Status: CwStatus.Ok, Value: { } device }) return Failed(paired.Status);
 
         var who = await cw.BootstrapAsync(device.Tokens.AccessToken, ct);

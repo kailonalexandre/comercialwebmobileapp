@@ -121,7 +121,7 @@ public static class IdentityModule
         auth.MapPost("/pair", async (PairRequest body, HttpContext http, AuthService service, CancellationToken ct) =>
         {
             if (!ValidCode(body.Code) || body.DeviceName?.Length > 100) return Results.Problem(statusCode: 422);
-            return ToHttp(await service.PairAsync(body.Code!, body.DeviceName?.Trim(), ct), http);
+            return ToHttp(await service.PairAsync(body.Code!, body.DeviceName?.Trim(), ClientIp(http), ct), http);
         }).RequireRateLimiting(PairPolicy);
 
         auth.MapPost("/refresh", async (RefreshRequest body, HttpContext http, AuthService service, CancellationToken ct) =>
@@ -144,6 +144,10 @@ public static class IdentityModule
 
         return app;
     }
+
+    // IP do aparelho já resolvido pelo ForwardedHeaders (só de proxy confiável); sem porta nem escopo IPv6.
+    private static string? ClientIp(HttpContext http) =>
+        http.Connection.RemoteIpAddress is { } ip ? (ip.IsIPv4MappedToIPv6 ? ip.MapToIPv4() : ip).ToString().Split('%')[0] : null;
 
     // Formato do código do QR (60 alfanuméricos): recusa lixo antes de chamar o ComercialWeb.
     private static bool ValidCode(string? code) => code is { Length: 60 } && code.All(char.IsAsciiLetterOrDigit);

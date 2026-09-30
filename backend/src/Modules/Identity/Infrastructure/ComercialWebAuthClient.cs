@@ -1,5 +1,9 @@
+using System.Globalization;
 using System.Net;
+using System.Net.Http.Headers;
+using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace ComercialWeb.Mobile.Identity.Infrastructure;
@@ -19,7 +23,8 @@ public sealed record CwResult<T>(CwStatus Status, T? Value = default);
 /// <summary>Contrato com /api/mobile/v1 do ComercialWeb usado no pareamento e na revalidação do aparelho.</summary>
 public interface IComercialWebAuth
 {
-    Task<CwResult<CwPairing>> PairAsync(string code, string? deviceName, CancellationToken ct);
+    /// <param name="clientIp">IP do aparelho que chamou este servidor: define o balde do rate limit do /pair no ComercialWeb.</param>
+    Task<CwResult<CwPairing>> PairAsync(string code, string? deviceName, string? clientIp, CancellationToken ct);
 
     Task<CwResult<CwBootstrap>> BootstrapAsync(string accessToken, CancellationToken ct);
 
@@ -31,15 +36,16 @@ public interface IComercialWebAuth
 /// <summary>
 /// HttpClient para o ComercialWeb. O servidor vem só da configuração (ComercialWeb:BaseUrl), nunca do QR:
 /// um QR forjado não pode apontar a API para outro host (SSRF). Sem retry automático.
+/// O /pair é assinado (HMAC, ver <see cref="MobileSignature"/>): sem ele o ComercialWeb responde 401.
 /// </summary>
-public sealed partial class ComercialWebAuthClient(HttpClient http, ILogger<ComercialWebAuthClient> logger) : IComercialWebAuth
+public sealed partial class ComercialWebAuthClient(HttpClient http, IConfiguration config, TimeProvider clock, ILogger<ComercialWebAuthClient> logger) : IComercialWebAuth
 {
     private const string Prefix = "/api/mobile/v1";
 
-    public async Task<CwResult<CwPairing>> PairAsync(string code, string? deviceName, CancellationToken ct)
+    public async Task<CwResult<CwPairing>> PairAsync(string code, string? deviceName, string? clientIp, CancellationToken ct)
     {
         var (status, body) = await SendAsync<PairDto>(HttpMethod.Post, "/pair", null,
-            new { code, device_name = deviceName ?? "Aplicativo", platform = "other", app_version = "1.0.0" }, ct);
+            new { code, device_name = deviceName ?? "Aplicativo", platform = "other", app_version = "1.0.0" }, ct, sign: true, clientIp);
         return body is { Device: not null } ? new(status, new CwPairing(new CwTokens(body.AccessToken, body.RefreshToken), body.Device.Id)) : new CwResult<CwPairing>(status);
     }
 
@@ -58,9 +64,11 @@ public sealed partial class ComercialWebAuthClient(HttpClient http, ILogger<Come
     public async Task<CwStatus> LogoutAsync(string accessToken, CancellationToken ct) =>
         (await SendAsync<object>(HttpMethod.Post, "/auth/logout", accessToken, null, ct)).Item1;
 
-    private async Task<(CwStatus, T?)> SendAsync<T>(HttpMethod method, string path, string? bearer, object? body, CancellationToken ct)
+    private async Task<(CwStatus, T?)> SendAsync<T>(
+        HttpMethod method, string path, string? bearer, object? body, CancellationToken ct, bool sign = false, string? clientIp = null)
     {
-        if (http.BaseAddress is null)
+        var secret = config["ComercialWeb:MobileApiSecret"];
+        if (http.BaseAddress is null || (sign && string.IsNullOrEmpty(secret)))
         {
             LogNotConfigured(logger);
             return (CwStatus.Unavailable, default);
@@ -68,7 +76,19 @@ public sealed partial class ComercialWebAuthClient(HttpClient http, ILogger<Come
         using var request = new HttpRequestMessage(method, Prefix + path);
         request.Headers.Accept.Add(new("application/json"));
         if (bearer is not null) request.Headers.Authorization = new("Bearer", bearer);
-        if (body is not null) request.Content = JsonContent.Create(body);
+        var bytes = body is null ? [] : JsonSerializer.SerializeToUtf8Bytes(body);
+        if (body is not null)
+        {
+            request.Content = new ByteArrayContent(bytes);
+            request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+        }
+        if (sign)
+        {
+            var timestamp = clock.GetUtcNow().ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
+            request.Headers.Add("X-Mobile-Timestamp", timestamp);
+            request.Headers.Add("X-Mobile-Signature", MobileSignature.Sign(secret!, timestamp, method.Method, Prefix + path, bytes));
+            if (clientIp is not null) request.Headers.Add("X-Mobile-Client-Ip", clientIp);
+        }
         try
         {
             using var response = await http.SendAsync(request, ct);
@@ -79,6 +99,10 @@ public sealed partial class ComercialWebAuthClient(HttpClient http, ILogger<Come
                     return await response.Content.ReadFromJsonAsync<T>(ct) is { } ok ? (CwStatus.Ok, ok) : (CwStatus.Unavailable, default);
                 case HttpStatusCode.NoContent:
                     return (CwStatus.Ok, default);
+                case HttpStatusCode.Unauthorized when sign:
+                    // Assinatura recusada = segredo divergente ou relógio fora da janela de 5 min: falha nossa, não do código do QR.
+                    LogUnexpectedStatus(logger, (int)response.StatusCode);
+                    return (CwStatus.Unavailable, default);
                 case HttpStatusCode.Unauthorized:
                     var error = await ReadErrorAsync(response, ct);
                     return (error == "mobile_token_expired" ? CwStatus.TokenExpired : CwStatus.Rejected, default);
@@ -123,12 +147,12 @@ public sealed partial class ComercialWebAuthClient(HttpClient http, ILogger<Come
     private sealed record ErrorBody(string? Code);
     private sealed record ErrorDto(ErrorBody? Error);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "ComercialWeb:BaseUrl não configurada; pareamento indisponível.")]
+    [LoggerMessage(Level = LogLevel.Error, Message = "ComercialWeb:BaseUrl (ou ComercialWeb:MobileApiSecret, no pareamento) não configurada; pareamento indisponível.")]
     private static partial void LogNotConfigured(ILogger logger);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "ComercialWeb indisponível ({Error}).")]
     private static partial void LogUnreachable(ILogger logger, string error);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "ComercialWeb respondeu {Status} inesperado.")]
+    [LoggerMessage(Level = LogLevel.Error, Message = "ComercialWeb respondeu {Status} inesperado (401 no pareamento indica segredo ou relógio divergente).")]
     private static partial void LogUnexpectedStatus(ILogger logger, int status);
 }
