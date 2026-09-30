@@ -8,8 +8,13 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   if (local && process.env.EAS_BUILD_PROFILE === 'production') {
     throw new Error('EXPO_PUBLIC_APP_ENV=local não é permitido no perfil de build production.');
   }
+  // Push (opcional): o arquivo do Firebase e o id do projeto EAS entram por variável, nunca versionados.
+  const googleServicesFile = process.env.GOOGLE_SERVICES_JSON;
+  const projectId = process.env.EAS_PROJECT_ID ?? config.extra?.eas?.projectId;
   return {
     ...(config as ExpoConfig),
+    ...(projectId && { extra: { ...config.extra, eas: { ...config.extra?.eas, projectId } } }),
+    android: { ...config.android, ...(googleServicesFile && { googleServicesFile }) },
     ios: {
       ...config.ios,
       infoPlist: {

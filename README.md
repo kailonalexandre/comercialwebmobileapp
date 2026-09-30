@@ -59,6 +59,10 @@ npx expo run:android --variant release      # APK release (assinatura: keystore 
 
 Na nuvem: `npx eas-cli@latest build --platform android|ios` com as mesmas três variáveis em `env` do perfil de produção do `eas.json`. `EXPO_PUBLIC_API_URL` sem HTTPS faz o app falhar ao abrir (de propósito).
 
+## Push notifications
+
+O código está pronto; a configuração de contas (EAS, Firebase, FCM) está em [docs/PUSH_SETUP.md](docs/PUSH_SETUP.md).
+
 ## Conectar e desconectar
 
 1. ComercialWeb → Configurações → Aplicativo Mobile → Gerar QR Code (vale 2 min, uso único).
