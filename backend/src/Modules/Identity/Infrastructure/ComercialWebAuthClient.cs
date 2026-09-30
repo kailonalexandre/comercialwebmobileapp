@@ -16,6 +16,9 @@ public sealed record CwPairing(CwTokens Tokens, string DeviceId);
 /// <summary>Quem o ComercialWeb diz que é o dono do aparelho (fonte da verdade de usuário, empresa e permissão mobile.access).</summary>
 public sealed record CwBootstrap(long UserId, long BusinessId, string? MinAppVersion = null);
 
+/// <summary>Saldo do produto na unidade do aparelho (a regra de saldo é do ComercialWeb, não daqui).</summary>
+public sealed record CwStock(long? UnitId, long TotalMilli);
+
 public enum CwStatus { Ok, TokenExpired, Rejected, Unavailable }
 
 public sealed record CwResult<T>(CwStatus Status, T? Value = default);
@@ -31,6 +34,9 @@ public interface IComercialWebAuth
     Task<CwResult<CwTokens>> RefreshAsync(string refreshToken, CancellationToken ct);
 
     Task<CwStatus> LogoutAsync(string accessToken, CancellationToken ct);
+
+    /// <summary>GET /products/{id}/stock com o token do aparelho (usar via DeviceLink.CallAsync, que renova o token).</summary>
+    Task<CwResult<CwStock>> ProductStockAsync(string accessToken, long productId, CancellationToken ct);
 }
 
 /// <summary>
@@ -63,6 +69,12 @@ public sealed partial class ComercialWebAuthClient(HttpClient http, IConfigurati
 
     public async Task<CwStatus> LogoutAsync(string accessToken, CancellationToken ct) =>
         (await SendAsync<object>(HttpMethod.Post, "/auth/logout", accessToken, null, ct)).Item1;
+
+    public async Task<CwResult<CwStock>> ProductStockAsync(string accessToken, long productId, CancellationToken ct)
+    {
+        var (status, body) = await SendAsync<StockDto>(HttpMethod.Get, $"/products/{productId}/stock", accessToken, null, ct);
+        return body?.Data is { } d ? new(status, new CwStock(d.UnitId, d.TotalMilli)) : new CwResult<CwStock>(status);
+    }
 
     private async Task<(CwStatus, T?)> SendAsync<T>(
         HttpMethod method, string path, string? bearer, object? body, CancellationToken ct, bool sign = false, string? clientIp = null)
@@ -142,6 +154,8 @@ public sealed partial class ComercialWebAuthClient(HttpClient http, IConfigurati
         [property: JsonPropertyName("access_token")] string AccessToken,
         [property: JsonPropertyName("refresh_token")] string RefreshToken,
         DeviceDto? Device);
+    private sealed record StockData([property: JsonPropertyName("unit_id")] long? UnitId, [property: JsonPropertyName("total_milli")] long TotalMilli);
+    private sealed record StockDto(StockData? Data);
     private sealed record IdDto(long Id);
     private sealed record ApiDto([property: JsonPropertyName("min_app_version")] string? MinAppVersion);
     private sealed record BootstrapDto(IdDto User, IdDto Business, ApiDto? Api);

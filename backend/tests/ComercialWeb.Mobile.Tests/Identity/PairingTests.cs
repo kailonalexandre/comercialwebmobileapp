@@ -15,6 +15,7 @@ public sealed class FakeComercialWebAuth : IComercialWebAuth
     public CwResult<CwPairing> Pair { get; set; } = new(CwStatus.Ok, new CwPairing(new CwTokens("cw-access-1", "cw-refresh-1"), "3f2b8c1e-0000-4000-8000-000000000001"));
     public Func<string, CwResult<CwBootstrap>> Bootstrap { get; set; } = _ => new(CwStatus.Ok, new CwBootstrap(1, 10));
     public CwResult<CwTokens> Refresh { get; set; } = new(CwStatus.Ok, new CwTokens("cw-access-2", "cw-refresh-2"));
+    public Func<string, long, CwResult<CwStock>> Stock { get; set; } = (_, _) => new(CwStatus.Ok, new CwStock(7, 12_500));
     public List<string> Calls { get; } = [];
 
     public Task<CwResult<CwPairing>> PairAsync(string code, string? deviceName, string? clientIp, CancellationToken ct)
@@ -33,6 +34,12 @@ public sealed class FakeComercialWebAuth : IComercialWebAuth
     {
         Calls.Add($"refresh:{refreshToken}");
         return Task.FromResult(Refresh);
+    }
+
+    public Task<CwResult<CwStock>> ProductStockAsync(string accessToken, long productId, CancellationToken ct)
+    {
+        Calls.Add($"stock:{accessToken}:{productId}");
+        return Task.FromResult(Stock(accessToken, productId));
     }
 
     public Task<CwStatus> LogoutAsync(string accessToken, CancellationToken ct)
@@ -328,6 +335,19 @@ public sealed class ComercialWebAuthClientTests
     {
         var client = Client(() => Json(HttpStatusCode.Unauthorized, """{"success":false,"error":{"code":"unauthenticated"}}"""));
         Assert.Equal(CwStatus.Unavailable, (await client.PairAsync("c", null, null, Ct)).Status);
+    }
+
+    [Fact]
+    public async Task Saldo_do_produto_le_o_data_do_comercialweb_com_bearer_do_aparelho()
+    {
+        var stub = new Stub(() => Json(HttpStatusCode.OK, """{"data":{"product_id":5,"unit_id":7,"total_milli":12500,"balances":[]}}"""));
+
+        var result = await Client(stub).ProductStockAsync("tok", 5, Ct);
+
+        Assert.Equal(new CwStock(7, 12_500), result.Value);
+        var (request, _) = Assert.Single(stub.Received);
+        Assert.Equal("https://cw.test/api/mobile/v1/products/5/stock", request.RequestUri!.ToString());
+        Assert.Equal("Bearer tok", request.Headers.Authorization!.ToString());
     }
 
     [Fact]

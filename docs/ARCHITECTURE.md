@@ -79,7 +79,7 @@ GRANT UPDATE (read_at, archived_at, updated_at) ON <banco>.notifications TO 'mob
 - Só produtos da empresa da sessão, sem excluídos; inativos só com `includeInactive=true`. Produto de outra empresa: 404.
 - Busca igual à web (nome, SKU, código de barras + variantes UPC/EAN, `product_barcodes`, referência/código de variação, código exato), mas `%` e `_` são escapados.
 - `pageSize` 1–50, `page` 1–10000; fora disso 422. Preço em centavos (`salePriceCents`); custo e margens não são expostos.
-- Saldo de estoque ainda não exposto (depende de locais de estoque e variações; módulo Inventory).
+- Saldo de estoque: `GET /api/v1/products/{id}/stock` (`products.view`) devolve `{productId, unitId, totalMilli}` da unidade do aparelho. **Não é calculado aqui**: a regra (grade de variações, linhas legadas, endereços da unidade) é do ComercialWeb, e a API só chama `GET /api/mobile/v1/products/{id}/stock` com o token do aparelho (`DeviceLink.CallAsync`, que renova o token dele se expirou). Produto de outra empresa: 404 sem consultar o ComercialWeb; ComercialWeb fora: 503; recusa dele: 403. Sessão sem vínculo com o ComercialWeb (login por senha antigo): 503.
 
 ### Módulo Customers
 
@@ -207,6 +207,7 @@ App ──POST /api/v1/auth/pair {code}──► .NET ──POST /api/mobile/v1/
 - Logout do app chama `/auth/logout` do ComercialWeb (melhor esforço) e revoga a sessão local.
 - `/auth/pair` (10/min) e `/auth/refresh` (30/min) têm rate limit por IP. No refresh, só quem ganha a rotação do token consulta o ComercialWeb (evita corrida no refresh dele). Qualquer 4xx do ComercialWeb, exceto 429, conta como aparelho recusado; só 5xx, 429 e falha de rede são fail-open. `pair` que falha depois de criar o aparelho lá o desfaz com logout.
 - Configuração em produção: `ComercialWeb__BaseUrl` (HTTPS obrigatório fora de dev), `DataProtection__KeysPath` (obrigatório fora de dev; volume persistente, fora de backup do banco, permissão 700; chave perdida = sessões pareadas caem e exigem novo QR). Migration `0002` só adiciona colunas anuláveis (`cw_device_id`, `cw_tokens`).
+- **Versão mínima do app:** o `GET /bootstrap` que a API já faz no pareamento e em cada refresh traz `api.min_app_version`; a API o devolve ao app como `minAppVersion` (nunca inventa valor se o ComercialWeb não responde). O app compara com a própria versão e mostra a tela "Atualização necessária" se for menor; versão ausente ou ilegível nunca bloqueia.
 - **`/pair` assinado (contrato atual do ComercialWeb):** o .NET assina o corpo exato com HMAC-SHA256 (`X-Mobile-Timestamp`, `X-Mobile-Signature`, mesmo helper `MobileSignature` da pré-venda e do PDV) usando `ComercialWeb__MobileApiSecret` (= `MOBILE_API_SECRET` do Laravel, 32+ caracteres, nunca versionado). Sem segredo configurado o pareamento fica indisponível (503) sem chamar o ComercialWeb. 401 no `/pair` significa segredo ou relógio divergente (janela de 5 min): vira 503 com log de erro, nunca "código inválido".
 - **IP do aparelho:** o .NET envia `X-Mobile-Client-Ip` (IP resolvido pelo ForwardedHeaders, sem porta) para o rate limit do `/pair` ser por aparelho no ComercialWeb. Se alargar `KnownNetworks` de ForwardedHeaders, esse IP passa a ser falsificável via X-Forwarded-For.
 - Rate limit das demais rotas (bootstrap, sales, sync, refresh) é por aparelho no ComercialWeb; 429 no `/bootstrap` segue fail-open.

@@ -34,6 +34,16 @@ public sealed class DeviceLink(IIdentityStore store, IComercialWebAuth cw, IData
         };
     }
 
+    /// <summary>
+    /// Chamada ao ComercialWeb como o aparelho da sessão, renovando o token dele se expirou. Sessão sem vínculo
+    /// (login antigo) ou dado ilegível: Unavailable, nunca um token inventado.
+    /// </summary>
+    public async Task<CwResult<T>> CallAsync<T>(Guid sessionId, Func<string, CancellationToken, Task<CwResult<T>>> op, CancellationToken ct)
+    {
+        var (_, tokens) = await Load(sessionId, ct);
+        return tokens is null ? new CwResult<T>(CwStatus.Unavailable) : await Call(sessionId, tokens, op, ct);
+    }
+
     /// <summary>Melhor esforço: remove o aparelho do painel do ComercialWeb. Falha não impede o logout local.</summary>
     public async Task LogoutAsync(Guid sessionId, CancellationToken ct)
     {
