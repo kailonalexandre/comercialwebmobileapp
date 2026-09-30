@@ -5,7 +5,11 @@ namespace ComercialWeb.Mobile.Push;
 
 public sealed record ActiveToken(Guid SessionId, string Token, long UserId, long BusinessId, long LastNotificationId);
 
-public sealed record PendingNotification(long Id, string Title, string Body, string? EntityType, long? EntityId);
+/// <param name="AppOrigins">Quantas marcas de "venda feita pelo app" casam com a notificação (0 = veio de fora, avisa).</param>
+public sealed record PendingNotification(long Id, string Title, string Body, string? EntityType, long? EntityId, long AppOrigins = 0)
+{
+    public bool FromApp => AppOrigins > 0;
+}
 
 /// <summary>SQL do módulo: tokens em mobile_push_tokens (da API) e leitura de `notifications` (do ComercialWeb, somente leitura).</summary>
 public sealed class PushStore(MySqlDataSource db)
@@ -48,17 +52,20 @@ public sealed class PushStore(MySqlDataSource db)
     }
 
     /// <summary>Mesmo escopo do sino: do usuário, da empresa da sessão ou sem empresa; não lidas e não arquivadas.</summary>
-    public async Task<IReadOnlyList<PendingNotification>> PendingAsync(ActiveToken t, int limit, CancellationToken ct)
+    public async Task<IReadOnlyList<PendingNotification>> PendingAsync(ActiveToken t, int limit, DateTime? createdBefore, CancellationToken ct)
     {
         await using var conn = await db.OpenConnectionAsync(ct);
         return (await conn.QueryAsync<PendingNotification>(new CommandDefinition(
             """
-            SELECT CAST(n.id AS SIGNED) AS Id, n.title AS Title, n.body AS Body, n.entity_type AS EntityType, CAST(n.entity_id AS SIGNED) AS EntityId
+            SELECT CAST(n.id AS SIGNED) AS Id, n.title AS Title, n.body AS Body, n.entity_type AS EntityType, CAST(n.entity_id AS SIGNED) AS EntityId,
+                   (SELECT COUNT(*) FROM mobile_sale_origins o
+                     WHERE n.entity_type = 'sale' AND o.sale_id = n.entity_id AND o.business_id = @BusinessId) AS AppOrigins
             FROM notifications n
             WHERE n.user_id = @UserId AND (n.business_id = @BusinessId OR n.business_id IS NULL)
               AND n.id > @LastNotificationId AND n.read_at IS NULL AND n.archived_at IS NULL
+              AND (@createdBefore IS NULL OR n.created_at <= @createdBefore)
             ORDER BY n.id LIMIT @limit
-            """, new { t.UserId, t.BusinessId, t.LastNotificationId, limit }, cancellationToken: ct))).AsList();
+            """, new { t.UserId, t.BusinessId, t.LastNotificationId, limit, createdBefore }, cancellationToken: ct))).AsList();
     }
 
     public async Task AdvanceAsync(Guid sessionId, long notificationId, CancellationToken ct)

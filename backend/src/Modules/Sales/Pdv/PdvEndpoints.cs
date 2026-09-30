@@ -47,7 +47,7 @@ public static class PdvEndpoints
             return result.Value is { } quote ? Results.Ok(quote) : Problem(result);
         }).RequirePermission(UsePdv);
 
-        pdv.MapPost("/sales", async (PdvSaleRequest body, HttpContext http, ClaimsPrincipal user, PdvClient client, CancellationToken ct) =>
+        pdv.MapPost("/sales", async (PdvSaleRequest body, HttpContext http, ClaimsPrincipal user, PdvClient client, SaleOrigins origins, CancellationToken ct) =>
         {
             // A chave nasce no app ao montar a venda e se repete em todo reenvio: vira client_sale_uuid no ComercialWeb.
             if (!Guid.TryParse(http.Request.Headers["Idempotency-Key"].ToString(), out var key) || key == Guid.Empty
@@ -57,6 +57,7 @@ public static class PdvEndpoints
             var ids = SessionIds.From(user)!;
             var payments = body.Payments!.Select(p => new PdvPayment(p.Method!.Trim(), p.AmountCents)).ToList();
             var result = await client.SendSaleAsync(Order(ids, key, body, payments), ct);
+            if (result.Value is { } created) await origins.RecordAsync(ids.BusinessId, created.SaleId, ct);
             return result.Value switch
             {
                 { AlreadyExisted: true } sale => Results.Ok(sale),

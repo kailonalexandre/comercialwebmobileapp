@@ -20,7 +20,7 @@ public static class PreSaleEndpoints
 
     public static IEndpointRouteBuilder MapPreSaleEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/api/v1/pre-sales", async (PreSaleRequest body, HttpContext http, ClaimsPrincipal user, ComercialWebClient comercialWeb, CancellationToken ct) =>
+        app.MapPost("/api/v1/pre-sales", async (PreSaleRequest body, HttpContext http, ClaimsPrincipal user, ComercialWebClient comercialWeb, SaleOrigins origins, CancellationToken ct) =>
         {
             // A chave de idempotência nasce no app quando o pedido é montado e se repete em todo reenvio.
             if (!Guid.TryParse(http.Request.Headers["Idempotency-Key"].ToString(), out var key) || key == Guid.Empty || !IsValid(body))
@@ -31,6 +31,8 @@ public static class PreSaleEndpoints
                 ids.UserId, ids.BusinessId, key, body.CustomerId, body.SellerPersonId, body.Observation?.Trim(),
                 [.. body.Items!.Select(i => new PreSaleLine(i.ProductId, i.Quantity, i.DiscountPercent, i.DiscountCents))],
                 body.SaleDiscountPercent, body.SaleDiscountCents), ct);
+
+            if (outcome.Created is { } created) await origins.RecordAsync(ids.BusinessId, created.SaleId, ct);
 
             return outcome switch
             {

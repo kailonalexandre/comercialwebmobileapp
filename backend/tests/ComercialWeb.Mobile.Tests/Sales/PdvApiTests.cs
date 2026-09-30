@@ -187,6 +187,25 @@ public sealed class PdvApiTests(PdvFixture api) : IClassFixture<PdvFixture>
     }
 }
 
+public sealed class SaleOriginApiTests(PdvFixture api) : IClassFixture<PdvFixture>
+{
+    private static CancellationToken Ct => TestContext.Current.CancellationToken;
+
+    [Fact]
+    public async Task Venda_do_pdv_criada_pelo_app_fica_marcada_para_nao_avisar_o_proprio_celular()
+    {
+        TestDatabase.RequireMySql();
+        await api.Db.ExecuteAsync("DELETE FROM mobile_sale_origins");
+        api.ComercialWeb.Reply = () => FakeComercialWeb.Json(HttpStatusCode.Created, """{"success":true,"sale_id":77,"number":"V000077","status":"finalizada","total_cents":3000,"change_cents":0,"client_sale_uuid":"x","already_existed":false}""");
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/pdv/sales") { Content = JsonContent.Create(new { items = new[] { new { productId = 100, quantity = 1 } }, payments = new[] { new { method = "cash", amountCents = 3000L } } }) };
+        request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+
+        Assert.Equal(HttpStatusCode.Created, (await (await api.SignedInAsync("ana")).SendAsync(request, Ct)).StatusCode);
+
+        Assert.Equal(1, await api.Db.DataSource!.CreateCommand("SELECT COUNT(*) FROM mobile_sale_origins WHERE business_id = 10 AND sale_id = 77").ExecuteScalarAsync(Ct) is long n ? n : 0);
+    }
+}
+
 public sealed class PdvDiscountApiTests(PdvFixture api) : IClassFixture<PdvFixture>
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;

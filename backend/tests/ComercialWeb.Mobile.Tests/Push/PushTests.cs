@@ -42,8 +42,11 @@ public sealed class PushDispatcherTests(PushFixture api) : IClassFixture<PushFix
 
     private readonly FakePushSender _sender = new();
 
-    private PushDispatcher Dispatcher() =>
-        new(new PushStore(api.Db.DataSource!), _sender, TimeProvider.System, new ConfigurationBuilder().Build(), NullLogger<PushDispatcher>.Instance);
+    // Sem espera de origem por padrão (as notificações dos testes nascem "agora"); o teste da espera liga de propósito.
+    private PushDispatcher Dispatcher(int graceSeconds = 0) =>
+        new(new PushStore(api.Db.DataSource!), _sender, TimeProvider.System,
+            new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Push:OriginGraceSeconds"] = graceSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture) }).Build(),
+            NullLogger<PushDispatcher>.Instance);
 
     private async Task Reset(string? revokedAt = null, string expiresAt = "2999-01-01 00:00:00")
     {
@@ -56,10 +59,10 @@ public sealed class PushDispatcherTests(PushFixture api) : IClassFixture<PushFix
             """, new { s = Session.ToString(), t = Token, expires = expiresAt, revoked = revokedAt });
     }
 
-    private Task Notify(int id, long user, long? business, string? read = null, string? archived = null) => api.Db.ExecuteAsync("""
+    private Task Notify(int id, long user, long? business, string? read = null, string? archived = null, int entityId = 9, string createdAt = "NOW()") => api.Db.ExecuteAsync($"""
         INSERT INTO notifications (id, uuid, user_id, type_key, domain, severity, title, body, business_id, entity_type, entity_id, read_at, archived_at, created_at)
-        VALUES (@id, UUID(), @user, 'x', 'vendas', 'info', @title, 'corpo', @business, 'sale', 9, @read, @archived, NOW())
-        """, new { id, user, business, read, archived, title = $"Aviso {id}" });
+        VALUES (@id, UUID(), @user, 'x', 'vendas', 'info', @title, 'corpo', @business, 'sale', @entityId, @read, @archived, {createdAt})
+        """, new { id, user, business, read, archived, entityId, title = $"Aviso {id}" });
 
     private async Task<long> Watermark() => await api.Db.DataSource!.CreateConnection().ExecuteScalarAsync<long>(
         "SELECT COALESCE(MAX(last_notification_id), -1) FROM mobile_push_tokens");
@@ -85,6 +88,50 @@ public sealed class PushDispatcherTests(PushFixture api) : IClassFixture<PushFix
         _sender.Sent.Clear();
         await Dispatcher().RunOnceAsync(Ct);
         Assert.Empty(_sender.Sent); // nada repetido
+    }
+
+    [Fact]
+    public async Task Venda_feita_pelo_proprio_app_nao_avisa_o_celular_mas_a_marca_dagua_avanca()
+    {
+        TestDatabase.RequireMySql();
+        await Reset();
+        await api.Db.ExecuteAsync("DELETE FROM mobile_sale_origins; INSERT INTO mobile_sale_origins (business_id, sale_id, created_at) VALUES (10, 50, NOW(6)), (20, 52, NOW(6))");
+        await Notify(1, 1, 10, entityId: 50);   // venda criada pelo app: silenciosa
+        await Notify(2, 1, 10, entityId: 51);   // venda feita no web: avisa
+        await Notify(3, 1, 10, entityId: 52);   // marca de OUTRA empresa não vale: avisa
+
+        await Dispatcher().RunOnceAsync(Ct);
+
+        Assert.Equal([2L, 3L], _sender.Sent.Select(m => m.NotificationId));
+        Assert.Equal(3, await Watermark());
+    }
+
+    [Fact]
+    public async Task So_venda_do_app_na_fila_nao_envia_nada_e_avanca_a_marca_dagua()
+    {
+        TestDatabase.RequireMySql();
+        await Reset();
+        await api.Db.ExecuteAsync("DELETE FROM mobile_sale_origins; INSERT INTO mobile_sale_origins (business_id, sale_id, created_at) VALUES (10, 60, NOW(6))");
+        await Notify(1, 1, 10, entityId: 60);
+
+        await Dispatcher().RunOnceAsync(Ct);
+
+        Assert.Empty(_sender.Sent);
+        Assert.Equal(1, await Watermark());
+    }
+
+    [Fact]
+    public async Task Notificacao_muito_recente_espera_a_marca_de_origem_antes_de_avisar()
+    {
+        TestDatabase.RequireMySql();
+        await Reset();
+        await api.Db.ExecuteAsync("DELETE FROM mobile_sale_origins");
+        await Notify(1, 1, 10, createdAt: "'2037-01-01 00:00:00'");   // "agora" (no futuro): dentro da espera
+        await Notify(2, 1, 10, createdAt: "'2026-01-01 00:00:00'");   // antiga: já pode avisar
+
+        await Dispatcher(graceSeconds: 8).RunOnceAsync(Ct);
+
+        Assert.Equal([2L], _sender.Sent.Select(m => m.NotificationId));
     }
 
     [Fact]

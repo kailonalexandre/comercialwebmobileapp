@@ -23,6 +23,7 @@ public static class SalesModule
     public static IServiceCollection AddSalesModule(this IServiceCollection services, IConfiguration config)
     {
         services.AddScoped<SaleQueries>();
+        services.AddScoped<SaleOrigins>();
         services.AddHttpClient<ComercialWebClient>(http =>
         {
             if (Uri.TryCreate(config["ComercialWeb:BaseUrl"], UriKind.Absolute, out var baseUrl)) http.BaseAddress = baseUrl;
