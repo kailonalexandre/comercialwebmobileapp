@@ -2,7 +2,7 @@
   "expo": {
     "name": "Infinit Comercial",
     "slug": "infinit-comercial",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -31,12 +31,15 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "A câmera é usada apenas para ler o QR Code de pareamento com o ComercialWeb.",
+          "cameraPermission": "A câmera é usada apenas para ler o QR Code de pareamento e o código de barras dos produtos.",
           "recordAudioAndroid": false
         }
       ]
     ],
-    "scheme": "infinitcomercial",
+    "scheme": [
+      "infinitcomercial",
+      "comercialweb"
+    ],
     "experiments": {
       "typedRoutes": true
     }

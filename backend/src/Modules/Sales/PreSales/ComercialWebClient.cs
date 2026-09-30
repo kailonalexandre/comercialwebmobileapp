@@ -1,10 +1,9 @@
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ComercialWeb.Mobile.Identity.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -63,7 +62,7 @@ public sealed partial class ComercialWebClient(HttpClient http, IConfiguration c
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         var timestamp = clock.GetUtcNow().ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
         request.Headers.Add("X-Mobile-Timestamp", timestamp);
-        request.Headers.Add("X-Mobile-Signature", Sign(secret, timestamp, "POST", PreSalesPath, body));
+        request.Headers.Add("X-Mobile-Signature", MobileSignature.Sign(secret, timestamp, "POST", PreSalesPath, body));
 
         try
         {
@@ -75,12 +74,6 @@ public sealed partial class ComercialWebClient(HttpClient http, IConfiguration c
             LogUnreachable(logger, e.GetType().Name);
             return new PreSaleOutcome(null, PreSaleFailure.Unavailable);
         }
-    }
-
-    public static string Sign(string secret, string timestamp, string method, string path, byte[] body)
-    {
-        byte[] message = [.. Encoding.UTF8.GetBytes($"{timestamp}\n{method}\n{path}\n"), .. body];
-        return Convert.ToHexStringLower(HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), message));
     }
 
     private async Task<PreSaleOutcome> ReadAsync(HttpResponseMessage response, CancellationToken ct)

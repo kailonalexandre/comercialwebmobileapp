@@ -13,6 +13,17 @@ export async function fetchProducts(page: number, search: string): Promise<Paged
   return api.request<Paged<Product>>(`/v1/products?${query.toString()}`);
 }
 
+export type ProductStock = { productId: number; unitId: number | null; totalMilli: number };
+
+// Saldo da unidade do aparelho, calculado pelo ComercialWeb. Falha (sem permissão, servidor fora) é tratada pela tela.
+export async function fetchProductStock(id: number): Promise<ProductStock> {
+  if (!api) {
+    if (!__DEV__) throw new Error('API não configurada.');
+    return { productId: id, unitId: 1, totalMilli: 12_500 };
+  }
+  return api.request<ProductStock>(`/v1/products/${id}/stock`);
+}
+
 export type ProductDetail = Product & { description: string | null };
 
 export async function fetchProduct(id: number): Promise<ProductDetail> {

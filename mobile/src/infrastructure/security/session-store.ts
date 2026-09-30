@@ -4,6 +4,8 @@ export type Session = {
   accessToken: string;
   refreshToken: string;
   expiresAt: string; // ISO-8601
+  // api.min_app_version do ComercialWeb, repassada pela API no pareamento e em cada refresh.
+  minAppVersion?: string | null;
 };
 
 const KEY = 'cw.session';

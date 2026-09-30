@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { StatusBar } from 'expo-status-bar';
 
 import { SessionProvider, useSession } from '@/features/auth/session-context';
+import { UpdateRequiredScreen } from '@/features/auth/update-required-screen';
 import { PdvDraftProvider } from '@/features/pdv/pdv-draft';
 import { PreSaleDraftProvider } from '@/features/presale/presale-draft';
 import { PushBridge } from '@/features/push/push-bridge';
@@ -10,9 +11,10 @@ import { OnboardingProvider, useOnboarding } from '@/features/onboarding/onboard
 import { StateView } from '@/shared/components/state-view';
 
 function RootNavigator() {
-  const { status } = useSession();
+  const { status, updateRequired } = useSession();
   const { seen } = useOnboarding();
   if (status === 'loading' || seen === null) return <StateView kind="loading" />;
+  if (status === 'signedIn' && updateRequired) return <UpdateRequiredScreen />;
 
   const signedOut = status === 'signedOut';
 
@@ -29,12 +31,18 @@ function RootNavigator() {
           <Stack.Screen name="cliente/[id]" />
           <Stack.Screen name="clientes" />
           <Stack.Screen name="notificacoes" />
+          <Stack.Screen name="configuracoes" />
+          <Stack.Screen name="pedidos" />
+          <Stack.Screen name="pedido/[id]" />
           <Stack.Screen name="nova-venda" />
           <Stack.Screen name="selecionar-produto" />
           <Stack.Screen name="selecionar-cliente" />
         </Stack.Protected>
         <Stack.Protected guard={signedOut && !seen}>
           <Stack.Screen name="onboarding" />
+        </Stack.Protected>
+        <Stack.Protected guard={signedOut}>
+          <Stack.Screen name="pair" />
         </Stack.Protected>
         <Stack.Protected guard={signedOut && seen}>
           <Stack.Screen name="login" />

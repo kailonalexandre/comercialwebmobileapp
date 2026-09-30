@@ -50,9 +50,9 @@ public sealed class AuthService(IIdentityStore store, TokenIssuer tokens, LoginT
     /// Login por QR: o ComercialWeb valida o código (uso único, 2 min), cria o aparelho no painel e diz quem é o usuário
     /// e a empresa. O app nunca informa usuário nem empresa. Código inválido/expirado/sem acesso: mesma resposta.
     /// </summary>
-    public async Task<AuthResult> PairAsync(string code, string? deviceName, CancellationToken ct)
+    public async Task<AuthResult> PairAsync(string code, string? deviceName, string? clientIp, CancellationToken ct, DeviceInfo? info = null)
     {
-        var paired = await cw.PairAsync(code, deviceName, ct);
+        var paired = await cw.PairAsync(code, deviceName, clientIp, ct, info);
         if (paired is not { Status: CwStatus.Ok, Value: { } device }) return Failed(paired.Status);
 
         var who = await cw.BootstrapAsync(device.Tokens.AccessToken, ct);
@@ -68,7 +68,7 @@ public sealed class AuthService(IIdentityStore store, TokenIssuer tokens, LoginT
             device.DeviceId, link.Protect(device.Tokens));
         var (refresh, record) = NewRefresh(session.Id, now);
         await store.CreateSessionAsync(session, record, ct);
-        return AuthResult.Ok(Issue(session.Id, session.UserId, session.BusinessId, refresh, now));
+        return AuthResult.Ok(Issue(session.Id, session.UserId, session.BusinessId, refresh, now, identity.MinAppVersion));
 
         static AuthResult Failed(CwStatus status) =>
             AuthResult.Fail(status is CwStatus.Unavailable or CwStatus.Ok ? AuthFailure.Unavailable : AuthFailure.InvalidPairingCode);
@@ -105,12 +105,13 @@ public sealed class AuthService(IIdentityStore store, TokenIssuer tokens, LoginT
         }
 
         // Só quem ganhou a rotação fala com o ComercialWeb: dois refresh simultâneos não disputam o mesmo par de tokens dele.
-        if (!await link.IsStillPairedAsync(state.SessionId, state.UserId, state.BusinessId, ct))
+        var check = await link.IsStillPairedAsync(state.SessionId, state.UserId, state.BusinessId, ct);
+        if (!check.Paired)
         {
             await store.RevokeSessionAsync(state.SessionId, "device_revoked", now, ct);
             return AuthResult.Fail(AuthFailure.InvalidToken);
         }
-        return AuthResult.Ok(Issue(state.SessionId, state.UserId, state.BusinessId, refresh, now));
+        return AuthResult.Ok(Issue(state.SessionId, state.UserId, state.BusinessId, refresh, now, check.MinAppVersion));
     }
 
     public async Task LogoutAsync(Guid sessionId, CancellationToken ct)
@@ -128,9 +129,9 @@ public sealed class AuthService(IIdentityStore store, TokenIssuer tokens, LoginT
         return (plain, new NewRefreshToken(hash, sessionId, now, now + RefreshLifetime));
     }
 
-    private IssuedSession Issue(Guid sessionId, long userId, long businessId, string refresh, DateTimeOffset now)
+    private IssuedSession Issue(Guid sessionId, long userId, long businessId, string refresh, DateTimeOffset now, string? minAppVersion = null)
     {
         var (access, expiresAt) = tokens.CreateAccessToken(userId, sessionId, businessId, now);
-        return new IssuedSession(access, refresh, expiresAt);
+        return new IssuedSession(access, refresh, expiresAt, minAppVersion);
     }
 }

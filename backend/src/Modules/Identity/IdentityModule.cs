@@ -22,7 +22,7 @@ public sealed record LoginRequest(string? Login, string? Password, string? Devic
 
 public sealed record RefreshRequest(string? RefreshToken);
 
-public sealed record PairRequest(string? Code, string? DeviceName);
+public sealed record PairRequest(string? Code, string? DeviceName, string? Platform = null, string? AppVersion = null);
 
 public static class IdentityModule
 {
@@ -121,7 +121,7 @@ public static class IdentityModule
         auth.MapPost("/pair", async (PairRequest body, HttpContext http, AuthService service, CancellationToken ct) =>
         {
             if (!ValidCode(body.Code) || body.DeviceName?.Length > 100) return Results.Problem(statusCode: 422);
-            return ToHttp(await service.PairAsync(body.Code!, body.DeviceName?.Trim(), ct), http);
+            return ToHttp(await service.PairAsync(body.Code!, body.DeviceName?.Trim(), ClientIp(http), ct, DeviceInfo.From(body.Platform, body.AppVersion)), http);
         }).RequireRateLimiting(PairPolicy);
 
         auth.MapPost("/refresh", async (RefreshRequest body, HttpContext http, AuthService service, CancellationToken ct) =>
@@ -145,6 +145,10 @@ public static class IdentityModule
         return app;
     }
 
+    // IP do aparelho já resolvido pelo ForwardedHeaders (só de proxy confiável); sem porta nem escopo IPv6.
+    private static string? ClientIp(HttpContext http) =>
+        http.Connection.RemoteIpAddress is { } ip ? (ip.IsIPv4MappedToIPv6 ? ip.MapToIPv4() : ip).ToString().Split('%')[0] : null;
+
     // Formato do código do QR (60 alfanuméricos): recusa lixo antes de chamar o ComercialWeb.
     private static bool ValidCode(string? code) => code is { Length: 60 } && code.All(char.IsAsciiLetterOrDigit);
 
@@ -152,7 +156,7 @@ public static class IdentityModule
 
     private static IResult ToHttp(AuthResult result, HttpContext http)
     {
-        if (result.Session is { } s) return Results.Ok(new { s.AccessToken, s.RefreshToken, expiresAt = s.ExpiresAt });
+        if (result.Session is { } s) return Results.Ok(new { s.AccessToken, s.RefreshToken, expiresAt = s.ExpiresAt, minAppVersion = s.MinAppVersion });
         if (result.Failure == AuthFailure.LockedOut)
         {
             http.Response.Headers.RetryAfter = ((int)Math.Ceiling(result.RetryAfter!.Value.TotalSeconds)).ToString(CultureInfo.InvariantCulture);

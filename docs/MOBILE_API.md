@@ -51,7 +51,7 @@ Listas: `?page=1&per_page=20` (máx. 50). Resposta: `{ "data": [...], "meta": { 
 
 | Rota | Limite |
 | --- | --- |
-| `POST /pair` | 10/min por IP |
+| `POST /pair` | 10/min por IP do cliente final (`X-Mobile-Client-Ip`, só se a requisição for assinada), teto de 600/min por servidor |
 | `POST /auth/refresh` | 30/min por IP |
 | demais (autenticadas) | 120/min |
 | `GET /sync` | 60/min |
@@ -64,7 +64,8 @@ Listas: `?page=1&per_page=20` (máx. 50). Resposta: `{ "data": [...], "meta": { 
 Legenda: AUTH = `Bearer` (access token) salvo indicação. Todas as rotas autenticadas exigem a permissão `mobile.access` **além** da listada.
 
 ### POST /pair
-- **AUTH:** nenhum (o `code` é a credencial de uso único)
+- **AUTH:** assinatura de máquina do .NET (`X-Mobile-Timestamp`, `X-Mobile-Signature`: HMAC-SHA256 de `{timestamp}\nPOST\n/api/mobile/v1/pair\n{corpo}` com `MOBILE_API_SECRET`, janela de 5 min); sem ela, 401. O `code` é a credencial de uso único.
+- **HEADER opcional:** `X-Mobile-Client-Ip` = IP do aparelho que chamou o .NET. Só vale com assinatura válida e define o balde do rate limit.
 - **PERMISSIONS:** o usuário que gerou o QR precisa ter `mobile.access`
 - **REQUEST:** `{ "code": "<60 chars>", "device_name": "Galaxy S24", "platform": "android|ios|other", "app_version": "1.0.0" }`
   (`device_name` é o que aparece no painel; use o nome do aparelho informado pelo usuário/SO. Sem fingerprint.)

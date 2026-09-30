@@ -82,7 +82,7 @@ public sealed class PdvApiTests(PdvFixture api) : IClassFixture<PdvFixture>
         Assert.Equal(3500, root.GetProperty("payments")[0].GetProperty("amount_cents").GetInt64());
 
         var timestamp = request.Headers.GetValues("X-Mobile-Timestamp").Single();
-        Assert.Equal(ComercialWeb.Mobile.Sales.PreSales.ComercialWebClient.Sign(PdvFixture.Secret, timestamp, "POST", PdvClient.SalesPath, body),
+        Assert.Equal(ComercialWeb.Mobile.Identity.Infrastructure.MobileSignature.Sign(PdvFixture.Secret, timestamp, "POST", PdvClient.SalesPath, body),
             request.Headers.GetValues("X-Mobile-Signature").Single());
 
         var created = await response.Content.ReadFromJsonAsync<JsonElement>(Ct);

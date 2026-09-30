@@ -8,7 +8,7 @@ import { useSession } from '@/features/auth/session-context';
 import { formatLocal, toKpis, type Kpi } from '@/features/dashboard/dashboard-model';
 import { useDashboard } from '@/features/dashboard/use-dashboard';
 import { AppHeader } from '@/features/shell/app-header';
-import { appEnvironment } from '@/infrastructure/config';
+import { EnvBadge } from '@/shared/components/env-badge';
 import { Icon, type IconName } from '@/shared/components/icon';
 import { StateView } from '@/shared/components/state-view';
 import { IconTile } from '@/shared/components/icon-tile';
@@ -17,8 +17,6 @@ import { colors, radius, shadow, spacing, tones } from '@/shared/theme/tokens';
 import { formatCents } from '@/shared/utils/format';
 
 const soon = (title: string) => () => Alert.alert(title, 'Em breve.');
-
-const environmentLabel = { local: 'Ambiente local', homologacao: 'Homologação', producao: null } as const;
 
 type QuickAction = { label: string; hint: string; icon: IconName; permission?: string; onPress: () => void };
 
@@ -68,7 +66,6 @@ function SectionHeader({ title, action, onAction }: { title: string; action: str
 export function DashboardScreen() {
   const { data, failed, reload } = useDashboard();
   const { profile } = useSession();
-  const envLabel = environmentLabel[appEnvironment];
 
   if (!data) return failed ? <StateView kind="error" onRetry={reload} /> : <StateView kind="loading" />;
   const kpis = toKpis(data);
@@ -96,13 +93,7 @@ export function DashboardScreen() {
               <Icon name="chevron-down" size={16} color={colors.textMuted} />
             </Pressable>
           </View>
-          {envLabel && (
-            <View style={styles.envPill}>
-              <Text variant="caption" color="success">
-                {envLabel}
-              </Text>
-            </View>
-          )}
+          <EnvBadge />
         </View>
 
         <LinearGradient
@@ -195,13 +186,6 @@ const styles = StyleSheet.create({
   greeting: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
   hello: { fontSize: 24, lineHeight: 30 },
   company: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: 32 },
-  envPill: {
-    backgroundColor: colors.successSoft,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    marginTop: spacing.xs,
-  },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',

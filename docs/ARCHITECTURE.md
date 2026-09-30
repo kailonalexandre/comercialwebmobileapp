@@ -57,6 +57,7 @@ Risco principal: regras de tenancy, permissão, preço, estoque e venda já vive
 GRANT SELECT ON <banco>.* TO 'mobile_api'@'%';
 GRANT INSERT, UPDATE, DELETE ON <banco>.mobile_sessions TO 'mobile_api'@'%';
 GRANT INSERT, UPDATE, DELETE ON <banco>.mobile_refresh_tokens TO 'mobile_api'@'%';
+GRANT INSERT, UPDATE, DELETE ON <banco>.mobile_push_tokens TO 'mobile_api'@'%';
 GRANT INSERT ON <banco>.mobile_schema_migrations TO 'mobile_api'@'%';       -- só para o comando migrate
 GRANT UPDATE (read_at, archived_at, updated_at) ON <banco>.notifications TO 'mobile_api'@'%';
 ```
@@ -78,7 +79,7 @@ GRANT UPDATE (read_at, archived_at, updated_at) ON <banco>.notifications TO 'mob
 - Só produtos da empresa da sessão, sem excluídos; inativos só com `includeInactive=true`. Produto de outra empresa: 404.
 - Busca igual à web (nome, SKU, código de barras + variantes UPC/EAN, `product_barcodes`, referência/código de variação, código exato), mas `%` e `_` são escapados.
 - `pageSize` 1–50, `page` 1–10000; fora disso 422. Preço em centavos (`salePriceCents`); custo e margens não são expostos.
-- Saldo de estoque ainda não exposto (depende de locais de estoque e variações; módulo Inventory).
+- Saldo de estoque: `GET /api/v1/products/{id}/stock` (`products.view`) devolve `{productId, unitId, totalMilli}` da unidade do aparelho. **Não é calculado aqui**: a regra (grade de variações, linhas legadas, endereços da unidade) é do ComercialWeb, e a API só chama `GET /api/mobile/v1/products/{id}/stock` com o token do aparelho (`DeviceLink.CallAsync`, que renova o token dele se expirou). Produto de outra empresa: 404 sem consultar o ComercialWeb; ComercialWeb fora: 503; recusa dele: 403. Sessão sem vínculo com o ComercialWeb (login por senha antigo): 503.
 
 ### Módulo Customers
 
@@ -102,6 +103,13 @@ Paginação, `PagedResult` e escape de LIKE ficam em `src/Common` (compartilhado
 - Recorte igual à web: empresa **e unidade** da sessão, sem consolidar filiais; excluídas fora. Venda de outra unidade/empresa: 404.
 - `status` só aceita `pendente`, `pre_venda`, `finalizada`, `devolucao` (inclui `troca`), `condicional_aberto|fechado|cancelado`; outro valor: 422. Período por `DATE(created_at)`.
 - Datas no horário local da empresa (America/Sao_Paulo), sem offset, exatamente como gravadas e exibidas pela web. Valores em centavos.
+
+### Pedidos (Loja Virtual e marketplaces)
+
+- `GET /api/v1/orders?source=all|store|mercadolivre&status=&search=&page=&pageSize=` (`loja-virtual.access` **ou** `marketplaces.view`) e `GET /api/v1/orders/marketplace/{id}` (`marketplaces.view`).
+- É o Monitor de Pedidos da web: a API não tem regra própria, só repassa `GET /api/mobile/v1/orders` e `/orders/marketplace/{id}` com o token do aparelho (`DeviceLink.CallAsync`). Resposta `{sections: [{channel, failure, meta, items}]}`, uma seção por canal com paginação própria; `failure` preenchido = a fonte externa estava fora (o app mostra erro com "tentar de novo", não lista vazia).
+- Cada canal exige a própria permissão também na API (`source=store` → `loja-virtual.access`, `mercadolivre` → `marketplaces.view`, `all` → as duas): não confiamos que o ComercialWeb filtre as seções por permissão. Parâmetro inválido: 422 sem consultar o ComercialWeb. ComercialWeb fora: 503. Recusa dele na lista: 403; no detalhe: 404 (a permissão já foi conferida aqui).
+- App: aba de canais conforme as permissões do usuário (`/me/permissions` agora inclui as duas). Só pedido de marketplace tem detalhe; o da Loja Virtual ainda não existe na API do ComercialWeb.
 
 ### Módulo Dashboard
 
@@ -167,6 +175,16 @@ App ──POST /api/v1/pre-sales (Idempotency-Key)──► API .NET ──POST 
 
 No app: tokens em `expo-secure-store` com `WHEN_UNLOCKED_THIS_DEVICE_ONLY`; `android.allowBackup=false`; 401 força logout; retry automático desabilitado por padrão; `Idempotency-Key` em operações com efeito financeiro/estoque.
 
+## Riscos conhecidos e decisões (revisão de 2026-09-29)
+
+- **MySQL em dev:** o usuário `mobile_api` com privilégio mínimo é o correto. Em desenvolvimento local (container sem acesso root) a API usou temporariamente o usuário do próprio Laravel (privilégio total no banco dele). **Só dev**: produção e homologação usam `mobile_api`, e o `migrate` roda com uma conta de deploy separada.
+- **Scheme `comercialweb://` não é exclusivo:** outro app instalado no aparelho pode registrá-lo e receber o `code` quando o QR é lido pela **câmera do sistema** (o leitor dentro do app não é afetado). O código é de uso único e vale 2 min, e o pareamento por deep link pede confirmação, mas o risco existe. Mitigação de longo prazo: App Links/Universal Links verificados (`https://<domínio>/pair?...`), o que depende do formato do QR gerado pelo ComercialWeb.
+- **Rate limit por IP e deploy:** o IP do cliente vem do `ForwardedHeaders`. Ao definir o deploy, configure `KnownProxies` com o IP exato do proxy (nunca uma rede larga). Com a API em container atrás de um nginx no host, sem isso todos os aparelhos caem no mesmo balde (10 pareamentos/min para todos).
+- **`X-Mobile-Client-Ip` fora da assinatura HMAC:** a assinatura cobre timestamp, método, caminho e corpo. Incluir o IP exige mudar o contrato do lado Laravel; hoje o risco é teórico (TLS entre os servidores, código de uso único).
+- **Bloqueio por versão:** o `minAppVersion` só é reavaliado no pareamento e a cada refresh. Com a tela "Atualização necessária" aberta o app não faz requisições; se o administrador baixar a versão mínima, o aparelho sai do bloqueio ao desconectar e parear de novo (ou ao instalar a atualização).
+- **Renovação do token do ComercialWeb:** serializada por sessão dentro de uma instância da API (`DeviceLink`); com várias instâncias seria preciso lock no banco (`GET_LOCK`).
+- **429 do ComercialWeb nos repasses** (`/stock`, `/orders`) chega ao app como 503, e o app repete GET com backoff; um `Retry-After` repassado seria melhor.
+
 ## Threat model inicial
 
 | Ameaça | Controle |
@@ -201,12 +219,15 @@ App ──POST /api/v1/auth/pair {code}──► .NET ──POST /api/mobile/v1/
 
 - O ComercialWeb decide quem é o usuário e a empresa; o app só manda o `code` (60 alfanuméricos, uso único, 2 min). Código inválido, expirado, já usado ou sem `mobile.access`: 422 igual. ComercialWeb fora do ar: 503.
 - O par de tokens do ComercialWeb fica só no servidor, em `mobile_sessions.cw_tokens`, cifrado com Data Protection. Nunca chega ao app.
-- **Servidor do ComercialWeb vem de `ComercialWeb__BaseUrl`, nunca do QR.** Um QR forjado não pode apontar a API para outro host (SSRF). O app ignora o `server` do QR.
+- **Servidor do ComercialWeb vem de `ComercialWeb__BaseUrl`, nunca do QR.** Um QR forjado não pode apontar a API para outro host (SSRF). O app não usa o `server` do QR como endereço de chamada; só o valida pelas regras do ambiente (`AppEnvironment`: HTTPS + allowlist em `vps`, HTTP só de rede privada em `local`) e recusa QR fora delas sem chamar a API.
 - **Revogação:** a cada refresh do app (10 min) o .NET faz `GET /bootstrap` com o token do aparelho. Aparelho revogado no painel web, ou usuário/empresa diferentes: sessão revogada (`device_revoked`). Access do ComercialWeb expirado: renova com o refresh dele e guarda o novo par. ComercialWeb indisponível: **não** derruba o app (fail-open; o JWT segue revalidado contra usuário/empresa a cada chamada).
 - Logout do app chama `/auth/logout` do ComercialWeb (melhor esforço) e revoga a sessão local.
 - `/auth/pair` (10/min) e `/auth/refresh` (30/min) têm rate limit por IP. No refresh, só quem ganha a rotação do token consulta o ComercialWeb (evita corrida no refresh dele). Qualquer 4xx do ComercialWeb, exceto 429, conta como aparelho recusado; só 5xx, 429 e falha de rede são fail-open. `pair` que falha depois de criar o aparelho lá o desfaz com logout.
 - Configuração em produção: `ComercialWeb__BaseUrl` (HTTPS obrigatório fora de dev), `DataProtection__KeysPath` (obrigatório fora de dev; volume persistente, fora de backup do banco, permissão 700; chave perdida = sessões pareadas caem e exigem novo QR). Migration `0002` só adiciona colunas anuláveis (`cw_device_id`, `cw_tokens`).
-- Limitação: o rate limit do `/pair` no ComercialWeb (10/min) é por IP, e todos os pareamentos chegam do IP do .NET. Se virar gargalo, liberar o IP do .NET no ComercialWeb ou repassar o IP do app. Se alargar `KnownNetworks` de ForwardedHeaders, o rate limit por IP passa a ser falsificável via X-Forwarded-For.
+- **Versão mínima do app:** o `GET /bootstrap` que a API já faz no pareamento e em cada refresh traz `api.min_app_version`; a API o devolve ao app como `minAppVersion` (nunca inventa valor se o ComercialWeb não responde). O app compara com a própria versão e mostra a tela "Atualização necessária" se for menor; versão ausente ou ilegível nunca bloqueia.
+- **`/pair` assinado (contrato atual do ComercialWeb):** o .NET assina o corpo exato com HMAC-SHA256 (`X-Mobile-Timestamp`, `X-Mobile-Signature`, mesmo helper `MobileSignature` da pré-venda e do PDV) usando `ComercialWeb__MobileApiSecret` (= `MOBILE_API_SECRET` do Laravel, 32+ caracteres, nunca versionado). Sem segredo configurado o pareamento fica indisponível (503) sem chamar o ComercialWeb. 401 no `/pair` significa segredo ou relógio divergente (janela de 5 min): vira 503 com log de erro, nunca "código inválido".
+- **IP do aparelho:** o .NET envia `X-Mobile-Client-Ip` (IP resolvido pelo ForwardedHeaders, sem porta) para o rate limit do `/pair` ser por aparelho no ComercialWeb. Se alargar `KnownNetworks` de ForwardedHeaders, esse IP passa a ser falsificável via X-Forwarded-For.
+- Rate limit das demais rotas (bootstrap, sales, sync, refresh) é por aparelho no ComercialWeb; 429 no `/bootstrap` segue fail-open.
 - Pendente conhecido: `LoginThrottle` nunca remove chaves antigas (só importa com login por senha ligado); sessões de login por senha não têm vínculo com o ComercialWeb.
 - Leituras (vendas, produtos, clientes, notificações) seguem por SQL direto por enquanto; migrar módulo a módulo para `/api/mobile/v1` remove a duplicação de regras.
 

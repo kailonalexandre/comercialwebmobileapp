@@ -20,7 +20,8 @@ public sealed record RefreshTokenState(
 
 public sealed record Profile(string UserName, long BusinessId, string BusinessName);
 
-public sealed record IssuedSession(string AccessToken, string RefreshToken, DateTimeOffset ExpiresAt);
+/// <param name="MinAppVersion">api.min_app_version do ComercialWeb (quando disponível): o app bloqueia versões menores.</param>
+public sealed record IssuedSession(string AccessToken, string RefreshToken, DateTimeOffset ExpiresAt, string? MinAppVersion = null);
 
 /// <summary>Persistência do módulo. Consultas às tabelas do ComercialWeb são somente leitura.</summary>
 public interface IIdentityStore

@@ -86,7 +86,7 @@ public sealed class PreSaleApiTests(PreSaleFixture api) : IClassFixture<PreSaleF
 
         // Mesma fórmula que o middleware PHP confere.
         var timestamp = request.Headers.GetValues("X-Mobile-Timestamp").Single();
-        Assert.Equal(ComercialWebClient.Sign(PreSaleFixture.Secret, timestamp, "POST", ComercialWebClient.PreSalesPath, body),
+        Assert.Equal(ComercialWeb.Mobile.Identity.Infrastructure.MobileSignature.Sign(PreSaleFixture.Secret, timestamp, "POST", ComercialWebClient.PreSalesPath, body),
             request.Headers.GetValues("X-Mobile-Signature").Single());
         Assert.InRange(long.Parse(timestamp, System.Globalization.CultureInfo.InvariantCulture), DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 60, DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 60);
 

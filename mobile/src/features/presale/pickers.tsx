@@ -25,6 +25,7 @@ export function PickProductScreen() {
   return (
     <ListScreen
       title="Adicionar produto"
+      scanBarcode
       searchPlaceholder="Nome, código, SKU ou código de barras"
       emptyMessage="Nenhum produto encontrado."
       fetchPage={fetchProducts}

@@ -14,6 +14,7 @@ export function ProductsScreen() {
       searchPlaceholder="Nome, código, SKU ou código de barras"
       emptyMessage="Nenhum produto encontrado."
       fetchPage={fetchProducts}
+      scanBarcode
       keyOf={(p) => String(p.id)}
       onBack={() => router.back()}
       renderRow={(p) => (
