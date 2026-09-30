@@ -47,7 +47,7 @@ Comandos e chaves em `deploy/k8s/prod/secret.example.yaml` (K3s) e no cabeçalho
   1. Pré-requisito do rate limit por IP: `kubectl apply -f deploy/k8s/cluster/traefik-real-ip.yaml` (ver o cabeçalho do arquivo; rollback: `kubectl delete -f`). Sem isso todos os clientes dividem o mesmo IP no Traefik.
   2. `sed` do SHA e `kubectl apply -k deploy/k8s/prod` (Deployment, Middlewares, IngressRoute e Certificate).
   3. `kubectl -n comercial-prod rollout status deploy/mobile-api` e `kubectl -n comercial-prod get certificate mobile-api-tls` (deve ficar `READY=True`).
-- **Dev (Compose):** `cp deploy/dev/* /srv/mobile-api-dev/`, criar `mobile-api.env` e `jwt.pem` (chmod 600), `docker compose -p mobile-api-dev -f compose.mobile-api.yaml --env-file mobile-api.env up -d`; instalar o vhost (`apache-vhost.api-dev.conf`), `a2enmod proxy proxy_http headers`, `certbot --apache -d api.dev.infinitsolucoesweb.com.br`.
+- **Dev (Compose):** `copiar deploy/dev/ para /root/Projetos/mobile-api/ (roteiro completo em DEPLOY_DEV.md)`, criar `mobile-api.env` e `jwt.pem` (chmod 600), `docker compose -p mobile-api-dev -f compose.mobile-api.yaml --env-file mobile-api.env up -d`; instalar o vhost (`apache-vhost.api-dev.conf`), `a2enmod proxy proxy_http headers`, `certbot --apache -d api.dev.infinitsolucoesweb.com.br`.
 
 ## 5. Conferir
 1. **Saúde:** `curl -s -o /dev/null -w "%{http_code}\n" https://<dominio-da-api>/health` → `200`.
