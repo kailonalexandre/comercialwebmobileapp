@@ -4,6 +4,22 @@ Valores reais de dev: API `https://api.dev.infinitsolucoesweb.com.br`, Comercial
 MySQL no host `172.16.0.1:3306`, banco `comercial_web_dev`, imagem `ghcr.io/kailonalexandre/comercialweb-mobile-api`,
 sub-rede da API `172.29.250.0/24` (fixa no Compose). Contexto e regras: [DEPLOY.md](DEPLOY.md). **Nunca cole senhas no chat.**
 
+## Regra de ouro
+**Não instalar nem alterar nada que não seja do app mobile.** Este roteiro só cria, e nada mais:
+- a pasta `/srv/mobile-api-dev` e um projeto Compose próprio (`mobile-api-dev`: 2 containers, 1 rede `172.29.250.0/24`, 1 volume);
+- 2 usuários MySQL (`mobile_api`, e `mobile_deploy` que é apagado no fim) e as tabelas `mobile_*` no banco de dev;
+- 1 vhost do Apache (`api-dev`) e 1 certificado para `api.dev.infinitsolucoesweb.com.br`;
+- 1 regra de firewall (MySQL só para a sub-rede da API), se o `ufw` estiver ativo.
+
+Não toca no ComercialWeb, no blue/green dele, nos outros sites e containers da VPS, nem no `certbot` (já instalado). Se o mapeamento abaixo mostrar que algo **do mobile** falta (por exemplo um módulo do Apache), instala-se só isso, com aviso antes; nada além.
+
+## Passo zero: mapear a VPS (somente leitura)
+```bash
+scp deploy/dev/mapear-vps.sh <USUARIO>@72.60.14.161:/tmp/
+ssh <USUARIO>@72.60.14.161 'bash /tmp/mapear-vps.sh 2>&1 | tee /tmp/mapa-vps.txt'
+```
+O script não instala, não cria e não altera nada, e não imprime segredos. Confere: sistema e disco, ferramentas, containers, redes (**conflito com `172.29.250.0/24`**), portas (80, 443, 3306, **8088 livre**), Apache (módulos e sites), certificados, DNS da API, firewall, MySQL (bind, usuários, bancos) e se o ComercialWeb de dev tem o `MOBILE_API_SECRET` e a rota do pareamento. **Só siga para o passo 0 depois de conferir a saída.**
+
 ## 0. Da sua máquina: copiar os 3 arquivos (não precisa clonar o repositório na VPS)
 ```bash
 cd ~/Documents/ComercialWebMobile
@@ -16,10 +32,8 @@ sudo mkdir -p /srv/mobile-api-dev && sudo chown "$USER" /srv/mobile-api-dev
 mv /tmp/compose.mobile-api.yaml /tmp/nginx-mobile-api.conf /tmp/apache-vhost.api-dev.conf /srv/mobile-api-dev/
 cd /srv/mobile-api-dev
 docker compose version | head -1
-ss -ltn | grep -c ':8088 ' ; command -v certbot || echo "certbot ausente"
-sudo ufw status 2>/dev/null | head -3
 ```
-(`8088` deve dar `0`. Se o `ufw` estiver ativo, o passo 6 libera o MySQL só para a sub-rede da API.)
+(Já mapeado no passo zero: `8088` livre, sem conflito de rede, `certbot` presente.)
 
 ## 2. Imagem (token `read:packages`)
 ```bash
@@ -103,9 +117,9 @@ Esperado: `saude local: 200` e o log sem `fail:`/`ERROR`.
 ## 7. Apache (TLS) e certificado
 ```bash
 sudo cp apache-vhost.api-dev.conf /etc/apache2/sites-available/api-dev.conf
-sudo a2enmod proxy proxy_http headers
+sudo a2enmod proxy proxy_http headers     # só os que o mapeamento mostrar como desabilitados; habilitar módulo não instala pacote
 sudo a2ensite api-dev && sudo apache2ctl configtest && sudo systemctl reload apache2
-sudo certbot --apache -d api.dev.infinitsolucoesweb.com.br     # se faltar: sudo apt install certbot python3-certbot-apache
+sudo certbot --apache -d api.dev.infinitsolucoesweb.com.br     # certbot já instalado na VPS
 ```
 
 ## 8. Conferir
