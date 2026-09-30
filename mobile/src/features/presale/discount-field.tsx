@@ -21,14 +21,14 @@ export function DiscountField({ label, value, onChange, disabled }: Props) {
   const [text, setText] = useState(discountText(value));
   const [invalid, setInvalid] = useState(false);
 
-  function change(nextText: string, nextKind: Discount['kind'] = kind) {
+  function change(nextText: string) {
     setText(nextText);
     if (nextText.trim() === '') {
       setInvalid(false);
       onChange(undefined);
       return;
     }
-    const parsed = parseDiscount(nextKind, nextText);
+    const parsed = parseDiscount(kind, nextText);
     setInvalid(parsed === null);
     if (parsed) onChange(parsed);
   }
@@ -45,8 +45,12 @@ export function DiscountField({ label, value, onChange, disabled }: Props) {
         options={KINDS}
         selected={kind}
         onSelect={(next) => {
+          if (next === kind) return;
+          // Trocar % por R$ (ou o contrário) não reinterpreta o número digitado: recomeça vazio.
           setKind(next);
-          if (!disabled) change(text, next);
+          setText('');
+          setInvalid(false);
+          if (!disabled) onChange(undefined);
         }}
       />
       <TextField

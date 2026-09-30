@@ -24,7 +24,7 @@ public static partial class ReceiptEndpoints
 
     public static IEndpointRouteBuilder MapReceiptEndpoints(this IEndpointRouteBuilder app)
     {
-        var receipt = app.MapGroup("/api/v1/sales/{id:long}/receipt");
+        var receipt = app.MapGroup("/api/v1/sales/{id:long:min(1)}/receipt");
 
         receipt.MapPost("/whatsapp", async (long id, ReceiptWhatsAppRequest? body, ClaimsPrincipal user, ReceiptClient client, CancellationToken ct) =>
         {
@@ -37,14 +37,14 @@ public static partial class ReceiptEndpoints
             return result.Status == ReceiptStatus.Ok
                 ? Results.Json(new { message = "Comprovante enviado para a fila do WhatsApp." }, statusCode: StatusCodes.Status202Accepted)
                 : Problem(result);
-        }).RequireAnyPermission(Permissions);
+        }).RequireAnyPermission(Permissions).RequireRateLimiting(IdentityModule.ReceiptPolicy);
 
         receipt.MapPost("/pdf", async (long id, ClaimsPrincipal user, ReceiptClient client, CancellationToken ct) =>
         {
             var ids = SessionIds.From(user)!;
             var (pdf, failure) = await client.PdfAsync(ids.UserId, ids.BusinessId, id, ct);
             return pdf is null ? Problem(failure!) : Results.File(pdf.Content, "application/pdf", pdf.FileName);
-        }).RequireAnyPermission(Permissions);
+        }).RequireAnyPermission(Permissions).RequireRateLimiting(IdentityModule.ReceiptPolicy);
 
         return app;
     }

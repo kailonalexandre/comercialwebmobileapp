@@ -1,4 +1,4 @@
-import { File, Paths } from 'expo-file-system';
+import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 
 import { api } from '@/infrastructure/api';
@@ -32,6 +32,17 @@ export async function sendReceiptWhatsApp(saleId: number, phone?: string): Promi
   }
 }
 
+// Melhor esforço: falha ao listar ou apagar não impede o novo compartilhamento.
+function clearOldReceipts() {
+  try {
+    for (const item of new Directory(Paths.cache).list()) {
+      if (item instanceof File && /comprovante-\d+\.pdf$/.test(item.uri)) item.delete();
+    }
+  } catch {
+    // sem cache legível: segue
+  }
+}
+
 /** Baixa o PDF do comprovante e abre a folha de compartilhar do sistema. Devolve false se o aparelho não compartilha. */
 export async function shareReceiptPdf(saleId: number): Promise<boolean> {
   if (!api) {
@@ -39,19 +50,25 @@ export async function shareReceiptPdf(saleId: number): Promise<boolean> {
     return false;
   }
   const bytes = await api.request<Uint8Array>(`/v1/sales/${saleId}/receipt/pdf`, { method: 'POST', body: {}, binary: true });
+  // O comprovante tem dados do cliente. Não é apagado logo após abrir a folha de compartilhar (o app de destino ainda
+  // pode estar lendo o arquivo): as cópias anteriores saem antes de gravar a nova, e a última some com o cache do sistema.
+  clearOldReceipts();
   const file = new File(Paths.cache, `comprovante-${saleId}.pdf`);
-  file.create({ overwrite: true });
-  file.write(bytes);
   try {
-    if (!(await Sharing.isAvailableAsync())) return false;
+    file.create({ overwrite: true });
+    file.write(bytes);
+    if (!(await Sharing.isAvailableAsync())) {
+      file.delete();
+      return false;
+    }
     await Sharing.shareAsync(file.uri, { mimeType: 'application/pdf', dialogTitle: 'Compartilhar comprovante', UTI: 'com.adobe.pdf' });
     return true;
-  } finally {
-    // O comprovante tem dados do cliente: não deixa cópia no cache depois de compartilhar.
+  } catch (e) {
     try {
-      file.delete();
+      file.delete(); // gravação parcial não fica no cache
     } catch {
-      // já removido pelo sistema
+      // nada a apagar
     }
+    throw e;
   }
 }

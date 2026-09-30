@@ -11,7 +11,7 @@ import { ListRow } from '@/shared/components/list-row';
 import { StatusPill } from '@/shared/components/status-pill';
 import { Text } from '@/shared/components/text';
 import { useDetail } from '@/shared/hooks/use-detail';
-import { colors, fonts, spacing } from '@/shared/theme/tokens';
+import { spacing } from '@/shared/theme/tokens';
 import { formatCents } from '@/shared/utils/format';
 
 const channelLabel: Record<string, string> = { mercadolivre: 'Mercado Livre' };
@@ -27,7 +27,7 @@ export function MarketplaceOrderScreen() {
         <>
           <View style={styles.hero}>
             <StatusPill label={o.status} tone="primary" />
-            <Text style={styles.heroTotal} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+            <Text variant="hero" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
               {formatCents(o.totalCents)}
             </Text>
             <Text variant="mono" color="textMuted">
@@ -60,5 +60,4 @@ export function MarketplaceOrderScreen() {
 
 const styles = StyleSheet.create({
   hero: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.lg },
-  heroTotal: { fontFamily: fonts.bold, fontSize: 40, lineHeight: 48, color: colors.text },
 });

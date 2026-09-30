@@ -87,6 +87,10 @@ export const typography = {
   label: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
   caption: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
   mono: { fontFamily: fonts.mono, fontSize: 14, lineHeight: 20 },
+  monoSmall: { fontFamily: fonts.mono, fontSize: 12, lineHeight: 16 },
+  // Totais em destaque: rodapé (total) e cartões de valor (hero).
+  total: { fontFamily: fonts.bold, fontSize: 24, lineHeight: 30 },
+  hero: { fontFamily: fonts.bold, fontSize: 40, lineHeight: 48 },
 } as const;
 
 export const shadow = {

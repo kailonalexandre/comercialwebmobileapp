@@ -10,7 +10,7 @@ import { DetailFrame } from '@/features/shell/detail-frame';
 import { StatusPill } from '@/shared/components/status-pill';
 import { Text } from '@/shared/components/text';
 import { useDetail } from '@/shared/hooks/use-detail';
-import { colors, fonts, radius, shadow, spacing } from '@/shared/theme/tokens';
+import { colors, radius, shadow, spacing } from '@/shared/theme/tokens';
 import { formatCents } from '@/shared/utils/format';
 
 function Line({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
@@ -35,7 +35,7 @@ export function SaleDetailScreen() {
         <>
           <View style={styles.hero}>
             <StatusPill label={statusLabel(sale.status)} tone={statusTone(sale.status)} />
-            <Text style={styles.heroTotal} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{formatCents(sale.totalCents)}</Text>
+            <Text variant="hero" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{formatCents(sale.totalCents)}</Text>
             <Text variant="mono" color="textMuted">
               {sale.number} · {formatLocal(sale.createdAt)}
             </Text>
@@ -106,7 +106,6 @@ export function SaleDetailScreen() {
 
 const styles = StyleSheet.create({
   hero: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.lg },
-  heroTotal: { fontFamily: fonts.bold, fontSize: 40, lineHeight: 48, color: colors.text },
   card: { gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.background, ...shadow.card },
   between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   line: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md },

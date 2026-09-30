@@ -99,11 +99,15 @@ public sealed partial class ReceiptClient(HttpClient http, IConfiguration config
                 return new ReceiptFailure(ReceiptStatus.NotFound);
             case HttpStatusCode.UnprocessableEntity:
                 var dto = Read(body);
-                var reason = dto?.Reason ?? dto?.Error?.Reason;
+                // Só o que o app sabe tratar sai daqui: detalhe interno do upstream nunca vira `reason`/`code`.
+                var raw = dto?.Reason ?? dto?.Error?.Reason;
+                var reason = raw is "connection_missing" or "customer_phone_missing" ? raw : null;
                 // Sem error.code é validação estrutural do Laravel (ex.: telefone inválido): mensagem genérica nossa.
-                return dto?.Error?.Code is { } code
-                    ? new ReceiptFailure(ReceiptStatus.Refused, code, reason, dto.Error.Message)
-                    : new ReceiptFailure(ReceiptStatus.Refused, "validation", reason);
+                return dto?.Error?.Code is "business_rule" or "forbidden" or "not_found"
+                    ? new ReceiptFailure(ReceiptStatus.Refused, dto.Error.Code, reason, dto.Error.Message)
+                    : dto?.Error?.Code is null
+                        ? new ReceiptFailure(ReceiptStatus.Refused, "validation", reason)
+                        : new ReceiptFailure(ReceiptStatus.Refused, "business_rule", reason, dto.Error.Message);
             default:
                 LogUnexpectedStatus(logger, (int)status);
                 return new ReceiptFailure(ReceiptStatus.Unavailable);

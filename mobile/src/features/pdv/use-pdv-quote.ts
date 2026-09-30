@@ -14,7 +14,8 @@ export type QuoteState = { status: 'idle' | 'loading' | 'ready' | 'error'; quote
  * recebimento é conferido. Refaz sozinha quando itens, quantidades ou cliente mudam.
  */
 export function usePdvQuote(draft: Draft, enabled: boolean): QuoteState {
-  const [state, setState] = useState<QuoteState>({ status: 'idle', quote: null, error: null, registerClosed: false });
+  // `forRequest` diz de qual pedido é a cotação guardada: mudou o carrinho ou o desconto, ela deixa de valer na hora.
+  const [state, setState] = useState<QuoteState & { forRequest: string | null }>({ status: 'idle', quote: null, error: null, registerClosed: false, forRequest: null });
   const request = draft.items.length > 0 ? JSON.stringify(toRequest(draft)) : null;
 
   useEffect(() => {
@@ -22,7 +23,7 @@ export function usePdvQuote(draft: Draft, enabled: boolean): QuoteState {
     let active = true;
     const timer = setTimeout(() => {
       fetchQuote(JSON.parse(request) as ReturnType<typeof toRequest>)
-        .then((quote) => active && setState({ status: 'ready', quote, error: null, registerClosed: false }))
+        .then((quote) => active && setState({ status: 'ready', quote, error: null, registerClosed: false, forRequest: request }))
         .catch((e: unknown) => {
           if (!active) return;
           const refusal = e instanceof ApiError ? e.refusal : undefined;
@@ -31,6 +32,7 @@ export function usePdvQuote(draft: Draft, enabled: boolean): QuoteState {
             quote: null,
             error: refusal?.message ?? userMessage(e) ?? 'Não foi possível calcular o total.',
             registerClosed: refusal?.code === 'cash_register_closed',
+            forRequest: request,
           });
         });
     }, DEBOUNCE_MS);
@@ -41,5 +43,7 @@ export function usePdvQuote(draft: Draft, enabled: boolean): QuoteState {
   }, [request, enabled]);
 
   // Sem itens não há o que cotar: o estado antigo não vale.
-  return request === null ? { status: 'idle', quote: null, error: null, registerClosed: false } : state;
+  if (request === null) return { status: 'idle', quote: null, error: null, registerClosed: false };
+  if (state.forRequest !== request) return { status: 'loading', quote: null, error: null, registerClosed: false };
+  return state;
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { useSession } from '@/features/auth/session-context';
 import { sendReceiptWhatsApp, shareReceiptPdf } from '@/features/sales/receipt-api';
 import { Button } from '@/shared/components/button';
 import { Text } from '@/shared/components/text';
@@ -11,6 +12,7 @@ type Notice = { tone: 'success' | 'danger' | 'textMuted'; text: string } | null;
 
 // Comprovante da venda: envia pelo WhatsApp da empresa (template do ComercialWeb) ou compartilha o PDF por outro app.
 export function ReceiptActions({ saleId }: { saleId: number }) {
+  const { profile } = useSession();
   const [busy, setBusy] = useState<'whatsapp' | 'pdf' | null>(null);
   const [askPhone, setAskPhone] = useState(false);
   const [phone, setPhone] = useState('');
@@ -52,6 +54,10 @@ export function ReceiptActions({ saleId }: { saleId: number }) {
       setBusy(null);
     }
   }
+
+  // Mesmas permissões que a API aceita (sales.view, sales.access ou pdv.access; a lista do app traz as duas visíveis).
+  const allowed = profile?.permissions.some((p) => p === 'sales.view' || p === 'pdv.access') ?? false;
+  if (!allowed) return null;
 
   return (
     <View style={styles.box}>

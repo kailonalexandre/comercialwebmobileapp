@@ -9,7 +9,7 @@ import { ReceiptActions } from '@/features/sales/receipt-actions';
 import { Button } from '@/shared/components/button';
 import { Icon } from '@/shared/components/icon';
 import { Text } from '@/shared/components/text';
-import { colors, fonts, layout, radius, shadow, spacing, touchTarget } from '@/shared/theme/tokens';
+import { colors, layout, radius, shadow, spacing, touchTarget } from '@/shared/theme/tokens';
 import { formatCents } from '@/shared/utils/format';
 
 export function NewSaleScreen() {
@@ -49,7 +49,7 @@ export function NewSaleScreen() {
         <Pressable accessibilityRole="button" accessibilityLabel="Voltar" onPress={() => router.back()} style={styles.back}>
           <Icon name="chevron-back" size={26} color={colors.text} />
         </Pressable>
-        <Text variant="title" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={{ flex: 1 }}>Nova pré-venda</Text>
+        <Text variant="title" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={styles.flex}>Nova pré-venda</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -81,7 +81,7 @@ export function NewSaleScreen() {
             <Text variant="caption" color="textMuted">
               Total estimado
             </Text>
-            <Text style={styles.footerTotal} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{formatCents(estimateCents(draft.items, draft.saleDiscount))}</Text>
+            <Text variant="total" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{formatCents(estimateCents(draft.items, draft.saleDiscount))}</Text>
           </View>
           <View style={styles.footerButton}>
             <Button label="Enviar" onPress={send} loading={phase.name === 'sending'} disabled={!canSend(draft)} />
@@ -101,7 +101,6 @@ const styles = StyleSheet.create({
   between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
   flex: { flex: 1 },
   footer: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, padding: spacing.lg, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border },
-  footerTotal: { fontFamily: fonts.bold, fontSize: 24, lineHeight: 30, color: colors.text },
   footerButton: { flex: 1 },
   doneBlock: { flex: 1, justifyContent: 'center', gap: spacing.lg, padding: spacing.xl },
   doneIcon: { width: 72, height: 72, borderRadius: radius.pill, backgroundColor: colors.successSoft, alignItems: 'center', justifyContent: 'center' },

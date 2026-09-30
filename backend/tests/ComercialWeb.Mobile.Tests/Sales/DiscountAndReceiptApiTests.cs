@@ -92,6 +92,29 @@ public sealed class ReceiptApiTests(ReceiptFixture api) : IClassFixture<ReceiptF
     }
 
     [Fact]
+    public async Task Motivo_e_codigo_desconhecidos_do_comercialweb_nao_chegam_ao_app()
+    {
+        TestDatabase.RequireMySql();
+        Reply(HttpStatusCode.UnprocessableEntity, """{"success":false,"reason":"stack_trace_do_php","error":{"code":"internal_detail_x","message":"Texto de operador."}}""");
+
+        var body = await (await Post("ana", "/api/v1/sales/77/receipt/whatsapp")).Content.ReadFromJsonAsync<JsonElement>(Ct);
+
+        Assert.False(body.TryGetProperty("reason", out _));
+        Assert.Equal("business_rule", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Id_zero_ou_negativo_nem_chega_ao_comercialweb()
+    {
+        TestDatabase.RequireMySql();
+        Reply(HttpStatusCode.Accepted, """{"success":true}""");
+
+        Assert.Equal(HttpStatusCode.NotFound, (await Post("ana", "/api/v1/sales/0/receipt/whatsapp")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Post("ana", "/api/v1/sales/-3/receipt/pdf")).StatusCode);
+        Assert.Empty(api.ComercialWeb.Received);
+    }
+
+    [Fact]
     public async Task Telefone_invalido_no_laravel_e_validation_sem_vazar_mensagem_interna()
     {
         TestDatabase.RequireMySql();
@@ -162,4 +185,23 @@ public sealed class ReceiptApiTests(ReceiptFixture api) : IClassFixture<ReceiptF
     [InlineData("a b.pdf", "ab.pdf")]
     public void Nome_do_arquivo_so_aceita_caracteres_seguros(string? raw, string expected) =>
         Assert.Equal(expected, ReceiptClient.SafeFileName(raw, 5));
+}
+
+public sealed class ReceiptRateLimitTests(ReceiptFixture api) : IClassFixture<ReceiptFixture>
+{
+    private static CancellationToken Ct => TestContext.Current.CancellationToken;
+
+    [Fact]
+    public async Task Envio_em_massa_do_mesmo_usuario_e_freado_com_429_e_outro_usuario_nao_e_afetado()
+    {
+        TestDatabase.RequireMySql();
+        api.ComercialWeb.Reply = () => FakeComercialWeb.Json(HttpStatusCode.Accepted, """{"success":true}""");
+        var ana = await api.SignedInAsync("ana");
+
+        var statuses = new List<HttpStatusCode>();
+        for (var i = 0; i < 22; i++) statuses.Add((await ana.PostAsJsonAsync($"/api/v1/sales/{i + 1}/receipt/whatsapp", new { phone = "11912345678" }, Ct)).StatusCode);
+
+        Assert.Equal(20, statuses.Count(s => s == HttpStatusCode.Accepted));
+        Assert.Equal(2, statuses.Count(s => s == HttpStatusCode.TooManyRequests));
+    }
 }

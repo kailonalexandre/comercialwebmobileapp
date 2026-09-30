@@ -37,6 +37,8 @@ public static class SalesModule
         {
             if (Uri.TryCreate(config["ComercialWeb:BaseUrl"], UriKind.Absolute, out var baseUrl)) http.BaseAddress = baseUrl;
             http.Timeout = TimeSpan.FromSeconds(30);
+            // Resposta maior que um PDF de comprovante nunca é lida inteira para a memória (estoura como falha de rede: 503).
+            http.MaxResponseContentBufferSize = 15 * 1024 * 1024;
         });
         return services;
     }

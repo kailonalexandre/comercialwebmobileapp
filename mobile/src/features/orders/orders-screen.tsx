@@ -25,7 +25,7 @@ function OrderRow({ order, channel }: { order: Order; channel: OrderChannel }) {
     <ListRow
       title={order.customer}
       subtitle={
-        <Text variant="mono" color="textMuted" style={styles.mono}>
+        <Text variant="monoSmall" color="textMuted">
           {order.number} · {formatLocal(order.createdAt)}
         </Text>
       }
@@ -75,5 +75,4 @@ export function OrdersScreen() {
 
 const styles = StyleSheet.create({
   trailing: { alignItems: 'flex-end', gap: spacing.xs },
-  mono: { fontSize: 12, lineHeight: 16 },
 });

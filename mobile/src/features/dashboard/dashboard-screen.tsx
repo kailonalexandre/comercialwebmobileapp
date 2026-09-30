@@ -117,7 +117,7 @@ export function DashboardScreen() {
                 </Text>
               </View>
             </View>
-            <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{formatCents(sales.totalCents)}</Text>
+            <Text variant="hero" color="textInverse" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{formatCents(sales.totalCents)}</Text>
             <Text variant="caption" color="textInverseMuted">
               {sales.count} {sales.count === 1 ? 'venda finalizada' : 'vendas finalizadas'}
             </Text>
@@ -211,7 +211,7 @@ export function DashboardScreen() {
                   <Text variant="label" numberOfLines={1}>
                     {sale.customerName ?? 'Consumidor final'}
                   </Text>
-                  <Text variant="mono" color="textMuted" style={styles.mono} numberOfLines={1}>
+                  <Text variant="monoSmall" color="textMuted" numberOfLines={1}>
                     {sale.number ? `${sale.number} · ` : ''}
                     {formatLocal(sale.occurredAt)}
                   </Text>
@@ -246,7 +246,6 @@ const styles = StyleSheet.create({
   heroCircle: { position: 'absolute', top: -60, right: -50, width: 190, height: 190, borderRadius: radius.pill, backgroundColor: colors.overlay },
   dateChip: { paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: radius.pill, backgroundColor: colors.overlay },
   dateText: { fontFamily: fonts.bold },
-  heroValue: { fontFamily: fonts.bold, fontSize: 38, lineHeight: 46, color: colors.textInverse },
   heroRow: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg },
   heroStat: { flex: 1, gap: 2, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.overlay },
   quickRow: { flexDirection: 'row', justifyContent: 'space-between' },
@@ -259,6 +258,5 @@ const styles = StyleSheet.create({
   attentionIcon: { width: 36, height: 36, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
   saleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.background, ...shadow.card },
   saleEnd: { alignItems: 'flex-end', gap: spacing.xs },
-  mono: { fontSize: 12, lineHeight: 16 },
   empty: { paddingVertical: spacing.lg, textAlign: 'center' },
 });

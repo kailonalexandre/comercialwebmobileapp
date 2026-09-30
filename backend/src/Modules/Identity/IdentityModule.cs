@@ -28,6 +28,9 @@ public static class IdentityModule
 {
     private const string PairPolicy = "pair";
     private const string RefreshPolicy = "refresh";
+
+    /// <summary>Envio e download de comprovante: por usuário, para um vendedor não disparar WhatsApp em massa pelo número da empresa.</summary>
+    public const string ReceiptPolicy = "receipt";
     private const int MaxInput = 255; // mesmo teto do ComercialWeb: bcrypt de entrada gigante vira DoS de CPU
 
     public static IServiceCollection AddIdentityModule(this IServiceCollection services, IConfiguration config, IHostEnvironment env)
@@ -62,6 +65,9 @@ public static class IdentityModule
         {
             o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
             o.AddPolicy(PairPolicy, http => RateLimitPartition.GetFixedWindowLimiter(http.Connection.RemoteIpAddress?.ToString() ?? "?", _ => new() { PermitLimit = 10, Window = TimeSpan.FromMinutes(1) }));
+            o.AddPolicy(ReceiptPolicy, http => RateLimitPartition.GetFixedWindowLimiter(
+                SessionIds.From(http.User) is { } ids ? $"u{ids.UserId}" : http.Connection.RemoteIpAddress?.ToString() ?? "?",
+                _ => new() { PermitLimit = 20, Window = TimeSpan.FromMinutes(1) }));
             o.AddPolicy(RefreshPolicy, http => RateLimitPartition.GetFixedWindowLimiter(http.Connection.RemoteIpAddress?.ToString() ?? "?", _ => new() { PermitLimit = 30, Window = TimeSpan.FromMinutes(1) }));
         });
         services.AddScoped<IPermissionChecker, MySqlPermissionChecker>();

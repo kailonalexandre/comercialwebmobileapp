@@ -30,7 +30,7 @@ function SaleRow({ sale }: { sale: SaleListItem }) {
       label={`${sale.customerName ?? 'Consumidor final'}, ${formatCents(sale.totalCents)}`}
       onPress={() => router.push({ pathname: '/venda/[id]', params: { id: String(sale.id) } })}
       subtitle={
-        <Text variant="mono" color="textMuted" style={styles.mono}>
+        <Text variant="monoSmall" color="textMuted">
           {sale.number} · {formatLocal(sale.createdAt).slice(11)}
         </Text>
       }
@@ -78,6 +78,5 @@ export function SalesScreen() {
 
 const styles = StyleSheet.create({
   trailing: { alignItems: 'flex-end', gap: spacing.xs },
-  mono: { fontSize: 12, lineHeight: 16 },
   newButton: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.lg, minHeight: 44, borderRadius: radius.lg, backgroundColor: colors.primarySoft },
 });
