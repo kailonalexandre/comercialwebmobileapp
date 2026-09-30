@@ -9,7 +9,7 @@ import { ReceiptActions } from '@/features/sales/receipt-actions';
 import { Button } from '@/shared/components/button';
 import { Icon } from '@/shared/components/icon';
 import { Text } from '@/shared/components/text';
-import { colors, radius, spacing, touchTarget } from '@/shared/theme/tokens';
+import { colors, fonts, radius, shadow, spacing, touchTarget } from '@/shared/theme/tokens';
 import { formatCents } from '@/shared/utils/format';
 
 export function NewSaleScreen() {
@@ -54,16 +54,6 @@ export function NewSaleScreen() {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <DraftEditor store={store} mode="presale" locked={locked} />
 
-        <View style={styles.card}>
-          <View style={styles.between}>
-            <Text variant="label">Total estimado</Text>
-            <Text variant="label">{formatCents(estimateCents(draft.items, draft.saleDiscount))}</Text>
-          </View>
-          <Text variant="caption" color="textMuted">
-            O total final é calculado pelo ComercialWeb, com preço, desconto e estoque atuais.
-          </Text>
-        </View>
-
         {phase.name === 'editing' && phase.error && (
           <Text color="danger" accessibilityLiveRegion="polite">
             {phase.error}
@@ -81,10 +71,22 @@ export function NewSaleScreen() {
               Se descartar, confira em Vendas se a pré-venda anterior chegou a ser criada.
             </Text>
           </View>
-        ) : (
-          <Button label="Enviar pré-venda" onPress={send} loading={phase.name === 'sending'} disabled={!canSend(draft)} />
-        )}
+        ) : null}
       </ScrollView>
+
+      {phase.name !== 'uncertain' && (
+        <View style={styles.footer}>
+          <View style={styles.flex}>
+            <Text variant="caption" color="textMuted">
+              Total estimado
+            </Text>
+            <Text style={styles.footerTotal}>{formatCents(estimateCents(draft.items, draft.saleDiscount))}</Text>
+          </View>
+          <View style={styles.footerButton}>
+            <Button label="Enviar" onPress={send} loading={phase.name === 'sending'} disabled={!canSend(draft)} />
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -94,9 +96,12 @@ const styles = StyleSheet.create({
   top: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
   back: { width: touchTarget, height: touchTarget, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', marginLeft: -spacing.sm },
   content: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl * 2 },
-  card: { gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border },
+  card: { gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.background, ...shadow.card },
   between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
   flex: { flex: 1 },
+  footer: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, padding: spacing.lg, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border },
+  footerTotal: { fontFamily: fonts.bold, fontSize: 24, lineHeight: 30, color: colors.text },
+  footerButton: { flex: 1 },
   doneBlock: { flex: 1, justifyContent: 'center', gap: spacing.lg, padding: spacing.xl },
   doneIcon: { width: 72, height: 72, borderRadius: radius.pill, backgroundColor: colors.successSoft, alignItems: 'center', justifyContent: 'center' },
 });

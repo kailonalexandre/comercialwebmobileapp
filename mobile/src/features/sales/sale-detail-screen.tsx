@@ -10,7 +10,7 @@ import { DetailFrame } from '@/features/shell/detail-frame';
 import { StatusPill } from '@/shared/components/status-pill';
 import { Text } from '@/shared/components/text';
 import { useDetail } from '@/shared/hooks/use-detail';
-import { colors, radius, spacing } from '@/shared/theme/tokens';
+import { colors, fonts, radius, shadow, spacing } from '@/shared/theme/tokens';
 import { formatCents } from '@/shared/utils/format';
 
 function Line({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
@@ -33,14 +33,18 @@ export function SaleDetailScreen() {
     <DetailFrame title="Venda" loading={!sale && !failure} failure={failure} error={error} notFoundMessage="Venda não encontrada." onRetry={reload}>
       {sale && (
         <>
+          <View style={styles.hero}>
+            <StatusPill label={statusLabel(sale.status)} tone={statusTone(sale.status)} />
+            <Text style={styles.heroTotal}>{formatCents(sale.totalCents)}</Text>
+            <Text variant="mono" color="textMuted">
+              {sale.number} · {formatLocal(sale.createdAt)}
+            </Text>
+          </View>
+
           <View style={styles.card}>
-            <View style={styles.between}>
-              <Text variant="title">{sale.number}</Text>
-              <StatusPill label={statusLabel(sale.status)} tone={statusTone(sale.status)} />
-            </View>
-            <Text color="textMuted">{formatLocal(sale.createdAt)}</Text>
-            <Text>{sale.customerName ?? 'Consumidor final'}</Text>
-            {sale.sellerName && <Text color="textMuted">Vendedor: {sale.sellerName}</Text>}
+            <Line label="Cliente" value={sale.customerName ?? 'Consumidor final'} />
+            {sale.sellerName && <Line label="Vendedor" value={sale.sellerName} />}
+            {sale.payments.length > 0 && <Line label="Pagamento" value={sale.payments.map((p) => p.method).join(', ')} />}
           </View>
 
           <Text variant="heading">Itens</Text>
@@ -101,7 +105,9 @@ export function SaleDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  card: { gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border },
+  hero: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.lg },
+  heroTotal: { fontFamily: fonts.bold, fontSize: 40, lineHeight: 48, color: colors.text },
+  card: { gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.background, ...shadow.card },
   between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   line: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md },
   item: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.xs },

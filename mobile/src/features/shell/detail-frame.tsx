@@ -7,7 +7,7 @@ import { Icon } from '@/shared/components/icon';
 import { StateView } from '@/shared/components/state-view';
 import { Text } from '@/shared/components/text';
 import type { DetailFailure } from '@/shared/hooks/use-detail';
-import { colors, radius, spacing, touchTarget } from '@/shared/theme/tokens';
+import { colors, radius, shadow, spacing, touchTarget } from '@/shared/theme/tokens';
 import { userMessage } from '@/shared/utils/error-message';
 
 type Props = {
@@ -25,10 +25,13 @@ export function DetailFrame({ title, loading, failure, error, notFoundMessage, o
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
       <View style={styles.top}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Voltar" onPress={() => router.back()} style={styles.back}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Voltar" onPress={() => router.back()} style={[styles.back, styles.backFilled]}>
           <Icon name="chevron-back" size={26} color={colors.text} />
         </Pressable>
-        <Text variant="heading">{title}</Text>
+        <Text variant="heading" style={styles.title}>
+          {title}
+        </Text>
+        <View style={styles.back} />
       </View>
       {loading && <StateView kind="loading" />}
       {failure === 'not_found' && <StateView kind="empty" message={notFoundMessage} />}
@@ -41,6 +44,9 @@ export function DetailFrame({ title, loading, failure, error, notFoundMessage, o
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.page },
   top: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
-  back: { width: touchTarget, height: touchTarget, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', marginLeft: -spacing.sm },
+  title: { flex: 1, textAlign: 'center' },
+  backFilled: { backgroundColor: colors.background, ...shadow.card },
+  // O botão da direita é só um espaço para manter o título centralizado.
+  back: { width: touchTarget, height: touchTarget, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
   content: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl * 2 },
 });

@@ -1,7 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 
 import { Text } from '@/shared/components/text';
-import { colors, radius, spacing } from '@/shared/theme/tokens';
+import { colors, radius, shadow, spacing } from '@/shared/theme/tokens';
 
 type Row = { label: string; value: string | null | undefined };
 
@@ -24,6 +24,6 @@ export function InfoCard({ rows }: { rows: Row[] }) {
 }
 
 const styles = StyleSheet.create({
-  card: { gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border },
+  card: { gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.background, ...shadow.card },
   row: { gap: 2 },
 });

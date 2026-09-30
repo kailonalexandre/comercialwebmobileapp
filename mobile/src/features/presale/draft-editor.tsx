@@ -9,7 +9,7 @@ import { Button } from '@/shared/components/button';
 import { Icon } from '@/shared/components/icon';
 import { Text } from '@/shared/components/text';
 import { TextField } from '@/shared/components/text-field';
-import { colors, radius, spacing, touchTarget } from '@/shared/theme/tokens';
+import { colors, radius, shadow, spacing, touchTarget } from '@/shared/theme/tokens';
 import { formatCents } from '@/shared/utils/format';
 
 export type DraftMode = 'presale' | 'pdv';
@@ -121,7 +121,7 @@ export function DraftEditor({ store, mode, locked, integerQuantity = false, canD
 }
 
 const styles = StyleSheet.create({
-  card: { gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border },
+  card: { gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.background, ...shadow.card },
   between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
   flex: { flex: 1 },
   remove: { width: touchTarget, height: touchTarget, alignItems: 'center', justifyContent: 'center' },

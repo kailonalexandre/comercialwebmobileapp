@@ -3,13 +3,14 @@ import { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AppHeader } from '@/features/shell/app-header';
-import { Icon, type IconName } from '@/shared/components/icon';
+import { useSession } from '@/features/auth/session-context';
+import { EnvBadge } from '@/shared/components/env-badge';
+import { type IconName } from '@/shared/components/icon';
 import { IconTile } from '@/shared/components/icon-tile';
 import { StateView } from '@/shared/components/state-view';
 import { Text } from '@/shared/components/text';
 import { TextField } from '@/shared/components/text-field';
-import { colors, radius, spacing, touchTarget, type Tone } from '@/shared/theme/tokens';
+import { colors, radius, shadow, spacing, type Tone } from '@/shared/theme/tokens';
 import { normalizeSearch } from '@/shared/utils/format';
 
 type Module = { title: string; description: string; icon: IconName; tone: Tone; href?: '/configuracoes' | '/pedidos' };
@@ -27,6 +28,7 @@ const modules: Module[] = [
 ];
 
 export function MenuScreen() {
+  const { profile } = useSession();
   const [query, setQuery] = useState('');
 
   const visible = useMemo(() => {
@@ -38,43 +40,43 @@ export function MenuScreen() {
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <AppHeader />
-        <View style={styles.titleBlock}>
-          <Text variant="title">Menu</Text>
-          <Text color="textMuted">Acesse todos os módulos do sistema.</Text>
-        </View>
+        <Text variant="title">Menu</Text>
 
-        <TextField
-          icon="search-outline"
-          placeholder="Buscar no menu"
-          value={query}
-          onChangeText={setQuery}
-          autoCorrect={false}
-          returnKeyType="search"
-        />
+        <Pressable accessibilityRole="button" accessibilityLabel="Configurações da conta" onPress={() => router.push('/configuracoes')} style={styles.user}>
+          <View style={styles.avatar}>
+            <Text variant="heading" color="onPrimary">
+              {profile?.userName.charAt(0).toUpperCase() || '·'}
+            </Text>
+          </View>
+          <View style={styles.flex}>
+            <Text variant="label">{profile?.userName ?? '…'}</Text>
+            <Text variant="caption" color="textMuted">
+              {profile?.businessName ?? ''}
+            </Text>
+          </View>
+          <EnvBadge />
+        </Pressable>
+
+        <TextField icon="search-outline" placeholder="Buscar módulo" value={query} onChangeText={setQuery} autoCorrect={false} returnKeyType="search" />
 
         {visible.length === 0 && <StateView kind="empty" message="Nenhum módulo encontrado." />}
-        {visible.map((m) => (
-          <Pressable
-            key={m.title}
-            accessibilityRole="button"
-            accessibilityLabel={`${m.title}. ${m.description}`}
-            onPress={() => (m.href ? router.push(m.href) : Alert.alert(m.title, 'Em breve.'))}
-            style={({ pressed }) => [styles.item, pressed && styles.pressed]}
-          >
-            <IconTile icon={m.icon} tone={m.tone} size={52} />
-            <View style={styles.flex}>
-              <Text variant="label" style={styles.itemTitle}>
-                {m.title}
-              </Text>
+        <View style={styles.grid}>
+          {visible.map((m) => (
+            <Pressable
+              key={m.title}
+              accessibilityRole="button"
+              accessibilityLabel={`${m.title}. ${m.description}`}
+              onPress={() => (m.href ? router.push(m.href) : Alert.alert(m.title, 'Em breve.'))}
+              style={({ pressed }) => [styles.item, pressed && styles.pressed]}
+            >
+              <IconTile icon={m.icon} tone={m.tone} size={40} />
+              <Text variant="label">{m.title}</Text>
               <Text variant="caption" color="textMuted">
                 {m.description}
               </Text>
-            </View>
-            <Icon name="chevron-forward" size={20} color={colors.primary} />
-          </Pressable>
-        ))}
-
+            </Pressable>
+          ))}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -83,19 +85,10 @@ export function MenuScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.page },
   content: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl * 2 },
-  flex: { flex: 1, gap: 2 },
-  titleBlock: { gap: spacing.xs, marginVertical: spacing.sm },
-  item: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.lg,
-    padding: spacing.md,
-    minHeight: touchTarget + spacing.xl,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
-  },
-  itemTitle: { fontSize: 17, lineHeight: 22 },
+  flex: { flex: 1 },
+  user: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.background, ...shadow.card },
+  avatar: { width: 48, height: 48, borderRadius: radius.pill, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
+  item: { flexBasis: '47%', flexGrow: 1, gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.background, ...shadow.card },
   pressed: { opacity: 0.7 },
 });
