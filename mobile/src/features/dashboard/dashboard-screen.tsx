@@ -94,7 +94,6 @@ export function DashboardScreen() {
               {firstName ? `${greeting(now.getHours())}, ${firstName}` : greeting(now.getHours())}
             </Text>
           </View>
-          <EnvBadge />
           <Pressable accessibilityRole="button" accessibilityLabel={`Notificações, ${unread} não lidas`} onPress={() => router.push('/notificacoes')} style={styles.roundButton}>
             <Icon name="notifications-outline" size={22} color={colors.text} />
             {unread > 0 && <View style={styles.dot} />}
@@ -105,6 +104,8 @@ export function DashboardScreen() {
             </Text>
           </Pressable>
         </View>
+
+        <EnvBadge />
 
         {sales && (
           <View style={styles.hero}>
