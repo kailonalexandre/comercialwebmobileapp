@@ -1,4 +1,7 @@
-export type DraftItem = { productId: number; name: string; unitPriceCents: number; quantity: number };
+// Desconto é só a intenção do vendedor: percentual (0 a 99,99) OU valor em centavos. O ComercialWeb aplica e limita.
+export type Discount = { kind: 'percent'; percent: number } | { kind: 'value'; cents: number };
+
+export type DraftItem = { productId: number; name: string; unitPriceCents: number; quantity: number; discount?: Discount };
 
 // Valor recebido por forma de pagamento (só o PDV usa; a pré-venda não recebe).
 export type PaymentLine = { method: string; label: string; amountCents: number };
@@ -8,6 +11,7 @@ export type Draft = {
   observation: string;
   items: DraftItem[];
   payments: PaymentLine[];
+  saleDiscount?: Discount;
 };
 
 export const emptyDraft: Draft = { customer: null, observation: '', items: [], payments: [] };
@@ -39,16 +43,50 @@ export const setQuantity = (items: DraftItem[], productId: number, quantity: num
 
 export const removeItem = (items: DraftItem[], productId: number): DraftItem[] => items.filter((i) => i.productId !== productId);
 
+// "10,5" -> { percent: 10.5 }; "12,50" -> { cents: 1250 }. Vazio, inválido ou fora do limite = null.
+export function parseDiscount(kind: Discount['kind'], text: string): Discount | null {
+  if (kind === 'value') {
+    const cents = parseMoney(text);
+    return cents === null ? null : { kind, cents };
+  }
+  const m = /^\s*(\d{1,2})(?:[.,](\d{1,2}))?\s*$/.exec(text);
+  if (!m) return null;
+  const percent = Number(`${m[1]}.${m[2] ?? '0'}`);
+  return percent > 0 && percent <= 99.99 ? { kind, percent } : null;
+}
+
+// Texto para o campo de edição (inverso de parseDiscount).
+export function discountText(d: Discount | undefined): string {
+  if (!d) return '';
+  return d.kind === 'percent' ? String(d.percent).replace('.', ',') : (d.cents / 100).toFixed(2).replace('.', ',');
+}
+
+// Campos do contrato da API: um só por par (percentual OU valor), no item ou na venda.
+export function discountFields(d: Discount | undefined, scope: 'item' | 'sale' = 'item'): Record<string, number> {
+  if (!d) return {};
+  const [percentKey, centsKey] = scope === 'sale' ? ['saleDiscountPercent', 'saleDiscountCents'] : ['discountPercent', 'discountCents'];
+  return d.kind === 'percent' ? { [percentKey]: d.percent } : { [centsKey]: d.cents };
+}
+
+const discountOf = (base: number, d: Discount | undefined): number =>
+  d === undefined ? 0 : Math.min(base, d.kind === 'percent' ? Math.round((base * d.percent) / 100) : d.cents);
+
 // Só estimativa para o usuário: o servidor recalcula preço, desconto e total.
-export const estimateCents = (items: DraftItem[]): number =>
-  items.reduce((sum, i) => sum + Math.round(i.unitPriceCents * i.quantity), 0);
+export const estimateCents = (items: DraftItem[], saleDiscount?: Discount): number => {
+  const subtotal = items.reduce((sum, i) => {
+    const base = Math.round(i.unitPriceCents * i.quantity);
+    return sum + base - discountOf(base, i.discount);
+  }, 0);
+  return subtotal - discountOf(subtotal, saleDiscount);
+};
 
 // O que vai no corpo do pedido. Preço e total nunca são enviados.
 export function toRequest(draft: Draft) {
   return {
     customerId: draft.customer?.id ?? null,
     observation: draft.observation.trim() || null,
-    items: draft.items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
+    items: draft.items.map((i) => ({ productId: i.productId, quantity: i.quantity, ...discountFields(i.discount) })),
+    ...discountFields(draft.saleDiscount, 'sale'),
   };
 }
 

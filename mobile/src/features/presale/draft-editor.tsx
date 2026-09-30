@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import type { DraftValue } from '@/features/presale/draft-context';
+import { DiscountField } from '@/features/presale/discount-field';
 import { MAX_OBSERVATION, parseQuantity, removeItem, setQuantity, type DraftItem } from '@/features/presale/draft-model';
 import { Button } from '@/shared/components/button';
 import { Icon } from '@/shared/components/icon';
@@ -43,7 +44,7 @@ function QuantityField({ item, disabled, store, integer }: { item: DraftItem; di
 }
 
 // Cliente, itens e observação: igual na pré-venda e no PDV. `mode` diz a qual rascunho os seletores devem responder.
-export function DraftEditor({ store, mode, locked, integerQuantity = false }: { store: DraftValue; mode: DraftMode; locked: boolean; integerQuantity?: boolean }) {
+export function DraftEditor({ store, mode, locked, integerQuantity = false, canDiscount = true }: { store: DraftValue; mode: DraftMode; locked: boolean; integerQuantity?: boolean; canDiscount?: boolean }) {
   const { draft, setDraft } = store;
   return (
     <>
@@ -86,11 +87,25 @@ export function DraftEditor({ store, mode, locked, integerQuantity = false }: { 
             )}
           </View>
           <QuantityField item={item} disabled={locked} store={store} integer={integerQuantity} />
+          {canDiscount && (
+            <DiscountField
+              label="Desconto no produto"
+              value={item.discount}
+              disabled={locked}
+              onChange={(discount) => setDraft((d) => ({ ...d, items: d.items.map((i) => (i.productId === item.productId ? { ...i, discount } : i)) }))}
+            />
+          )}
         </View>
       ))}
       {integerQuantity && <Text variant="caption" color="textMuted">No PDV a quantidade é em unidades inteiras.</Text>}
       {!locked && (
         <Button label="Adicionar produto" variant="outline" icon="add" onPress={() => router.push({ pathname: '/selecionar-produto', params: { mode } })} />
+      )}
+
+      {canDiscount && draft.items.length > 0 && (
+        <View style={styles.card}>
+          <DiscountField label="Desconto na venda" value={draft.saleDiscount} disabled={locked} onChange={(saleDiscount) => setDraft((d) => ({ ...d, saleDiscount }))} />
+        </View>
       )}
 
       <TextField

@@ -5,6 +5,7 @@ import { StyleSheet, View } from 'react-native';
 import { formatLocal } from '@/features/dashboard/dashboard-model';
 import { fetchSale } from '@/features/sales/sales-api';
 import { formatQuantity, statusLabel, statusTone } from '@/features/sales/sales-model';
+import { ReceiptActions } from '@/features/sales/receipt-actions';
 import { DetailFrame } from '@/features/shell/detail-frame';
 import { StatusPill } from '@/shared/components/status-pill';
 import { Text } from '@/shared/components/text';
@@ -90,6 +91,9 @@ export function SaleDetailScreen() {
               <Text color="textMuted">{sale.observation}</Text>
             </>
           )}
+
+          <Text variant="heading">Comprovante</Text>
+          <ReceiptActions saleId={sale.id} />
         </>
       )}
     </DetailFrame>

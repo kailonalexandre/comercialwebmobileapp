@@ -12,7 +12,7 @@ export type ApiErrorKind =
   | 'unknown';
 
 // Erro tipado. `message` é sempre genérica; detalhes técnicos ficam no servidor, rastreáveis pelo correlationId.
-export type Refusal = { code?: string; message?: string; totalCents?: number; remainingCents?: number };
+export type Refusal = { code?: string; message?: string; reason?: string; totalCents?: number; remainingCents?: number };
 
 export class ApiError extends Error {
   constructor(
@@ -44,6 +44,8 @@ export type RequestOptions = {
   idempotencyKey?: string;
   // Rotas sem sessão (login, refresh): não envia token e 401 significa credencial inválida.
   anonymous?: boolean;
+  // A resposta é um arquivo (ex.: PDF): devolve os bytes em vez de JSON.
+  binary?: boolean;
 };
 
 // Resultado da renovação: 'network' não derruba a sessão (usuário pode estar só offline).
@@ -96,7 +98,7 @@ async function readRefusal(response: Response): Promise<Refusal | undefined> {
     const b = (await response.json()) as Record<string, unknown>;
     const text = (v: unknown) => (typeof v === 'string' && v.length <= 300 ? v : undefined);
     const cents = (v: unknown) => (typeof v === 'number' && Number.isSafeInteger(v) ? v : undefined);
-    return { code: text(b.code), message: text(b.message), totalCents: cents(b.totalCents), remainingCents: cents(b.remainingCents) };
+    return { code: text(b.code), message: text(b.message), reason: text(b.reason), totalCents: cents(b.totalCents), remainingCents: cents(b.remainingCents) };
   } catch {
     return undefined;
   }
@@ -165,6 +167,7 @@ export function createApiClient({
       );
     }
     if (response.status === 204) return undefined as T;
+    if (options.binary) return new Uint8Array(await response.arrayBuffer()) as T;
     return (await response.json()) as T;
   }
 

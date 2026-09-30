@@ -4,9 +4,11 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { fetchPaymentMethods, type PaymentMethod } from '@/features/pdv/pdv-api';
+import { useSession } from '@/features/auth/session-context';
 import { usePdvDraft } from '@/features/pdv/pdv-draft';
 import { usePdvQuote } from '@/features/pdv/use-pdv-quote';
 import { DraftEditor } from '@/features/presale/draft-editor';
+import { ReceiptActions } from '@/features/sales/receipt-actions';
 import { addPayment, changeCents, paidCents, parseMoney, remainingCents, removePayment } from '@/features/presale/draft-model';
 import { Button } from '@/shared/components/button';
 import { Icon } from '@/shared/components/icon';
@@ -17,6 +19,9 @@ import { formatCents } from '@/shared/utils/format';
 
 export function PdvScreen() {
   const store = usePdvDraft();
+  const { profile } = useSession();
+  // Só esconde o campo; o ComercialWeb confere pdv.discount em cada venda.
+  const canDiscount = profile?.permissions.includes('pdv.discount') ?? false;
   const { draft, phase, setDraft, send, reset } = store;
   const locked = phase.name !== 'editing';
   const quote = usePdvQuote(draft, phase.name === 'editing');
@@ -68,6 +73,7 @@ export function PdvScreen() {
               Troco: {formatCents(phase.sale.changeCents ?? 0)}
             </Text>
           )}
+          <ReceiptActions saleId={phase.sale.saleId} />
           <Button label="Nova venda" onPress={reset} />
           <Button
             label="Ver vendas"
@@ -87,9 +93,15 @@ export function PdvScreen() {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text variant="title">PDV</Text>
 
-        <DraftEditor store={store} mode="pdv" locked={locked} integerQuantity />
+        <DraftEditor store={store} mode="pdv" locked={locked} integerQuantity canDiscount={canDiscount} />
 
         <View style={styles.card}>
+          {(quote.quote?.discountCents ?? 0) > 0 && (
+            <View style={styles.between}>
+              <Text color="textMuted">Descontos</Text>
+              <Text color="textMuted">- {formatCents(quote.quote?.discountCents ?? 0)}</Text>
+            </View>
+          )}
           <View style={styles.between}>
             <Text variant="label">Total</Text>
             <Text variant="heading">{quote.status === 'loading' && total === null ? 'Calculando…' : total === null ? '—' : formatCents(total)}</Text>

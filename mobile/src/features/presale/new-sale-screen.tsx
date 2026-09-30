@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { DraftEditor } from '@/features/presale/draft-editor';
 import { canSend, estimateCents } from '@/features/presale/draft-model';
 import { usePreSaleDraft } from '@/features/presale/presale-draft';
+import { ReceiptActions } from '@/features/sales/receipt-actions';
 import { Button } from '@/shared/components/button';
 import { Icon } from '@/shared/components/icon';
 import { Text } from '@/shared/components/text';
@@ -27,6 +28,7 @@ export function NewSaleScreen() {
           <Text color="textMuted">
             Nº {phase.sale.number} · {formatCents(phase.sale.totalCents)}
           </Text>
+          <ReceiptActions saleId={phase.sale.saleId} />
           <Button
             label="Ver vendas"
             onPress={() => {
@@ -55,7 +57,7 @@ export function NewSaleScreen() {
         <View style={styles.card}>
           <View style={styles.between}>
             <Text variant="label">Total estimado</Text>
-            <Text variant="label">{formatCents(estimateCents(draft.items))}</Text>
+            <Text variant="label">{formatCents(estimateCents(draft.items, draft.saleDiscount))}</Text>
           </View>
           <Text variant="caption" color="textMuted">
             O total final é calculado pelo ComercialWeb, com preço, desconto e estoque atuais.

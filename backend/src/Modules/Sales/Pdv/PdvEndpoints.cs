@@ -25,6 +25,9 @@ public static class PdvEndpoints
     // Mesma permissão do grupo de rotas do PDV da web; o ComercialWeb confere de novo.
     public const string UsePdv = "pdv.access";
 
+    // Só para o app esconder o campo de desconto; o ComercialWeb confere de novo em cada venda.
+    public const string DiscountPdv = "pdv.discount";
+
     public static IEndpointRouteBuilder MapPdvEndpoints(this IEndpointRouteBuilder app)
     {
         var pdv = app.MapGroup("/api/v1/pdv");
