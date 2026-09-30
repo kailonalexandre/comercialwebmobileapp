@@ -4,9 +4,10 @@ import type { ConfigContext, ExpoConfig } from 'expo/config';
 // o nativo é gerado aqui (nunca edite android/ ou ios/ à mão). Trocou de flavor? `expo prebuild --clean`.
 export default ({ config }: ConfigContext): ExpoConfig => {
   const local = process.env.EXPO_PUBLIC_APP_ENV === 'local';
-  // Um .env.local esquecido no ambiente não pode virar build de produção com HTTP liberado.
-  if (local && process.env.EAS_BUILD_PROFILE === 'production') {
-    throw new Error('EXPO_PUBLIC_APP_ENV=local não é permitido no perfil de build production.');
+  // Um .env.local esquecido no ambiente não pode virar build distribuído (produção ou testadores) com HTTP liberado.
+  // Teste na rede local usa o perfil development ou o build local (Gradle), nunca um perfil distribuído.
+  if (local && ['production', 'preview'].includes(process.env.EAS_BUILD_PROFILE ?? '')) {
+    throw new Error('EXPO_PUBLIC_APP_ENV=local não é permitido nos perfis de build production e preview.');
   }
   // Push (opcional): o arquivo do Firebase e o id do projeto EAS entram por variável, nunca versionados.
   const googleServicesFile = process.env.GOOGLE_SERVICES_JSON;

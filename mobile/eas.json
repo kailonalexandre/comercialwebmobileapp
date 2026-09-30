@@ -9,7 +9,7 @@
     "preview": {
       "distribution": "internal",
       "android": { "buildType": "apk" },
-      "env": { "EXPO_PUBLIC_APP_ENV": "local" }
+      "env": { "EXPO_PUBLIC_APP_ENV": "vps" }
     },
     "production": {
       "env": { "EXPO_PUBLIC_APP_ENV": "vps" }
