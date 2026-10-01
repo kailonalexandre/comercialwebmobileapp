@@ -46,7 +46,7 @@ sec "Certificados (certbot)"
 sudo -n certbot certificates 2>/dev/null | grep -E 'Certificate Name|Domains|Expiry' || echo "sem sudo sem senha: rode 'sudo certbot certificates' e cole só os nomes e domínios"
 
 sec "DNS da API de dev (deve apontar para este servidor)"
-echo "api.dev -> $(dig +short api.dev.infinitsolucoesweb.com.br 2>/dev/null | tr '\n' ' ')   | IP público deste servidor: $(curl -s -m 5 https://ifconfig.me 2>/dev/null)"
+echo "api.dev -> $(dig +short api.dev.infinitsolucoesweb.com.br 2>/dev/null | tr '\n' ' ')   | IP público deste servidor: $(curl -4 -s -m 5 https://ifconfig.me 2>/dev/null)"
 
 sec "Firewall"
 sudo -n ufw status 2>/dev/null | head -14 || echo "sem sudo sem senha: rode 'sudo ufw status'"
