@@ -23,6 +23,18 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         ...(local && { NSAppTransportSecurity: { NSAllowsLocalNetworking: true } }),
       },
     },
-    plugins: [...(config.plugins ?? []), ['expo-build-properties', { android: { usesCleartextTraffic: local } }]],
+    plugins: [
+      ...(config.plugins ?? []),
+      [
+        'expo-build-properties',
+        {
+          android: {
+            usesCleartextTraffic: local,
+            // Teste interno em aparelho real: só arm64 (4x menos compilação nativa e disco). Produção mantém todas as ABIs.
+            ...(process.env.EAS_BUILD_PROFILE === 'dev-vps' && { buildArchs: ['arm64-v8a'] }),
+          },
+        },
+      ],
+    ],
   };
 };

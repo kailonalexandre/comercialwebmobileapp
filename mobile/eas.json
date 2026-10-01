@@ -11,6 +11,15 @@
       "android": { "buildType": "apk" },
       "env": { "EXPO_PUBLIC_APP_ENV": "vps" }
     },
+    "dev-vps": {
+      "distribution": "internal",
+      "android": { "buildType": "apk" },
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "vps",
+        "EXPO_PUBLIC_API_URL": "https://api.dev.infinitsolucoesweb.com.br/api",
+        "EXPO_PUBLIC_ALLOWED_SERVER_HOSTS": "dev.infinitsolucoesweb.com.br"
+      }
+    },
     "production": {
       "env": { "EXPO_PUBLIC_APP_ENV": "vps" }
     }
