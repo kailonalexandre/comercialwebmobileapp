@@ -73,6 +73,7 @@ export function ListScreen<T>({ title, subtitle, searchPlaceholder, emptyMessage
     <SafeAreaView edges={['top']} style={styles.root}>
       <FlatList
         ref={scroller}
+        showsVerticalScrollIndicator={false}
         data={list.items}
         keyExtractor={keyOf}
         renderItem={({ item, index }) => {
