@@ -39,18 +39,18 @@ public sealed partial class PushDispatcher(PushStore store, IPushSender sender, 
             var pending = await store.PendingAsync(token, PerCycleCap, createdBefore, ct);
             if (pending.Count == 0) continue;
 
-            // Vendas feitas pelo próprio app não geram aviso no celular (só no web); a marca d'água avança por cima delas.
-            var toSend = pending.Where(n => !n.FromApp).ToList();
+            // Vendas feitas pelo próprio app (só avisam no web) e domínios silenciados não geram push; a marca d'água avança por cima.
+            var toSend = pending.Where(n => !n.Skip).ToList();
             var results = toSend.Count == 0
                 ? []
                 : await sender.SendAsync([.. toSend.Select(n => new PushMessage(token.Token, n.Title, n.Body, n.Id, n.EntityType, n.EntityId))], ct);
             var outcomes = toSend.Zip(results).ToDictionary(x => x.First.Id, x => x.Second);
 
-            // Avança até a última entrega OK (ou venda do app, que não precisa de aviso) antes do primeiro erro.
+            // Avança até a última entrega OK (ou item sem push: venda do app/silenciado) antes do primeiro erro.
             long? lastOk = null;
             foreach (var n in pending)
             {
-                if (n.FromApp)
+                if (n.Skip)
                 {
                     lastOk = n.Id;
                     continue;
