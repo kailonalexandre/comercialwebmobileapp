@@ -142,6 +142,11 @@ GRANT UPDATE (read_at, archived_at, updated_at) ON $BANCO.notifications TO 'mobi
 DROP USER IF EXISTS 'mobile_deploy'@'172.29.250.%';
 SQL
 ok "privilégios do mobile_api; conta de deploy removida"
+# Preferências de aviso (migration 0005, imagem nova): a tabela só existe a partir dessa imagem, então o GRANT é condicional.
+if [ "$(sudo mysql -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$BANCO' AND table_name='mobile_push_mutes'")" = 1 ]; then
+  sudo mysql -e "GRANT INSERT, UPDATE, DELETE ON $BANCO.mobile_push_mutes TO 'mobile_api'@'172.29.250.%';"
+  ok "privilégio de mobile_push_mutes (preferências de aviso)"
+fi
 
 # subir
 compose up -d
@@ -158,4 +163,8 @@ echo; echo "== 4. Conferências =="
 curl -s -o /dev/null -w "  saúde https:       %{http_code} (esperado 200)\n" "https://$DOMINIO/health"
 curl -s -o /dev/null -w "  pair com código falso: %{http_code} (esperado 422; 503 = segredo/relógio divergente)\n" -X POST "https://$DOMINIO/api/v1/auth/pair" -H 'Content-Type: application/json' -d "{\"code\":\"$(printf 'a%.0s' $(seq 60))\"}"
 printf '  rate limit (18 chamadas): '; for i in $(seq 1 18); do curl -s -o /dev/null -w '%{http_code} ' -X POST "https://$DOMINIO/api/v1/auth/pair" -H 'Content-Type: application/json' -d '{}'; done; echo "(esperado: 422 ... depois 429)"
+# Push: precisa de Push__Enabled=true no container e de aparelhos que tenham registrado o token (APK com google-services.json).
+PUSH_ON=$(docker exec "${PROJ}-mobile-api-1" printenv Push__Enabled 2>/dev/null || true)
+[ "$PUSH_ON" = true ] && ok "push ligado no container (Push__Enabled=true)" || falha "push DESLIGADO no container (Push__Enabled='${PUSH_ON:-vazio}'): confira o compose.mobile-api.yaml em $ALVO"
+echo "  aparelhos com push registrado: $(sudo mysql -N -e "SELECT COUNT(*) FROM $BANCO.mobile_push_tokens" 2>/dev/null || echo '?') (0 = nenhum APK com Firebase conectou ainda)"
 echo; echo "Pronto. Para atualizar depois: bash $0 <novo SHA>. Para parar: docker compose -p $PROJ -f $ALVO/compose.mobile-api.yaml down"

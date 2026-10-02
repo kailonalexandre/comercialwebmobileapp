@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router';
 import { View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon, type IconName } from '@/shared/components/icon';
 import { fonts, radius, shadow, spacing, typography } from '@/shared/theme/tokens';
@@ -15,9 +16,13 @@ const tab = (title: string, icon: IconName, activeIcon: IconName) => ({
   tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon name={focused ? activeIcon : icon} focused={focused} />,
 });
 
+const TAB_BAR_HEIGHT = 60;
+
 export default function AppTabsLayout() {
   const styles = useStyles();
   const { colors } = useTheme();
+  // Altura explícita: botões (Fabio) ou gesto (Ivan) nunca encostam nos rótulos, e o mínimo vale mesmo se o aparelho reportar inset 0.
+  const bottom = Math.max(useSafeAreaInsets().bottom, spacing.md);
   return (
     <Tabs
       screenOptions={{
@@ -26,7 +31,7 @@ export default function AppTabsLayout() {
         tabBarInactiveTintColor: colors.textMuted,
         tabBarAllowFontScaling: false,
         tabBarLabelStyle: { fontFamily: fonts.semibold, fontSize: typography.caption.fontSize - 2 },
-        tabBarStyle: styles.bar,
+        tabBarStyle: [styles.bar, { height: TAB_BAR_HEIGHT + bottom, paddingBottom: bottom }],
         tabBarItemStyle: styles.item,
       }}
     >
@@ -55,7 +60,7 @@ export default function AppTabsLayout() {
 }
 
 const useStyles = makeStyles((colors) => ({
-  bar: { paddingTop: spacing.sm, backgroundColor: colors.background, borderTopColor: colors.border },
+  bar: { paddingTop: 2, backgroundColor: colors.background, borderTopColor: colors.border },
   item: { gap: 2 },
   pdvIcon: { width: 56, height: 32, alignItems: 'center' },
   pdvButton: {

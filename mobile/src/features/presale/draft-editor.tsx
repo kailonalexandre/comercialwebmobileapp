@@ -1,10 +1,14 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, Pressable, View } from 'react-native';
 
+import { fetchPricesIn } from '@/features/catalog/products-api';
+import { applyPrices } from '@/features/pricing/price-table-model';
+import { PriceTablePicker } from '@/features/pricing/price-table-picker';
+import { usePriceTables } from '@/features/pricing/price-tables';
 import type { DraftValue } from '@/features/presale/draft-context';
 import { DiscountField } from '@/features/presale/discount-field';
-import { MAX_OBSERVATION, parseQuantity, removeItem, setQuantity, type DraftItem } from '@/features/presale/draft-model';
+import { estimateCents, MAX_OBSERVATION, parseQuantity, removeItem, setQuantity, type DraftItem } from '@/features/presale/draft-model';
 import { Button } from '@/shared/components/button';
 import { Icon } from '@/shared/components/icon';
 import { Text } from '@/shared/components/text';
@@ -50,6 +54,49 @@ export function DraftEditor({ store, mode, locked, integerQuantity = false, canD
   const styles = useStyles();
   const { colors } = useTheme();
   const { draft, setDraft } = store;
+  const { selected, select, label } = usePriceTables();
+  const [switching, setSwitching] = useState(false);
+
+  // Operação nova (carrinho vazio) começa na tabela que o usuário vem usando.
+  useEffect(() => {
+    if (!locked && draft.items.length === 0 && draft.priceTable !== selected) setDraft((d) => ({ ...d, priceTable: selected }));
+    // só na abertura: depois disso a tabela da operação é decisão explícita (ou sugestão do cliente)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Trocar a tabela com itens no carrinho nunca muda valor em silêncio: pergunta e usa os preços do ComercialWeb.
+  async function recalculate(key: string) {
+    setSwitching(true);
+    try {
+      const prices = await fetchPricesIn(draft.items.map((i) => i.productId), key);
+      const { missing } = applyPrices(draft.items, prices);
+      if (missing.length > 0) {
+        Alert.alert('Produto sem preço nesta tabela', `${missing.slice(0, 5).join(', ')}${missing.length > 5 ? '…' : ''} não tem preço na tabela ${label(key)}. Remova o produto ou mantenha a tabela atual.`);
+        return;
+      }
+      setDraft((d) => ({ ...d, priceTable: key, items: applyPrices(d.items, prices).items }));
+      select(key);
+    } catch {
+      Alert.alert('Não foi possível recalcular', 'Confira a conexão e tente de novo. A tabela de preço não foi alterada.');
+    } finally {
+      setSwitching(false);
+    }
+  }
+
+  function changeTable(key: string) {
+    if (key === draft.priceTable) return;
+    if (draft.items.length === 0) {
+      setDraft((d) => ({ ...d, priceTable: key }));
+      select(key);
+      return;
+    }
+    Alert.alert(
+      `Trocar para ${label(key)}?`,
+      `Deseja recalcular os preços dos produtos já adicionados utilizando a tabela ${label(key)}? Os preços da venda são sempre calculados pelo sistema na tabela escolhida.`,
+      [{ text: 'Cancelar', style: 'cancel' }, { text: 'Recalcular preços', onPress: () => void recalculate(key) }],
+    );
+  }
+
   return (
     <>
       <Pressable
@@ -67,6 +114,15 @@ export function DraftEditor({ store, mode, locked, integerQuantity = false, canD
         </View>
         {!locked && <Icon name="chevron-forward" size={20} color={colors.textMuted} />}
       </Pressable>
+
+      <View style={styles.card}>
+        <PriceTablePicker value={draft.priceTable} onChange={changeTable} disabled={locked || switching} />
+        {mode === 'presale' && (
+          <Text variant="caption" color="textMuted">
+            Tabela: {label(draft.priceTable)} · Itens: {draft.items.length} · Total estimado: {formatCents(estimateCents(draft.items, draft.saleDiscount))}
+          </Text>
+        )}
+      </View>
 
       <Text variant="heading">Itens</Text>
       {draft.items.length === 0 && <Text color="textMuted">Nenhum item. Adicione ao menos um produto.</Text>}

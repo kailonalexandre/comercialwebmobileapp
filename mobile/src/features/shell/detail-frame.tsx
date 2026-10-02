@@ -39,7 +39,7 @@ export function DetailFrame({ title, loading, failure, error, notFoundMessage, o
       {loading && <StateView kind="loading" />}
       {failure === 'not_found' && <StateView kind="empty" message={notFoundMessage} />}
       {failure === 'error' && <StateView kind="error" message={userMessage(error)} onRetry={onRetry} />}
-      {!loading && !failure && <ScrollView contentContainerStyle={styles.content}>{children}</ScrollView>}
+      {!loading && !failure && <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={styles.content}>{children}</ScrollView>}
     </SafeAreaView>
   );
 }

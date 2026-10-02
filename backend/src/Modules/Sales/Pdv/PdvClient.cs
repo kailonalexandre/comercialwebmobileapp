@@ -16,7 +16,8 @@ public sealed record PdvPayment(string Method, long AmountCents);
 /// <summary>Pedido já validado; usuário e empresa vêm da sessão, nunca do app.</summary>
 public sealed record PdvOrder(
     long UserId, long BusinessId, Guid? ClientSaleUuid, long? CustomerId, long? SellerPersonId, string? Observation,
-    IReadOnlyList<PdvItem> Items, IReadOnlyList<PdvPayment>? Payments, decimal? SaleDiscountPercent = null, long? SaleDiscountCents = null);
+    IReadOnlyList<PdvItem> Items, IReadOnlyList<PdvPayment>? Payments, decimal? SaleDiscountPercent = null, long? SaleDiscountCents = null,
+    string? PriceTable = null);
 
 public sealed record PdvQuoteLine(long ProductId, string Name, int Quantity, long UnitPriceCents, long TotalCents, long DiscountCents = 0);
 
@@ -92,6 +93,7 @@ public sealed partial class PdvClient(HttpClient http, IConfiguration config, Ti
         items = o.Items.Select(i => new { product_id = i.ProductId, quantity = i.Quantity, discount_percent = i.DiscountPercent, discount_cents = i.DiscountCents }),
         sale_discount_percent = o.SaleDiscountPercent,
         sale_discount_cents = o.SaleDiscountCents,
+        price_mode = o.PriceTable,
         payments = includePayments ? o.Payments?.Select(p => new { method = p.Method, amount_cents = p.AmountCents }) : null,
     };
 

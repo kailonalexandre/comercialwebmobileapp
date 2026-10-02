@@ -17,7 +17,7 @@ O `projectId` **não é segredo**; pode commitar o `app.json`. Alternativa sem a
 1. https://console.firebase.google.com → criar projeto (Analytics pode ficar desligado).
 2. Adicionar app Android com o pacote `br.com.infinitsolucoesweb.comercial`.
 3. Baixar o `google-services.json` e guardar **fora do git**, por exemplo `mobile/secrets/google-services.json` (a pasta `secrets/` e o arquivo `google-services.json` já estão no `.gitignore`).
-4. Ao gerar o build: `export GOOGLE_SERVICES_JSON=./secrets/google-services.json` (o `app.config.ts` aponta o Expo para ele).
+4. Ao gerar o build local, passe o caminho **absoluto** (a pasta `secrets/` é ignorada pelo git e não entra no pacote que o EAS monta): `GOOGLE_SERVICES_JSON=$PWD/secrets/google-services.json npx eas-cli build --platform android --profile dev-vps --local` (o `app.config.ts` aponta o Expo para ele).
 
 ## 3. Credencial FCM V1 (para o Expo enviar)
 

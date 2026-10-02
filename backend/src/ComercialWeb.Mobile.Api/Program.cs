@@ -33,8 +33,8 @@ builder.Services.Configure<ForwardedHeadersOptions>(o =>
 });
 
 builder.Services.AddIdentityModule(builder.Configuration, builder.Environment);
-builder.Services.AddCatalogModule();
-builder.Services.AddCustomersModule();
+builder.Services.AddCatalogModule(builder.Configuration);
+builder.Services.AddCustomersModule(builder.Configuration);
 builder.Services.AddSalesModule(builder.Configuration);
 builder.Services.AddDashboardModule();
 builder.Services.AddNotificationsModule();

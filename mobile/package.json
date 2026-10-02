@@ -51,5 +51,15 @@
   "private": true,
   "jest": {
     "preset": "jest-expo"
+  },
+  "expo": {
+    "install": {
+      "exclude": [
+        "expo",
+        "expo-constants",
+        "expo-router",
+        "@types/jest"
+      ]
+    }
   }
 }

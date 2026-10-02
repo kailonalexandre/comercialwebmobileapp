@@ -93,7 +93,7 @@ export function PdvScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text variant="title">PDV</Text>
 
         <DraftEditor store={store} mode="pdv" locked={locked} integerQuantity canDiscount={canDiscount} />

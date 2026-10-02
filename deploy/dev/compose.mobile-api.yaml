@@ -17,7 +17,7 @@ services:
       Jwt__SigningKeyPath: /run/secrets/jwt_pem
       # Só o container do nginx (sub-rede fixa abaixo) pode informar o IP do cliente.
       ForwardedHeaders__KnownNetworks: 172.29.250.0/24
-      Push__Enabled: "false"
+      Push__Enabled: "true"
       ConnectionStrings__ComercialWeb: ${ConnectionStrings__ComercialWeb:?}
       ComercialWeb__MobileApiSecret: ${ComercialWeb__MobileApiSecret:?}
     secrets: [jwt_pem]

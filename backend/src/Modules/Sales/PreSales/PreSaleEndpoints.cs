@@ -1,3 +1,4 @@
+using ComercialWeb.Mobile.Common;
 using System.Security.Claims;
 using ComercialWeb.Mobile.Identity;
 using ComercialWeb.Mobile.Identity.Authorization;
@@ -11,7 +12,7 @@ public sealed record PreSaleItemRequest(long ProductId, decimal Quantity, decima
 
 public sealed record PreSaleRequest(
     long? CustomerId, long? SellerPersonId, string? Observation, IReadOnlyList<PreSaleItemRequest>? Items,
-    decimal? SaleDiscountPercent = null, long? SaleDiscountCents = null);
+    decimal? SaleDiscountPercent = null, long? SaleDiscountCents = null, string? PriceTable = null);
 
 public static class PreSaleEndpoints
 {
@@ -30,7 +31,7 @@ public static class PreSaleEndpoints
             var outcome = await comercialWeb.SendPreSaleAsync(new PreSaleCommand(
                 ids.UserId, ids.BusinessId, key, body.CustomerId, body.SellerPersonId, body.Observation?.Trim(),
                 [.. body.Items!.Select(i => new PreSaleLine(i.ProductId, i.Quantity, i.DiscountPercent, i.DiscountCents))],
-                body.SaleDiscountPercent, body.SaleDiscountCents), ct);
+                body.SaleDiscountPercent, body.SaleDiscountCents, body.PriceTable), ct);
 
             if (outcome.Created is { } created) await origins.RecordAsync(ids.BusinessId, created.SaleId, ct);
 
@@ -56,5 +57,6 @@ public static class PreSaleEndpoints
         && Discounts.IsValid(body.SaleDiscountPercent, body.SaleDiscountCents)
         && body.CustomerId is null or > 0
         && body.SellerPersonId is null or > 0
-        && (body.Observation?.Length ?? 0) <= 1000;
+        && (body.Observation?.Length ?? 0) <= 1000
+        && PriceTables.IsValidKey(body.PriceTable);
 }

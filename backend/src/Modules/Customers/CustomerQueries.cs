@@ -6,14 +6,14 @@ namespace ComercialWeb.Mobile.Customers;
 
 public sealed record CustomerListItem(
     long Id, long Code, string Name, string? TradeName, string? Document, string? Phone,
-    string? City, string? State, bool IsActive, bool RestrictionAlert, bool RestrictionBlock);
+    string? City, string? State, bool IsActive, bool RestrictionAlert, bool RestrictionBlock, bool RegistrationIncomplete = false, string? TradeScope = null);
 
 public sealed record Address(string? Street, string? Number, string? District, string? City, string? State, string? Zip);
 
 public sealed record CustomerDetail(
     long Id, long Code, string Name, string? TradeName, string PersonKind, string? Document,
     string? Phone, string? Mobile, string? Whatsapp, string? Email, Address MainAddress,
-    bool IsActive, bool RestrictionAlert, bool RestrictionBlock);
+    bool IsActive, bool RestrictionAlert, bool RestrictionBlock, bool RegistrationIncomplete = false, string? TradeScope = null);
 
 /// <summary>
 /// Clientes (people.is_client) da empresa da sessão, somente leitura.
@@ -56,7 +56,8 @@ public sealed class CustomerQueries(MySqlDataSource db)
             SELECT CAST(p.id AS SIGNED) AS Id, CAST(p.code AS SIGNED) AS Code, p.name AS Name, p.trade_name AS TradeName,
                    p.document AS Document, COALESCE(p.mobile, p.phone) AS Phone,
                    p.main_address->>'$.city' AS City, p.main_address->>'$.state' AS State,
-                   p.is_active AS IsActive, p.restriction_alert AS RestrictionAlert, p.restriction_block AS RestrictionBlock
+                   p.is_active AS IsActive, p.restriction_alert AS RestrictionAlert, p.restriction_block AS RestrictionBlock,
+                   p.registration_incomplete AS RegistrationIncomplete, p.trade_scope AS TradeScope
             {where}
             ORDER BY p.name, p.id LIMIT @pageSize OFFSET @offset
             """, args, cancellationToken: ct))).AsList();
@@ -75,14 +76,15 @@ public sealed class CustomerQueries(MySqlDataSource db)
                    p.main_address->>'$.street' AS Street, p.main_address->>'$.number' AS Number,
                    p.main_address->>'$.district' AS District, p.main_address->>'$.city' AS City,
                    p.main_address->>'$.state' AS State, p.main_address->>'$.zip' AS Zip,
-                   p.is_active AS IsActive, p.restriction_alert AS RestrictionAlert, p.restriction_block AS RestrictionBlock
+                   p.is_active AS IsActive, p.restriction_alert AS RestrictionAlert, p.restriction_block AS RestrictionBlock,
+                   p.registration_incomplete AS RegistrationIncomplete, p.trade_scope AS TradeScope
             FROM people p WHERE p.id = @id AND {Scope}
             """,
             new { id, businessId }, cancellationToken: ct));
         return row is null ? null : new CustomerDetail(
             row.Id, row.Code, row.Name, row.TradeName, row.PersonKind, row.Document, row.Phone, row.Mobile, row.Whatsapp, row.Email,
             new Address(row.Street, row.Number, row.District, row.City, row.State, row.Zip),
-            row.IsActive, row.RestrictionAlert, row.RestrictionBlock);
+            row.IsActive, row.RestrictionAlert, row.RestrictionBlock, row.RegistrationIncomplete, row.TradeScope);
     }
 
     private sealed class DetailRow
@@ -106,5 +108,7 @@ public sealed class CustomerQueries(MySqlDataSource db)
         public bool IsActive { get; set; }
         public bool RestrictionAlert { get; set; }
         public bool RestrictionBlock { get; set; }
+        public bool RegistrationIncomplete { get; set; }
+        public string? TradeScope { get; set; }
     }
 }
