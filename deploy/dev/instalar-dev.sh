@@ -82,7 +82,8 @@ cat <<TXT
   - Apache: vhost api-dev + certificado de $DOMINIO (certbot já instalado)
   Nada mais. Não toca no ComercialWeb, em outros containers nem em outros sites.
 TXT
-read -r -p "Digite SIM para continuar: " R; [ "$R" = SIM ] || { echo "Cancelado. Nada foi alterado."; exit 0; }
+# DEPLOY_AUTO=1 (só o CD do GitHub Actions) pula a confirmação; sem TTY e sem a variável, o `read` falha e nada é alterado.
+[ "${DEPLOY_AUTO:-}" = 1 ] || { read -r -p "Digite SIM para continuar: " R; [ "$R" = SIM ] || { echo "Cancelado. Nada foi alterado."; exit 0; }; }
 
 echo; echo "== 3. Instalando =="
 mkdir -p "$ALVO"; cp "$AQUI"/compose.mobile-api.yaml "$AQUI"/nginx-mobile-api.conf "$AQUI"/apache-vhost.api-dev.conf "$ALVO"/
@@ -90,6 +91,7 @@ ok "arquivos em $ALVO"
 
 # imagem
 if ! docker pull "$IMAGEM:$IMG" >/dev/null 2>&1; then
+  [ "${DEPLOY_AUTO:-}" = 1 ] && { echo "ERRO: pull de $IMAGEM:$IMG falhou e o modo automático não pede token: faça 'docker login ghcr.io' (read:packages) na VPS uma vez."; exit 1; }
   echo "  Preciso de login no ghcr.io (token clássico SÓ com read:packages)."
   read -r -s -p "  Token: " T; echo; printf '%s' "$T" | docker login ghcr.io -u kailonalexandre --password-stdin >/dev/null; unset T
   docker pull "$IMAGEM:$IMG" >/dev/null || { echo "ERRO: pull falhou (pacote sem acesso para o token?)."; exit 1; }
