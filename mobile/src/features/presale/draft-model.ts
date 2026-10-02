@@ -7,6 +7,8 @@ export type DraftItem = { productId: number; name: string; unitPriceCents: numbe
 export type PaymentLine = { method: string; label: string; amountCents: number };
 
 export type Draft = {
+  // Tabela de preço da operação (chave do ComercialWeb). O servidor calcula os preços nela.
+  priceTable: string;
   customer: { id: number; name: string } | null;
   observation: string;
   items: DraftItem[];
@@ -14,7 +16,7 @@ export type Draft = {
   saleDiscount?: Discount;
 };
 
-export const emptyDraft: Draft = { customer: null, observation: '', items: [], payments: [] };
+export const emptyDraft: Draft = { priceTable: 'varejo', customer: null, observation: '', items: [], payments: [] };
 
 // Limites do servidor (FormRequest do ComercialWeb): recusar aqui poupa a ida e volta.
 export const MAX_ITEMS = 200;
@@ -80,9 +82,10 @@ export const estimateCents = (items: DraftItem[], saleDiscount?: Discount): numb
   return subtotal - discountOf(subtotal, saleDiscount);
 };
 
-// O que vai no corpo do pedido. Preço e total nunca são enviados.
+// O que vai no corpo do pedido. Preço e total nunca são enviados: só a tabela, e o servidor calcula.
 export function toRequest(draft: Draft) {
   return {
+    priceTable: draft.priceTable,
     customerId: draft.customer?.id ?? null,
     observation: draft.observation.trim() || null,
     items: draft.items.map((i) => ({ productId: i.productId, quantity: i.quantity, ...discountFields(i.discount) })),

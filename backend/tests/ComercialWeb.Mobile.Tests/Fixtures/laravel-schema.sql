@@ -119,6 +119,9 @@ CREATE TABLE people (
     is_client TINYINT(1) NOT NULL DEFAULT 0,
     is_supplier TINYINT(1) NOT NULL DEFAULT 0,
     is_active TINYINT(1) NOT NULL DEFAULT 1,
+    trade_scope VARCHAR(20) NULL,
+    registration_incomplete TINYINT(1) NOT NULL DEFAULT 0,
+    mobile_client_uuid CHAR(36) NULL,
     deleted_at TIMESTAMP NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

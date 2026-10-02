@@ -5,9 +5,22 @@ using MySqlConnector;
 
 namespace ComercialWeb.Mobile.Catalog;
 
-public sealed record ProductListItem(long Id, long Code, string Name, string? Sku, string? Barcode, long SalePriceCents, bool IsActive);
+/// <param name="SalePriceCents">Preço de venda do cadastro (varejo).</param>
+/// <param name="PriceCents">Preço na tabela pedida; null = produto sem preço nessa tabela.</param>
+public sealed record ProductListItem(long Id, long Code, string Name, string? Sku, string? Barcode, long SalePriceCents, bool IsActive, long? PriceCents = null)
+{
+    // Dapper materializa pelo construtor que casa com as colunas do SELECT (sem o preço da tabela).
+    public ProductListItem(long id, long code, string name, string? sku, string? barcode, long salePriceCents, bool isActive)
+        : this(id, code, name, sku, barcode, salePriceCents, isActive, null) { }
+}
 
-public sealed record ProductDetail(long Id, long Code, string Name, string? Sku, string? Barcode, long SalePriceCents, bool IsActive, string? Description);
+/// <param name="Prices">Preço por tabela, como o ComercialWeb calcula; null quando ele não respondeu (o app mostra só o varejo).</param>
+public sealed record ProductDetail(long Id, long Code, string Name, string? Sku, string? Barcode, long SalePriceCents, bool IsActive, string? Description,
+    IReadOnlyDictionary<string, long>? Prices = null)
+{
+    public ProductDetail(long id, long code, string name, string? sku, string? barcode, long salePriceCents, bool isActive, string? description)
+        : this(id, code, name, sku, barcode, salePriceCents, isActive, description, null) { }
+}
 
 /// <summary>
 /// Consulta de produtos da empresa da sessão (somente leitura nas tabelas do ComercialWeb).

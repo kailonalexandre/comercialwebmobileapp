@@ -1,3 +1,4 @@
+import { toRequest, type QuickCustomerInput } from '@/features/customers/quick-customer-model';
 import { api } from '@/infrastructure/api';
 import type { Paged } from '@/shared/hooks/use-paged-list';
 
@@ -13,6 +14,8 @@ export type Customer = {
   isActive: boolean;
   restrictionAlert: boolean;
   restrictionBlock: boolean;
+  registrationIncomplete?: boolean;
+  tradeScope?: string | null;
 };
 
 export async function fetchCustomers(page: number, search: string): Promise<Paged<Customer>> {
@@ -60,4 +63,57 @@ export function formatAddress(a: CustomerDetail['mainAddress']): string | null {
   const place = [a.city, a.state].filter(Boolean).join('/');
   const parts = [street, a.district, place, a.zip].filter((v) => !!v);
   return parts.length > 0 ? parts.join(' - ') : null;
+}
+
+// --- Cadastro rápido -------------------------------------------------------------------------------------------
+// Respostas do cadastro/consultas chegam como o ComercialWeb as devolve (snake_case, dentro de `data`).
+
+export type CreatedCustomer = { id: number; incomplete: boolean };
+
+export async function createQuickCustomer(input: QuickCustomerInput, idempotencyKey: string): Promise<CreatedCustomer> {
+  if (!api) {
+    if (!__DEV__) throw new Error('API não configurada.');
+    return { id: 1, incomplete: !input.document };
+  }
+  const res = await api.request<{ data: { id: number; registration_incomplete: boolean } }>('/v1/customers', {
+    method: 'POST', body: toRequest(input), idempotencyKey, timeoutMs: 15_000,
+  });
+  return { id: res.data.id, incomplete: res.data.registration_incomplete };
+}
+
+export type DuplicateMatch = { id: number; name: string; document: string | null; phone: string | null; email: string | null; reasons: string[] };
+
+// Falha na checagem nunca bloqueia o cadastro: sem rede, a duplicidade fica para o ComercialWeb.
+export async function findDuplicates(query: { document?: string; phone?: string; email?: string }): Promise<DuplicateMatch[]> {
+  if (!api) return [];
+  try {
+    const res = await api.request<{ data: { matches: DuplicateMatch[] } }>('/v1/customers/duplicates', { method: 'POST', body: query, timeoutMs: 6_000 });
+    return res.data.matches;
+  } catch {
+    return [];
+  }
+}
+
+export type PostalCodeData = { street: string | null; district: string | null; city: string | null; state: string | null };
+
+export async function lookupPostalCode(zip: string): Promise<PostalCodeData | null> {
+  if (!api) return null;
+  try {
+    const res = await api.request<{ data: PostalCodeData | null }>(`/v1/customers/lookup/postal-code?zip=${encodeURIComponent(zip)}`, { timeoutMs: 8_000 });
+    return res.data;
+  } catch {
+    return null;
+  }
+}
+
+export type CompanyData = { name: string | null; trade_name: string | null; phone: string | null; email: string | null };
+
+export async function lookupCompany(document: string): Promise<CompanyData | null> {
+  if (!api) return null;
+  try {
+    const res = await api.request<{ data: CompanyData | null }>(`/v1/customers/lookup/company?document=${encodeURIComponent(document)}`, { timeoutMs: 10_000 });
+    return res.data;
+  } catch {
+    return null;
+  }
 }

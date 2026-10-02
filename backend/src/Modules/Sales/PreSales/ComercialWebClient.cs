@@ -14,7 +14,7 @@ public sealed record PreSaleLine(long ProductId, decimal Quantity, decimal? Disc
 /// <summary>Pedido já validado; usuário e empresa vêm da sessão, nunca do app.</summary>
 public sealed record PreSaleCommand(
     long UserId, long BusinessId, Guid ClientSaleUuid, long? CustomerId, long? SellerPersonId, string? Observation, IReadOnlyList<PreSaleLine> Items,
-    decimal? SaleDiscountPercent = null, long? SaleDiscountCents = null);
+    decimal? SaleDiscountPercent = null, long? SaleDiscountCents = null, string? PriceTable = null);
 
 public sealed record PreSaleCreated(long SaleId, string Number, string Status, long TotalCents, bool AlreadyExisted);
 
@@ -58,6 +58,7 @@ public sealed partial class ComercialWebClient(HttpClient http, IConfiguration c
             items = command.Items.Select(i => new { product_id = i.ProductId, quantity = i.Quantity, discount_percent = i.DiscountPercent, discount_cents = i.DiscountCents }),
             sale_discount_percent = command.SaleDiscountPercent,
             sale_discount_cents = command.SaleDiscountCents,
+            price_mode = command.PriceTable,
         }, Json);
 
         using var request = new HttpRequestMessage(HttpMethod.Post, PreSalesPath) { Content = new ByteArrayContent(body) };
