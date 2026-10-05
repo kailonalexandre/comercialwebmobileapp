@@ -41,7 +41,7 @@ export function MenuScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text variant="title">Menu</Text>
 
         <Pressable accessibilityRole="button" accessibilityLabel="Configurações da conta" onPress={() => router.push('/configuracoes')} style={styles.user}>

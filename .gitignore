@@ -106,3 +106,4 @@ Thumbs.db
 
 # ---- Claude Code local ----
 .claude/settings.local.json
+mobile/*.apk

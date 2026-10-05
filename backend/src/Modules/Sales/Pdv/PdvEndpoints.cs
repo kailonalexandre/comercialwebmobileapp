@@ -1,3 +1,4 @@
+using ComercialWeb.Mobile.Common;
 using System.Security.Claims;
 using ComercialWeb.Mobile.Identity;
 using ComercialWeb.Mobile.Identity.Authorization;
@@ -13,12 +14,12 @@ public sealed record PdvPaymentRequest(string? Method, long AmountCents);
 
 public record PdvQuoteRequest(
     long? CustomerId, long? SellerPersonId, string? Observation, IReadOnlyList<PdvItemRequest>? Items,
-    decimal? SaleDiscountPercent = null, long? SaleDiscountCents = null);
+    decimal? SaleDiscountPercent = null, long? SaleDiscountCents = null, string? PriceTable = null);
 
 public sealed record PdvSaleRequest(
     long? CustomerId, long? SellerPersonId, string? Observation, IReadOnlyList<PdvItemRequest>? Items, IReadOnlyList<PdvPaymentRequest>? Payments,
-    decimal? SaleDiscountPercent = null, long? SaleDiscountCents = null)
-    : PdvQuoteRequest(CustomerId, SellerPersonId, Observation, Items, SaleDiscountPercent, SaleDiscountCents);
+    decimal? SaleDiscountPercent = null, long? SaleDiscountCents = null, string? PriceTable = null)
+    : PdvQuoteRequest(CustomerId, SellerPersonId, Observation, Items, SaleDiscountPercent, SaleDiscountCents, PriceTable);
 
 public static class PdvEndpoints
 {
@@ -72,14 +73,15 @@ public static class PdvEndpoints
     private static PdvOrder Order(SessionIds ids, Guid? key, PdvQuoteRequest body, IReadOnlyList<PdvPayment>? payments) =>
         new(ids.UserId, ids.BusinessId, key, body.CustomerId, body.SellerPersonId, body.Observation?.Trim(),
             [.. body.Items!.Select(i => new PdvItem(i.ProductId, i.Quantity, i.DiscountPercent, i.DiscountCents))], payments,
-            body.SaleDiscountPercent, body.SaleDiscountCents);
+            body.SaleDiscountPercent, body.SaleDiscountCents, body.PriceTable);
 
     // Mesmos limites do FormRequest do ComercialWeb, para recusar aqui sem ida e volta.
     internal static bool IsValid(PdvQuoteRequest body) =>
         body.Items is { Count: >= 1 and <= 200 }
         && body.Items.All(i => i.ProductId > 0 && i.Quantity is >= 1 and <= 99_999 && Discounts.IsValid(i.DiscountPercent, i.DiscountCents))
         && Discounts.IsValid(body.SaleDiscountPercent, body.SaleDiscountCents)
-        && (body.Observation?.Length ?? 0) <= 1000;
+        && (body.Observation?.Length ?? 0) <= 1000
+        && PriceTables.IsValidKey(body.PriceTable);
 
     internal static bool ValidPayments(IReadOnlyList<PdvPaymentRequest>? payments) =>
         payments is { Count: >= 1 and <= 8 }

@@ -12,7 +12,7 @@ export type ApiErrorKind =
   | 'unknown';
 
 // Erro tipado. `message` é sempre genérica; detalhes técnicos ficam no servidor, rastreáveis pelo correlationId.
-export type Refusal = { code?: string; message?: string; reason?: string; totalCents?: number; remainingCents?: number };
+export type Refusal = { code?: string; message?: string; reason?: string; totalCents?: number; remainingCents?: number; fields?: Record<string, string> };
 
 export class ApiError extends Error {
   constructor(
@@ -98,7 +98,18 @@ async function readRefusal(response: Response): Promise<Refusal | undefined> {
     const b = (await response.json()) as Record<string, unknown>;
     const text = (v: unknown) => (typeof v === 'string' && v.length <= 300 ? v : undefined);
     const cents = (v: unknown) => (typeof v === 'number' && Number.isSafeInteger(v) ? v : undefined);
-    return { code: text(b.code), message: text(b.message), reason: text(b.reason), totalCents: cents(b.totalCents), remainingCents: cents(b.remainingCents) };
+    // Validação do ComercialWeb repassada pelo .NET: `errors: { campo: ["mensagem"] }`; guarda a primeira por campo.
+    const fields: Record<string, string> = {};
+    if (b.errors && typeof b.errors === 'object') {
+      for (const [field, list] of Object.entries(b.errors as Record<string, unknown>)) {
+        const first = Array.isArray(list) ? text(list[0]) : undefined;
+        if (first) fields[field] = first;
+      }
+    }
+    return {
+      code: text(b.code), message: text(b.message), reason: text(b.reason), totalCents: cents(b.totalCents), remainingCents: cents(b.remainingCents),
+      fields: Object.keys(fields).length > 0 ? fields : undefined,
+    };
   } catch {
     return undefined;
   }

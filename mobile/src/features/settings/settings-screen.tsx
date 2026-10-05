@@ -2,6 +2,7 @@ import Constants from 'expo-constants';
 import { Alert, StyleSheet, View } from 'react-native';
 
 import { useSession } from '@/features/auth/session-context';
+import { PushPreferencesSection } from '@/features/settings/push-preferences-section';
 import { DetailFrame } from '@/features/shell/detail-frame';
 import { apiBaseUrl, appEnv } from '@/infrastructure/config';
 import { Button } from '@/shared/components/button';
@@ -49,6 +50,7 @@ export function SettingsScreen() {
         </Text>
         <Segmented options={APPEARANCE} selected={preference} onSelect={setPreference} />
       </View>
+      <PushPreferencesSection />
       <View style={styles.section}>
         <Text variant="label" color="textMuted">
           Sobre

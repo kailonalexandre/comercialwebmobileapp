@@ -87,7 +87,7 @@ export function DashboardScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
-      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={false} onRefresh={reload} />}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={false} onRefresh={reload} />}>
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel={`Empresa atual: ${profile?.businessName ?? ''}. Trocar empresa`} onPress={soon('Trocar empresa')} style={[styles.company, styles.flex]}>
             <Text variant="caption" color="textMuted" numberOfLines={1} style={styles.shrink}>

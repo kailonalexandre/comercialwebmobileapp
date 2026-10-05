@@ -20,9 +20,10 @@ test('estimativa em centavos sem erro de ponto flutuante', () => {
 });
 
 test('o corpo do pedido não leva preço nem total', () => {
-  const draft = { customer: { id: 7, name: 'Maria' }, observation: '  entregar cedo ', items: [{ ...camiseta, quantity: 2 }], payments: [] };
-  expect(toRequest(draft)).toEqual({ customerId: 7, observation: 'entregar cedo', items: [{ productId: 1, quantity: 2 }] });
-  expect(JSON.stringify(toRequest(draft))).not.toMatch(/price|total|Price/);
+  const draft = { priceTable: 'varejo', customer: { id: 7, name: 'Maria' }, observation: '  entregar cedo ', items: [{ ...camiseta, quantity: 2 }], payments: [] };
+  expect(toRequest(draft)).toEqual({ priceTable: 'varejo', customerId: 7, observation: 'entregar cedo', items: [{ productId: 1, quantity: 2 }] });
+  // O preço nunca vai: só a tabela escolhida, e o servidor calcula.
+  expect(JSON.stringify(toRequest(draft))).not.toMatch(/unitPrice|total|Cents":\d+,"quantity/i);
 });
 
 test('sem itens não envia', () => {
@@ -50,8 +51,9 @@ test('valor em reais vira centavos e recusa lixo', () => {
 });
 
 test('pedido do PDV leva formas e valores, nunca preço', () => {
-  const draft = { customer: null, observation: '', items: [{ ...camiseta, quantity: 1 }], payments: [{ method: 'cash', label: 'Dinheiro', amountCents: 5000 }] };
+  const draft = { priceTable: 'atacado', customer: null, observation: '', items: [{ ...camiseta, quantity: 1 }], payments: [{ method: 'cash', label: 'Dinheiro', amountCents: 5000 }] };
   expect(toSaleRequest(draft).payments).toEqual([{ method: 'cash', amountCents: 5000 }]);
+  expect(toSaleRequest(draft).priceTable).toBe('atacado');
   expect(JSON.stringify(toSaleRequest(draft))).not.toMatch(/unitPrice|totalCents|label/);
 });
 

@@ -54,3 +54,31 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Deploy na VPS de DEV: só em push para dev (nunca em PR, nunca em main) e só depois da imagem publicada.
+  # Usa o environment `dev-vps` (secrets e proteção ficam lá); setup em docs/DEPLOY.md, seção "CD do dev".
+  # Roda deploy/dev/instalar-dev.sh no modo automático com o SHA completo da imagem recém-publicada.
+  deploy-dev:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    needs: image
+    runs-on: ubuntu-latest
+    environment: dev-vps
+    concurrency:
+      group: deploy-dev
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+      - name: Copiar scripts e rodar na VPS
+        env:
+          SSH_KEY: ${{ secrets.DEV_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEV_SSH_KNOWN_HOSTS }}
+          DEST: ${{ secrets.DEV_SSH_USER }}@${{ secrets.DEV_SSH_HOST }}
+          SHA: ${{ github.sha }}
+        run: |
+          install -m 700 -d ~/.ssh
+          (umask 177; printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy)
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          OPTS="-i $HOME/.ssh/id_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
+          ssh $OPTS "$DEST" 'mkdir -p ~/mobile-api-deploy'
+          scp $OPTS -r deploy/dev/. "$DEST:mobile-api-deploy/"
+          ssh $OPTS "$DEST" "sudo -n env DEPLOY_AUTO=1 bash ~/mobile-api-deploy/instalar-dev.sh $SHA"

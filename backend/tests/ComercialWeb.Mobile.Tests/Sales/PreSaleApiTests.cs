@@ -96,6 +96,18 @@ public sealed class PreSaleApiTests(PreSaleFixture api) : IClassFixture<PreSaleF
     }
 
     [Fact]
+    public async Task Tabela_de_preco_vai_como_price_mode_e_formato_invalido_e_recusado()
+    {
+        TestDatabase.RequireMySql();
+        api.ComercialWeb.Received.Clear();
+        var items = new[] { new { productId = 100, quantity = 1m } };
+        Assert.Equal(HttpStatusCode.Created, (await Post("ana", new { priceTable = "atacado", items })).StatusCode);
+        using var json = JsonDocument.Parse(Assert.Single(api.ComercialWeb.Received).Body);
+        Assert.Equal("atacado", json.RootElement.GetProperty("price_mode").GetString());
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await Post("ana", new { priceTable = "Atacado; x", items })).StatusCode);
+    }
+
+    [Fact]
     public async Task Reenvio_ja_existente_responde_200()
     {
         TestDatabase.RequireMySql();

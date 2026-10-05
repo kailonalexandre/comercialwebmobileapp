@@ -55,7 +55,7 @@ export function NewSaleScreen() {
         <Text variant="title" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={styles.flex}>Nova pré-venda</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <DraftEditor store={store} mode="presale" locked={locked} />
 
         {phase.name === 'editing' && phase.error && (

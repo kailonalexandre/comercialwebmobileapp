@@ -57,6 +57,18 @@ public sealed class PdvApiTests(PdvFixture api) : IClassFixture<PdvFixture>
     private void Reply(HttpStatusCode status, string json) => api.ComercialWeb.Reply = () => FakeComercialWeb.Json(status, json);
 
     [Fact]
+    public async Task Cotacao_e_venda_levam_a_tabela_de_preco_como_price_mode()
+    {
+        TestDatabase.RequireMySql();
+        Reply(HttpStatusCode.OK, """{"subtotal_cents":3000,"discount_cents":0,"total_cents":3000,"items":[]}""");
+        await Send("ana", HttpMethod.Post, "/api/v1/pdv/quote", new { priceTable = "atacado", items = new[] { new { productId = 100, quantity = 1 } } });
+        using var json = JsonDocument.Parse(Assert.Single(api.ComercialWeb.Received).Body);
+        Assert.Equal("atacado", json.RootElement.GetProperty("price_mode").GetString());
+        var invalid = await Send("ana", HttpMethod.Post, "/api/v1/pdv/quote", new { priceTable = "x y", items = new[] { new { productId = 100, quantity = 1 } } });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, invalid.StatusCode);
+    }
+
+    [Fact]
     public async Task Venda_e_encaminhada_assinada_com_usuario_empresa_e_chave_da_sessao_sem_preco()
     {
         TestDatabase.RequireMySql();

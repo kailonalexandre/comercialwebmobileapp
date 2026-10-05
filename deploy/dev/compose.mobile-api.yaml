@@ -1,6 +1,6 @@
 # API .NET na VPS de DEV (Docker Compose). Projeto à parte do ComercialWeb (não mexe no blue/green dele):
 #   docker compose -p mobile-api-dev -f compose.mobile-api.yaml --env-file mobile-api.env up -d
-# mobile-api.env fica FORA do git (chmod 600) com:
+# mobile-api.env (em /root/Projetos/mobile-api/) fica FORA do git (chmod 600) com:
 #   MOBILE_API_IMAGE_TAG=<sha completo>   ConnectionStrings__ComercialWeb=...   ComercialWeb__MobileApiSecret=...
 # Fluxo do tráfego: Apache do host (TLS, api.dev.infinitsolucoesweb.com.br) -> 127.0.0.1:8088 (nginx com limit_req)
 # -> mobile-api:8080. Rate limit é do nginx (borda), nunca da API.
@@ -17,7 +17,7 @@ services:
       Jwt__SigningKeyPath: /run/secrets/jwt_pem
       # Só o container do nginx (sub-rede fixa abaixo) pode informar o IP do cliente.
       ForwardedHeaders__KnownNetworks: 172.29.250.0/24
-      Push__Enabled: "false"
+      Push__Enabled: "true"
       ConnectionStrings__ComercialWeb: ${ConnectionStrings__ComercialWeb:?}
       ComercialWeb__MobileApiSecret: ${ComercialWeb__MobileApiSecret:?}
     secrets: [jwt_pem]

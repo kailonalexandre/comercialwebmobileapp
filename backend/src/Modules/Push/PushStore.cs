@@ -6,9 +6,12 @@ namespace ComercialWeb.Mobile.Push;
 public sealed record ActiveToken(Guid SessionId, string Token, long UserId, long BusinessId, long LastNotificationId);
 
 /// <param name="AppOrigins">Quantas marcas de "venda feita pelo app" casam com a notificação (0 = veio de fora, avisa).</param>
-public sealed record PendingNotification(long Id, string Title, string Body, string? EntityType, long? EntityId, long AppOrigins = 0)
+public sealed record PendingNotification(long Id, string Title, string Body, string? EntityType, long? EntityId, long AppOrigins = 0, long MutedDomain = 0)
 {
     public bool FromApp => AppOrigins > 0;
+
+    /// <summary>Não vira push: venda do próprio app ou domínio silenciado pelo usuário. A marca d'água avança por cima.</summary>
+    public bool Skip => FromApp || MutedDomain > 0;
 }
 
 /// <summary>SQL do módulo: tokens em mobile_push_tokens (da API) e leitura de `notifications` (do ComercialWeb, somente leitura).</summary>
@@ -59,7 +62,8 @@ public sealed class PushStore(MySqlDataSource db)
             """
             SELECT CAST(n.id AS SIGNED) AS Id, n.title AS Title, n.body AS Body, n.entity_type AS EntityType, CAST(n.entity_id AS SIGNED) AS EntityId,
                    (SELECT COUNT(*) FROM mobile_sale_origins o
-                     WHERE n.entity_type = 'sale' AND o.sale_id = n.entity_id AND o.business_id = @BusinessId) AS AppOrigins
+                     WHERE n.entity_type = 'sale' AND o.sale_id = n.entity_id AND o.business_id = @BusinessId) AS AppOrigins,
+                   EXISTS (SELECT 1 FROM mobile_push_mutes m WHERE m.user_id = @UserId AND m.domain = n.domain) AS MutedDomain
             FROM notifications n
             WHERE n.user_id = @UserId AND (n.business_id = @BusinessId OR n.business_id IS NULL)
               AND n.id > @LastNotificationId AND n.read_at IS NULL AND n.archived_at IS NULL
@@ -74,5 +78,22 @@ public sealed class PushStore(MySqlDataSource db)
         await conn.ExecuteAsync(new CommandDefinition(
             "UPDATE mobile_push_tokens SET last_notification_id = GREATEST(last_notification_id, @notificationId) WHERE session_id = @sid",
             new { sid = sessionId.ToString(), notificationId }, cancellationToken: ct));
+    }
+
+    public async Task<IReadOnlyList<string>> MutedAsync(long userId, CancellationToken ct)
+    {
+        await using var conn = await db.OpenConnectionAsync(ct);
+        return (await conn.QueryAsync<string>(new CommandDefinition("SELECT domain FROM mobile_push_mutes WHERE user_id = @userId ORDER BY domain", new { userId }, cancellationToken: ct))).AsList();
+    }
+
+    /// <summary>Substitui o conjunto silenciado do usuário.</summary>
+    public async Task SetMutedAsync(long userId, IReadOnlyCollection<string> domains, CancellationToken ct)
+    {
+        await using var conn = await db.OpenConnectionAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        await conn.ExecuteAsync(new CommandDefinition("DELETE FROM mobile_push_mutes WHERE user_id = @userId", new { userId }, tx, cancellationToken: ct));
+        if (domains.Count > 0)
+            await conn.ExecuteAsync(new CommandDefinition("INSERT INTO mobile_push_mutes (user_id, domain) VALUES (@userId, @domain)", domains.Select(domain => new { userId, domain }), tx, cancellationToken: ct));
+        await tx.CommitAsync(ct);
     }
 }

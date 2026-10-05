@@ -73,7 +73,7 @@ export function LoginScreen({ deepLink }: { deepLink?: string }) {
   return (
     <View style={styles.root}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <SafeAreaView edges={['top']} style={styles.content}>
             <View style={styles.logo}>
               <BrandMark size={52} color={colors.onPrimary} />

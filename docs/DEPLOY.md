@@ -47,7 +47,24 @@ Comandos e chaves em `deploy/k8s/prod/secret.example.yaml` (K3s) e no cabeçalho
   1. Pré-requisito do rate limit por IP: `kubectl apply -f deploy/k8s/cluster/traefik-real-ip.yaml` (ver o cabeçalho do arquivo; rollback: `kubectl delete -f`). Sem isso todos os clientes dividem o mesmo IP no Traefik.
   2. `sed` do SHA e `kubectl apply -k deploy/k8s/prod` (Deployment, Middlewares, IngressRoute e Certificate).
   3. `kubectl -n comercial-prod rollout status deploy/mobile-api` e `kubectl -n comercial-prod get certificate mobile-api-tls` (deve ficar `READY=True`).
-- **Dev (Compose):** `cp deploy/dev/* /srv/mobile-api-dev/`, criar `mobile-api.env` e `jwt.pem` (chmod 600), `docker compose -p mobile-api-dev -f compose.mobile-api.yaml --env-file mobile-api.env up -d`; instalar o vhost (`apache-vhost.api-dev.conf`), `a2enmod proxy proxy_http headers`, `certbot --apache -d api.dev.infinitsolucoesweb.com.br`.
+- **Dev (Compose):** `copiar deploy/dev/ para /root/Projetos/mobile-api/ (roteiro completo em DEPLOY_DEV.md)`, criar `mobile-api.env` e `jwt.pem` (chmod 600), `docker compose -p mobile-api-dev -f compose.mobile-api.yaml --env-file mobile-api.env up -d`; instalar o vhost (`apache-vhost.api-dev.conf`), `a2enmod proxy proxy_http headers`, `certbot --apache -d api.dev.infinitsolucoesweb.com.br`.
+
+### CD do dev (automático em push para `dev`)
+O job `deploy-dev` de `.github/workflows/backend-image.yml` roda depois de a imagem ser publicada: copia `deploy/dev/` para `~/mobile-api-deploy/` na VPS e executa `sudo -n env DEPLOY_AUTO=1 bash instalar-dev.sh <SHA>` (mesmo script do deploy manual; migrations incluídas). Só dispara em push para `dev` (nunca PR/`main`) e só quando `backend/**` muda. Prod continua manual.
+
+Setup único (você faz, o repositório não guarda nenhum segredo):
+1. **VPS:** usuário **`mobile-deploy`**, exclusivo deste CD (não reutilize o `deploy` da VPS, que é compartilhado com o CD do ComercialWeb e do bugtracker, nem o seu). Sem senha e **sem** grupo `docker`: o script já roda como root via `sudo`.
+   ```bash
+   sudo adduser --disabled-password --gecos "" mobile-deploy
+   sudo install -d -m 700 -o mobile-deploy -g mobile-deploy /home/mobile-deploy/.ssh
+   echo 'mobile-deploy ALL=(root) NOPASSWD: /usr/bin/env DEPLOY_AUTO=1 bash /home/mobile-deploy/mobile-api-deploy/instalar-dev.sh *' | sudo tee /etc/sudoers.d/mobile-deploy >/dev/null
+   sudo chmod 440 /etc/sudoers.d/mobile-deploy && sudo visudo -cf /etc/sudoers.d/mobile-deploy
+   ```
+   Faça `docker login ghcr.io -u <dono>` (token clássico `read:packages`) uma vez como **root**, porque o modo automático não pede token.
+2. **Chave:** `ssh-keygen -t ed25519 -f deploy_key -N ""`; a pública vai para `/home/mobile-deploy/.ssh/authorized_keys` (dono `mobile-deploy`, `chmod 600`); a privada vira o secret e depois é apagada (`shred -u`). Teste o login antes de apagá-la.
+3. **GitHub → Settings → Environments → `dev-vps`:** secrets `DEV_SSH_KEY` (privada), `DEV_SSH_USER` (`mobile-deploy`), `DEV_SSH_HOST` (**só o IP ou o hostname, sem `usuario@`**: o workflow monta `USER@HOST`) e `DEV_SSH_KNOWN_HOSTS` (saída de `ssh-keyscan -t ed25519 <ip>`, conferida com `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` na VPS). Restrinja o environment à branch `dev`.
+4. **Risco a ter em mente:** o script vem do próprio commit e `mobile-deploy` é dono dele, então quem faz merge em `dev` (ou controla essa chave) executa código como root na VPS. Mantenha `dev` protegida (PR obrigatório) e a chave só como secret do environment.
+5. **Diagnóstico:** `sudo journalctl -u ssh --since "30 min ago"` na VPS mostra por que o sshd recusou o runner. `Invalid user x@y` quer dizer que `DEV_SSH_HOST` está com `usuario@` na frente.
 
 ## 5. Conferir
 1. **Saúde:** `curl -s -o /dev/null -w "%{http_code}\n" https://<dominio-da-api>/health` → `200`.

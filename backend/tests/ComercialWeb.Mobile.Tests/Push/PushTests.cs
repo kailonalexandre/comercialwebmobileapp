@@ -68,6 +68,19 @@ public sealed class PushDispatcherTests(PushFixture api) : IClassFixture<PushFix
         "SELECT COALESCE(MAX(last_notification_id), -1) FROM mobile_push_tokens");
 
     [Fact]
+    public async Task Dominio_silenciado_nao_vira_push_mas_avanca_a_marca_dagua()
+    {
+        TestDatabase.RequireMySql();
+        await Reset();
+        await api.Db.ExecuteAsync("DELETE FROM mobile_push_mutes; INSERT INTO mobile_push_mutes (user_id, domain) VALUES (1, 'vendas');");
+        await Notify(1, 1, 10);
+        await Dispatcher().RunOnceAsync(Ct);
+        Assert.Empty(_sender.Sent);
+        Assert.Equal(1, await Watermark()); // ao reativar, o passado não chega em rajada
+        await api.Db.ExecuteAsync("DELETE FROM mobile_push_mutes");
+    }
+
+    [Fact]
     public async Task Envia_so_do_escopo_da_sessao_em_ordem_e_avanca_a_marca_dagua()
     {
         TestDatabase.RequireMySql();
@@ -244,6 +257,27 @@ public sealed class PushEndpointsTests(PushFixture api) : IClassFixture<PushFixt
 
         Assert.Equal(HttpStatusCode.NoContent, (await bruno.DeleteAsync("/api/v1/me/push-token", Ct)).StatusCode);
         Assert.Equal(0, await Rows(token));
+    }
+
+    [Fact]
+    public async Task Preferencias_de_push_gravam_e_listam_so_do_proprio_usuario()
+    {
+        TestDatabase.RequireMySql();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await api.Anonymous().GetAsync("/api/v1/me/push-preferences", Ct)).StatusCode);
+        var ana = await api.SignedInAsync("ana");
+        var bruno = await api.SignedInAsync("bruno");
+
+        var put = await ana.PutAsJsonAsync("/api/v1/me/push-preferences", new { mutedDomains = new List<string> { "venda", "estoque", "venda" } }, Ct);
+        Assert.Equal(HttpStatusCode.NoContent, put.StatusCode);
+        using var mine = JsonDocument.Parse(await ana.GetStringAsync("/api/v1/me/push-preferences", Ct));
+        Assert.Equal(["estoque", "venda"], mine.RootElement.GetProperty("mutedDomains").EnumerateArray().Select(e => e.GetString()));
+        using var other = JsonDocument.Parse(await bruno.GetStringAsync("/api/v1/me/push-preferences", Ct));
+        Assert.Equal(0, other.RootElement.GetProperty("mutedDomains").GetArrayLength());
+
+        await ana.PutAsJsonAsync("/api/v1/me/push-preferences", new { mutedDomains = Array.Empty<string>() }, Ct);
+        using var cleared = JsonDocument.Parse(await ana.GetStringAsync("/api/v1/me/push-preferences", Ct));
+        Assert.Equal(0, cleared.RootElement.GetProperty("mutedDomains").GetArrayLength());
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await ana.PutAsJsonAsync("/api/v1/me/push-preferences", new { mutedDomains = new List<string> { "Dominio Invalido!" } }, Ct)).StatusCode);
     }
 
     [Fact]
