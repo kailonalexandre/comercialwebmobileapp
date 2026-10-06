@@ -4,6 +4,7 @@ using ComercialWeb.Mobile.Customers;
 using ComercialWeb.Mobile.Dashboard;
 using ComercialWeb.Mobile.Identity;
 using ComercialWeb.Mobile.Identity.Authorization;
+using ComercialWeb.Mobile.Management;
 using ComercialWeb.Mobile.Sales;
 using ComercialWeb.Mobile.Sales.Orders;
 using ComercialWeb.Mobile.Sales.Pdv;
@@ -28,6 +29,9 @@ internal static class PermissionsEndpoint
         PdvEndpoints.DiscountPdv,
         DashboardModule.ViewReceivables,
         DashboardModule.ViewInventory,
+        ManagementModule.ViewPayables,
+        ManagementModule.AccessPurchases,
+        ManagementModule.AccessReports,
         OrdersEndpoints.StoreOrders,
         OrdersEndpoints.MarketplaceOrders,
     ];
