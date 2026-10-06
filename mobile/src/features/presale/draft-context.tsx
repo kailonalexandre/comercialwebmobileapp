@@ -21,6 +21,8 @@ export type DraftValue = {
   setDraft: (change: (d: Draft) => Draft) => void;
   send: () => Promise<void>;
   reset: () => void;
+  // Reabre um pedido recusado para o operador corrigir (nada foi criado no servidor).
+  load: (draft: Draft) => void;
 };
 
 /**
@@ -54,7 +56,13 @@ export function createDraftStore(kind: SaleKind) {
       setKey(randomUUID());
     }, []);
 
-    const value = useMemo(() => ({ draft, phase, setDraft, send, reset }), [draft, phase, setDraft, send, reset]);
+    const load = useCallback((next: Draft) => {
+      setDraftState(next);
+      setPhase({ name: 'editing' });
+      setKey(randomUUID());
+    }, []);
+
+    const value = useMemo(() => ({ draft, phase, setDraft, send, reset, load }), [draft, phase, setDraft, send, reset, load]);
     return <DraftContext.Provider value={value}>{children}</DraftContext.Provider>;
   }
 

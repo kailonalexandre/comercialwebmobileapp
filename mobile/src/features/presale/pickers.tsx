@@ -1,6 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback } from 'react';
 
+import { useQuickCustomerQueue } from '@/features/customers/quick-customer-queue';
 import { fetchCustomers } from '@/features/customers/customers-api';
 import { fetchProducts } from '@/features/catalog/products-api';
 import { suggestedTable } from '@/features/pricing/price-table-model';
@@ -58,7 +59,8 @@ export function PickProductScreen() {
 export function PickCustomerScreen() {
   const { setDraft } = useTargetDraft();
   const { tables } = usePriceTables();
-  const choose = (customer: { id: number; name: string } | null, tradeScope?: string | null) => {
+  const waiting = useQuickCustomerQueue().filter((e) => e.status === 'pending' || e.status === 'syncing');
+  const choose = (customer: { id: number; name: string; pendingId?: string } | null, tradeScope?: string | null) => {
     // Cliente só de atacado abre a venda em Atacado (visível e editável na tela). Com itens já lançados, nada muda sozinho.
     const suggested = suggestedTable(tradeScope, tables);
     setDraft((d) => ({ ...d, customer, priceTable: suggested && d.items.length === 0 ? suggested : d.priceTable }));
@@ -72,7 +74,15 @@ export function PickCustomerScreen() {
       fetchPage={fetchCustomers}
       keyOf={(c) => String(c.id)}
       onBack={() => router.back()}
-      filters={<Button label="Consumidor final (sem cliente)" variant="outline" onPress={() => choose(null)} />}
+      filters={
+        <>
+          <Button label="Consumidor final (sem cliente)" variant="outline" onPress={() => choose(null)} />
+          {waiting.map((e) => (
+            // Cadastro feito sem conexão: a venda fica guardada e sobe depois que o cliente for criado.
+            <ListRow key={e.id} title={e.input.name} lines={['Cadastro aguardando sincronização']} onPress={() => choose({ id: 0, name: e.input.name, pendingId: e.id })} trailing={<StatusPill label="Pendente" tone="primary" />} />
+          ))}
+        </>
+      }
       renderRow={(c) => (
         <ListRow
           title={c.name}

@@ -1,5 +1,8 @@
+import { router } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
+import { usePdvDraft } from '@/features/pdv/pdv-draft';
+import { usePreSaleDraft } from '@/features/presale/presale-draft';
 import { STATUS_LABEL } from '@/features/customers/quick-customer-model';
 import { estimateCents } from '@/features/presale/draft-model';
 import { discardSale, retrySale, syncSales, useSaleQueue } from '@/features/sales/sale-queue';
@@ -15,6 +18,8 @@ const tone = (e: SaleQueueEntry) => (e.status === 'error' ? 'danger' : 'primary'
 // Vendas deste aparelho ainda não confirmadas pelo ComercialWeb (aguardando, enviando ou com erro).
 export function PendingSales() {
   const styles = useStyles();
+  const pdv = usePdvDraft();
+  const presale = usePreSaleDraft();
   const items = useSaleQueue().filter((e) => e.status !== 'synced');
   if (items.length === 0) return null;
   return (
@@ -28,11 +33,23 @@ export function PendingSales() {
             <Text variant="caption" color="textMuted">
               {formatCents(e.totalCents ?? estimateCents(e.draft.items, e.draft.saleDiscount))} · {e.draft.items.length} {e.draft.items.length === 1 ? 'item' : 'itens'}
             </Text>
+            {e.status === 'pending' && e.draft.customer?.pendingId && <Text variant="caption" color="textMuted">Aguardando o cadastro do cliente</Text>}
             {e.error && <Text variant="caption" color="danger">{e.error}</Text>}
           </View>
           <StatusPill label={STATUS_LABEL[e.status]} tone={tone(e)} />
           {e.status === 'error' && (
             <View style={styles.actions}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  // Recusada pelo servidor = nada foi criado: volta ao carrinho para corrigir e reenviar.
+                  (e.kind === 'pdv' ? pdv : presale).load(e.draft);
+                  discardSale(e.id);
+                  router.navigate(e.kind === 'pdv' ? '/pdv' : '/nova-venda');
+                }}
+              >
+                <Text variant="label" color="primary">Editar</Text>
+              </Pressable>
               <Pressable accessibilityRole="button" onPress={() => { retrySale(e.id); void syncSales(); }}><Text variant="label" color="primary">Tentar de novo</Text></Pressable>
               <Pressable accessibilityRole="button" onPress={() => discardSale(e.id)}><Text variant="label" color="danger">Descartar</Text></Pressable>
             </View>

@@ -4,6 +4,7 @@ import { useSyncExternalStore } from 'react';
 
 import { createQuickCustomer } from '@/features/customers/customers-api';
 import type { QueueEntry, QuickCustomerInput } from '@/features/customers/quick-customer-model';
+import { failPendingCustomer, resolvePendingCustomer } from '@/features/sales/sale-queue';
 import { ApiError } from '@/infrastructure/api/client';
 
 // Fila local de cadastros rápidos. Fica no armazenamento privado do app (arquivo único) e cada item carrega a
@@ -72,6 +73,9 @@ export async function enqueueQuickCustomer(input: QuickCustomerInput): Promise<Q
 }
 
 export const clearQueue = () => entries.length > 0 && set([]);
+// Id do servidor de um cadastro já sincronizado (undefined = ainda na fila ou recusado).
+export const serverIdOf = (id: string) => entries.find((e) => e.id === id)?.serverId;
+
 export const discardEntry = (id: string) => set(entries.filter((e) => e.id !== id));
 export const retryEntry = (id: string) => update(id, { status: 'pending', error: undefined });
 
@@ -94,6 +98,7 @@ export function syncQuickCustomers(): Promise<void> {
       try {
         const created = await createQuickCustomer(item.input, item.id);
         update(item.id, { status: 'synced', serverId: created.id, incomplete: created.incomplete, error: undefined });
+        void resolvePendingCustomer(item.id, created.id);
       } catch (e) {
         const offline = e instanceof ApiError && (e.kind === 'network' || e.kind === 'timeout' || e.kind === 'server');
         if (offline) {
@@ -101,6 +106,7 @@ export function syncQuickCustomers(): Promise<void> {
           break; // sem conexão para o próximo também: tenta de novo mais tarde
         }
         update(item.id, { status: 'error', error: failureMessage(e) });
+        void failPendingCustomer(item.id, failureMessage(e));
       }
     }
   })().finally(() => {

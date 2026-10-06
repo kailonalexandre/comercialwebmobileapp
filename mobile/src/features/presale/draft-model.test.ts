@@ -94,3 +94,11 @@ test('estimativa aplica desconto por item e na venda sem passar de zero', () => 
   expect(estimateCents(items, { kind: 'value', cents: 982 })).toBe(8_000);
   expect(estimateCents(items, { kind: 'value', cents: 999_999 })).toBe(0);
 });
+
+describe('cliente com cadastro pendente', () => {
+  it('não manda id inventado ao servidor', () => {
+    const draft = { ...emptyDraft, customer: { id: 0, name: 'Novo', pendingId: 'k1' } };
+    expect(toRequest(draft).customerId).toBeNull();
+    expect(toRequest({ ...draft, customer: { id: 7, name: 'Novo' } }).customerId).toBe(7);
+  });
+});

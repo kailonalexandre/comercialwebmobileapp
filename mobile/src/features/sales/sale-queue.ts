@@ -1,6 +1,7 @@
 import { File, Paths } from 'expo-file-system';
 import { useSyncExternalStore } from 'react';
 
+import { loadQueue, serverIdOf } from '@/features/customers/quick-customer-queue';
 import { sendPdvSale } from '@/features/pdv/pdv-api';
 import type { Draft } from '@/features/presale/draft-model';
 import { sendPreSale, type SendResult } from '@/features/presale/presale-api';
@@ -73,6 +74,20 @@ export function useSaleQueue(): SaleQueueEntry[] {
 export const retrySale = (id: string) => update(id, { status: 'pending', error: undefined, code: undefined });
 export const discardSale = (id: string) => set(entries.filter((e) => e.id !== id));
 
+// Cliente cadastrado offline subiu: as vendas que o usavam passam a apontar para o id real e entram na rodada de envio.
+export async function resolvePendingCustomer(pendingId: string, customerId: number): Promise<void> {
+  await loadSaleQueue();
+  if (!entries.some((e) => e.draft.customer?.pendingId === pendingId)) return;
+  set(entries.map((e) => (e.draft.customer?.pendingId === pendingId ? { ...e, draft: { ...e.draft, customer: { id: customerId, name: e.draft.customer.name } } } : e)));
+  void syncSales();
+}
+
+// Cadastro do cliente foi recusado: as vendas dele não têm como subir. Ficam em erro (a venda guardada não se perde).
+export async function failPendingCustomer(pendingId: string, message: string): Promise<void> {
+  await loadSaleQueue();
+  set(entries.map((e) => (e.draft.customer?.pendingId === pendingId && e.status === 'pending' ? { ...e, status: 'error' as const, error: `Cadastro do cliente recusado: ${message}` } : e)));
+}
+
 const sendOf = (kind: SaleKind) => (kind === 'pdv' ? sendPdvSale : sendPreSale);
 
 // Envia os pendentes um a um (nada em paralelo). Relê a fila a cada volta: venda gravada durante o envio entra na mesma rodada.
@@ -81,7 +96,7 @@ export function syncSales(businessId?: number): Promise<void> {
     await loadSaleQueue();
     const tried = new Set<string>();
     for (;;) {
-      const item = entries.find((e) => e.status === 'pending' && !tried.has(e.id) && (e.businessId === undefined || businessId === undefined || e.businessId === businessId));
+      const item = entries.find((e) => e.status === 'pending' && !e.draft.customer?.pendingId && !tried.has(e.id) && (e.businessId === undefined || businessId === undefined || e.businessId === businessId));
       if (!item) break;
       tried.add(item.id);
       update(item.id, { status: 'syncing' });
@@ -100,7 +115,11 @@ export function syncSales(businessId?: number): Promise<void> {
  * houver conexão. Recusa e falta de permissão saem da fila (nada foi criado) e voltam ao operador para corrigir.
  */
 export async function submitSale(kind: SaleKind, draft: Draft, key: string, businessId?: number): Promise<SendResult | { kind: 'queued' }> {
-  await loadSaleQueue();
+  await Promise.all([loadSaleQueue(), loadQueue()]);
+  // O cadastro do cliente pode ter subido enquanto a venda era montada: usa o id real na hora.
+  const pending = draft.customer?.pendingId;
+  const realId = pending ? serverIdOf(pending) : undefined;
+  if (pending && realId !== undefined && draft.customer) draft = { ...draft, customer: { id: realId, name: draft.customer.name } };
   // Mesma chave = mesmo pedido: reenviar ou tocar duas vezes nunca cria segunda entrada.
   if (!entries.some((e) => e.id === key)) {
     set([...entries, { id: key, kind, draft, status: 'pending', businessId, createdAt: new Date().toISOString() }]);

@@ -9,7 +9,8 @@ export type PaymentLine = { method: string; label: string; amountCents: number }
 export type Draft = {
   // Tabela de preço da operação (chave do ComercialWeb). O servidor calcula os preços nela.
   priceTable: string;
-  customer: { id: number; name: string } | null;
+  // pendingId: cadastro rápido ainda na fila (sem id no servidor); a venda fica na fila até ele subir.
+  customer: { id: number; name: string; pendingId?: string } | null;
   observation: string;
   items: DraftItem[];
   payments: PaymentLine[];
@@ -86,7 +87,7 @@ export const estimateCents = (items: DraftItem[], saleDiscount?: Discount): numb
 export function toRequest(draft: Draft) {
   return {
     priceTable: draft.priceTable,
-    customerId: draft.customer?.id ?? null,
+    customerId: draft.customer && !draft.customer.pendingId ? draft.customer.id : null,
     observation: draft.observation.trim() || null,
     items: draft.items.map((i) => ({ productId: i.productId, quantity: i.quantity, ...discountFields(i.discount) })),
     ...discountFields(draft.saleDiscount, 'sale'),
