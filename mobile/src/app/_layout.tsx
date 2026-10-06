@@ -11,6 +11,7 @@ import { PdvDraftProvider } from '@/features/pdv/pdv-draft';
 import { PreSaleDraftProvider } from '@/features/presale/presale-draft';
 import { PriceTablesProvider } from '@/features/pricing/price-tables';
 import { QuickCustomerSync } from '@/features/customers/quick-customer-sync';
+import { SaleQueueSync } from '@/features/sales/sale-queue-sync';
 import { PushBridge } from '@/features/push/push-bridge';
 import { OnboardingProvider, useOnboarding } from '@/features/onboarding/onboarding-context';
 import { StateView } from '@/shared/components/state-view';
@@ -90,6 +91,7 @@ export default function RootLayout() {
               <SessionScopedDraft>
                 <PushBridge />
                 <QuickCustomerSync />
+                <SaleQueueSync />
                 <RootNavigator />
               </SessionScopedDraft>
             </PriceTablesProvider>

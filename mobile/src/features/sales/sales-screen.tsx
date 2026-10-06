@@ -4,6 +4,7 @@ import { Pressable, View } from 'react-native';
 
 import { useSession } from '@/features/auth/session-context';
 import { formatLocal } from '@/features/dashboard/dashboard-model';
+import { PendingSales } from '@/features/sales/pending-sales';
 import { fetchSales, type SaleStatusFilter } from '@/features/sales/sales-api';
 import { statusLabel, statusTone, type SaleListItem } from '@/features/sales/sales-model';
 import { ListScreen } from '@/features/shell/list-screen';
@@ -64,6 +65,7 @@ export function SalesScreen() {
       keyOf={(s) => String(s.id)}
       renderRow={(s) => <SaleRow sale={s} />}
       sectionOf={(s) => formatLocal(s.createdAt).slice(0, 10)}
+      header={<PendingSales />}
       filters={<ChipRow options={FILTERS} selected={filter} onSelect={setFilter} />}
       action={
         profile?.permissions.includes('sales.create') ? (

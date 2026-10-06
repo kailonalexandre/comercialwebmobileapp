@@ -91,6 +91,30 @@ export function PdvScreen() {
     );
   }
 
+  if (phase.name === 'queued') {
+    return (
+      <SafeAreaView edges={['top']} style={styles.root}>
+        <View style={styles.doneBlock}>
+          <View style={styles.doneIcon}>
+            <Icon name="cloud-offline-outline" size={40} color={colors.primary} />
+          </View>
+          <Text variant="title">Venda guardada</Text>
+          <Text color="textMuted">Sem confirmação do servidor. A venda está guardada neste aparelho e será enviada sozinha quando a conexão voltar, sem duplicar.</Text>
+          <Text variant="caption" color="textMuted">Acompanhe em Vendas, em “Aguardando sincronização”.</Text>
+          <Button label="Nova venda" onPress={reset} />
+          <Button
+            label="Ver vendas"
+            variant="outline"
+            onPress={() => {
+              reset();
+              router.navigate('/vendas');
+            }}
+          />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -115,8 +139,10 @@ export function PdvScreen() {
               {quote.registerClosed ? ' Depois de abrir o caixa, volte a esta tela.' : ''}
             </Text>
           )}
-          <Text variant="caption" color="textMuted">
-            Preços e estoque conferidos no ComercialWeb.
+          <Text variant="caption" color={quote.offline ? 'danger' : 'textMuted'}>
+            {quote.offline
+              ? 'Sem conexão: total estimado. A venda fica guardada no aparelho e o ComercialWeb confere preços e estoque ao sincronizar.'
+              : 'Preços e estoque conferidos no ComercialWeb.'}
           </Text>
         </View>
 
@@ -200,19 +226,9 @@ export function PdvScreen() {
           </Text>
         )}
 
-        {phase.name === 'uncertain' ? (
-          <View style={styles.card}>
-            <Text color="danger">Não foi possível confirmar se a venda foi registrada. Reenvie: se ela já existir, não será duplicada.</Text>
-            <Button label="Reenviar" onPress={send} />
-            <Button label="Descartar e começar de novo" variant="outline" onPress={reset} />
-            <Text variant="caption" color="textMuted">
-              Se descartar, confira em Vendas se a venda anterior chegou a ser registrada.
-            </Text>
-          </View>
-        ) : null}
       </ScrollView>
 
-      {phase.name !== 'uncertain' && (
+      {(
         <View style={styles.footer}>
           <View style={styles.flex}>
             <Text variant="caption" color="textMuted">

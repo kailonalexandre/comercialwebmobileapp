@@ -1,3 +1,5 @@
+import { File, Paths } from 'expo-file-system';
+
 import { toRequest, toSaleRequest, type Draft } from '@/features/presale/draft-model';
 import type { SendResult } from '@/features/presale/presale-api';
 import { api } from '@/infrastructure/api';
@@ -18,9 +20,28 @@ const devMethods: PaymentMethod[] = [
   { code: 'debit_card', name: 'Cartão de débito' },
 ];
 
+// Última lista conhecida: sem conexão o operador ainda escolhe a forma de pagamento (o servidor confere ao sincronizar).
+const methodsFile = () => new File(Paths.document, 'payment-methods.json');
+
 export async function fetchPaymentMethods(): Promise<PaymentMethod[]> {
   if (!api) return devMethods;
-  return (await api.request<{ methods: PaymentMethod[] }>('/v1/pdv/payment-methods')).methods;
+  try {
+    const methods = (await api.request<{ methods: PaymentMethod[] }>('/v1/pdv/payment-methods')).methods;
+    try {
+      methodsFile().create({ overwrite: true });
+      methodsFile().write(JSON.stringify(methods));
+    } catch {
+      // sem cache, só perde o uso offline
+    }
+    return methods;
+  } catch (e) {
+    try {
+      if (methodsFile().exists) return JSON.parse(await methodsFile().text()) as PaymentMethod[];
+    } catch {
+      // cache ilegível: segue o erro original
+    }
+    throw e;
+  }
 }
 
 // Preços e total reais do ComercialWeb; o total mostrado ao operador é sempre este, nunca o estimado no app.
