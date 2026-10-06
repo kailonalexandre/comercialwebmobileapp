@@ -284,3 +284,7 @@ App ─POST /api/v1/pdv/quote|sales (Idempotency-Key)─► .NET ─POST /api/mo
 - Rotas de máquina novas: `price-tables`, `products/prices`; `price_mode` em `pre-sales` e `pdv/quote|sales` (grava `sales.price_mode`). .NET: `GET /price-tables`, `GET /products?priceTable=`, `GET /products/{id}` (traz `prices`), `POST /products/prices`, `priceTable` em pré-venda e PDV.
 - App: tabela escolhida persiste (SecureStore) e é a padrão de cada operação nova; cada rascunho tem a sua (`Draft.priceTable`), sempre visível. Trocar com itens no carrinho pergunta e recalcula pelo servidor; produto sem preço na nova tabela impede a troca. Cliente com escopo de comércio "atacado" sugere Atacado (a web não faz isso).
 - Divergência conhecida no ComercialWeb: o PDV web (`PdvSaleService::addItem`) usa `wholesale_price ?: sale_price` (sem o desconto global); pré-venda e `products/prices` usam o desconto global.
+
+## Gestão (somente leitura)
+
+Financeiro (contas a receber/pagar e resumo), Compras e Relatórios de vendas são consultas do .NET direto no banco do ComercialWeb (módulo `Management`), com as mesmas permissões da web e escopo da empresa inteira (como o dashboard). Nada é escrito: lançamentos, baixas e conferência de XML seguem no ComercialWeb. Offline não se aplica (sem escrita para enfileirar); sem conexão a tela mostra o erro com "Tentar novamente".

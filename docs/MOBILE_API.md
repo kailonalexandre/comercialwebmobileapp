@@ -136,6 +136,19 @@ Legenda: AUTH = `Bearer` (access token) salvo indicação. Todas as rotas autent
 - **PERMISSIONS:** `people.view`. **REQUEST:** `page`, `per_page`, `search`.
 - **RESPONSE:** lista paginada de `{ id, code, name, trade_name, document, phone, is_active }` (só clientes ativos).
 
+### GET /financial/summary, /financial/receivables, /financial/payables
+- **PERMISSIONS:** `financial.receivables.view` / `financial.payables.view` (o resumo traz só o lado permitido; o outro vem `null`).
+- **REQUEST (listas):** `status` (`open|overdue|paid`; `open` inclui vencidos), `search` (descrição, documento, cliente/fornecedor), `page`, `pageSize`.
+- **RESPONSE:** lista paginada de `{ id, description, document, personName, dueDate, amountCents, paidCents, openCents, status, overdue, installmentNumber, installmentCount }`; resumo: `{ receivablesOpen, receivablesOverdue, payablesOpen, payablesOverdue }` cada um `{ count, totalCents }`. Empresa inteira, sem títulos excluídos nem agrupados em outro; "vencido" usa o hoje da empresa.
+
+### GET /purchases
+- **PERMISSIONS:** `purchases.access`. **REQUEST:** `status`, `search` (número ou fornecedor), `page`, `pageSize`.
+- **RESPONSE:** lista paginada de `{ id, number, kind, status, supplierName, orderedAt, totalCents, isUrgent }` (mais recentes primeiro).
+
+### GET /reports/sales
+- **PERMISSIONS:** `relatorios.access`. **REQUEST:** `from`, `to` (`yyyy-MM-dd`, inclusive; padrão: últimos 30 dias até hoje da empresa; máximo 366 dias, senão 422).
+- **RESPONSE:** `{ from, to, count, totalCents, averageTicketCents, byDay: [{ day, count, totalCents }], byMethod: [{ method, count, totalCents }] }` (só vendas finalizadas, pela data local da venda).
+
 ### GET /notifications
 - **PERMISSIONS:** `mobile.access`. **REQUEST:** `page`, `per_page`, `read` (`read|unread`).
 - **RESPONSE:** `{ data: [ { id, type, severity, title, body, read, created_at } ], meta, unread }`. É o mesmo armazenamento do sino do web (usuário + empresa do aparelho).
