@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback } from 'react';
 
-import { useQuickCustomerQueue } from '@/features/customers/quick-customer-queue';
+import { inActiveBusiness, useQuickCustomerQueue } from '@/features/customers/quick-customer-queue';
 import { fetchCustomers } from '@/features/customers/customers-api';
 import { fetchProducts } from '@/features/catalog/products-api';
 import { suggestedTable } from '@/features/pricing/price-table-model';
@@ -59,7 +59,7 @@ export function PickProductScreen() {
 export function PickCustomerScreen() {
   const { setDraft } = useTargetDraft();
   const { tables } = usePriceTables();
-  const waiting = useQuickCustomerQueue().filter((e) => e.status === 'pending' || e.status === 'syncing');
+  const waiting = useQuickCustomerQueue().filter((e) => (e.status === 'pending' || e.status === 'syncing') && inActiveBusiness(e));
   const choose = (customer: { id: number; name: string; pendingId?: string } | null, tradeScope?: string | null) => {
     // Cliente só de atacado abre a venda em Atacado (visível e editável na tela). Com itens já lançados, nada muda sozinho.
     const suggested = suggestedTable(tradeScope, tables);

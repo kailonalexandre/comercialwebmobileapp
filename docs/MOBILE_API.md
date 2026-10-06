@@ -149,6 +149,11 @@ Legenda: AUTH = `Bearer` (access token) salvo indicação. Todas as rotas autent
 - **PERMISSIONS:** `relatorios.access`. **REQUEST:** `from`, `to` (`yyyy-MM-dd`, inclusive; padrão: últimos 30 dias até hoje da empresa; máximo 366 dias, senão 422).
 - **RESPONSE:** `{ from, to, count, totalCents, averageTicketCents, byDay: [{ day, count, totalCents }], byMethod: [{ method, count, totalCents }] }` (só vendas finalizadas da unidade atual, pela data local da venda).
 
+### GET /me/businesses, POST /auth/switch-business
+- **GET /me/businesses:** `{ businesses: [{ id, name }], currentBusinessId }` — empresas com vínculo ativo do usuário (mesmo critério do login).
+- **POST /auth/switch-business** `{ businessId }`: troca a empresa da sessão sem novo login. Só empresa com vínculo ativo (senão 403; id inválido 422). Resposta `{ accessToken, expiresAt, businessId, businessName }`: o token antigo (outra empresa) deixa de valer na hora; o refresh token da sessão continua o mesmo e já renova na empresa nova.
+- Rotas que usam o token do aparelho pareado no ComercialWeb (saldo `GET /products/{id}/stock` e pedidos `GET /orders*`) só valem na empresa do QR: depois da troca respondem **409** `company_not_paired` em vez de servir dados de outra empresa. O restante (vendas, clientes, produtos, financeiro etc.) acompanha a empresa ativa.
+
 ### GET /notifications
 - **PERMISSIONS:** `mobile.access`. **REQUEST:** `page`, `per_page`, `read` (`read|unread`).
 - **RESPONSE:** `{ data: [ { id, type, severity, title, body, read, created_at } ], meta, unread }`. É o mesmo armazenamento do sino do web (usuário + empresa do aparelho).

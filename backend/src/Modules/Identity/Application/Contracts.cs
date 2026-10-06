@@ -20,6 +20,11 @@ public sealed record RefreshTokenState(
 
 public sealed record Profile(string UserName, long BusinessId, string BusinessName);
 
+public sealed record BusinessRef(long Id, string Name);
+
+/// <summary>Nova credencial depois da troca de empresa: só o access token muda (o refresh da sessão continua valendo).</summary>
+public sealed record SwitchedBusiness(string AccessToken, DateTimeOffset ExpiresAt, long BusinessId, string BusinessName);
+
 /// <param name="MinAppVersion">api.min_app_version do ComercialWeb (quando disponível): o app bloqueia versões menores.</param>
 public sealed record IssuedSession(string AccessToken, string RefreshToken, DateTimeOffset ExpiresAt, string? MinAppVersion = null);
 
@@ -45,6 +50,18 @@ public interface IIdentityStore
     Task<bool> IsSessionActiveAsync(Guid sessionId, long userId, long businessId, DateTimeOffset now, CancellationToken ct);
 
     Task<Profile?> GetProfileAsync(long userId, long businessId, CancellationToken ct);
+
+    /// <summary>Empresas com vínculo ativo do usuário (mesmo critério do login), por nome.</summary>
+    Task<IReadOnlyList<BusinessRef>> ListBusinessesAsync(long userId, CancellationToken ct);
+
+    /// <summary>
+    /// Aponta a sessão para outra empresa do usuário. False se a sessão não está ativa ou o usuário não tem vínculo ativo
+    /// com a empresa. Guarda a empresa do pareamento na primeira troca (paired_business_id).
+    /// </summary>
+    Task<bool> SwitchBusinessAsync(Guid sessionId, long userId, long businessId, CancellationToken ct);
+
+    /// <summary>Empresa em que o aparelho foi pareado no ComercialWeb; <paramref name="current"/> se a sessão nunca trocou.</summary>
+    Task<long> GetPairedBusinessIdAsync(Guid sessionId, long current, CancellationToken ct);
 
     /// <summary>Par de tokens do ComercialWeb (cifrado) da sessão; null se a sessão não foi pareada por QR.</summary>
     Task<string?> GetCwTokensAsync(Guid sessionId, CancellationToken ct);

@@ -90,11 +90,12 @@ public static class CatalogModule
         {
             var ids = SessionIds.From(user)!;
             if (await queries.FindAsync(ids.BusinessId, id, ct) is null) return Results.Problem(statusCode: StatusCodes.Status404NotFound);
-            var result = await link.CallAsync(ids.SessionId, (token, c) => cw.ProductStockAsync(token, id, c), ct);
+            var result = await link.CallAsync(ids.SessionId, ids.BusinessId, (token, c) => cw.ProductStockAsync(token, id, c), ct);
             return result switch
             {
                 { Status: CwStatus.Ok, Value: { } stock } => Results.Ok(new { productId = id, unitId = stock.UnitId, totalMilli = stock.TotalMilli }),
                 { Status: CwStatus.Unavailable } => Results.Problem(statusCode: StatusCodes.Status503ServiceUnavailable),
+                { Status: CwStatus.NotPaired } => Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "company_not_paired"),
                 _ => Results.Problem(statusCode: StatusCodes.Status403Forbidden),
             };
         }).RequirePermission(ViewProducts);

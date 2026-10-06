@@ -8,7 +8,8 @@ import { clearQueue, syncQuickCustomers, useQuickCustomerQueue } from '@/feature
 // Sem UI: mantém a cópia local de clientes (offline) e reenvia a fila ao entrar e sempre que o app volta ao primeiro plano; ao sair da conta a fila e a cópia de clientes são apagadas,
 // para um cadastro pendente nunca ser enviado depois em nome de outro usuário.
 export function QuickCustomerSync() {
-  const { status } = useSession();
+  const { status, profile } = useSession();
+  const businessId = profile?.businessId;
   const waiting = useQuickCustomerQueue().some((e) => e.status === 'pending');
   useEffect(() => {
     if (status === 'signedOut') {
@@ -26,6 +27,6 @@ export function QuickCustomerSync() {
       sub.remove();
       clearInterval(timer);
     };
-  }, [status, waiting]);
+  }, [status, waiting, businessId]);
   return null;
 }

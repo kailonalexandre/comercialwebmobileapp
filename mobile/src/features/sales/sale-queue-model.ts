@@ -39,3 +39,7 @@ export function applyResult(entry: SaleQueueEntry, result: SendResult): SaleQueu
 // App fechado no meio do envio: volta para a fila (o reenvio é seguro por causa da chave).
 export const restore = (entries: SaleQueueEntry[]): SaleQueueEntry[] =>
   entries.map((e) => (e.status === 'syncing' ? { ...e, status: 'pending' as const } : e));
+
+// Venda de uma empresa nunca sobe nem aparece em outra. Sem empresa conhecida (dado antigo ou sessão ainda carregando), vale para qualquer uma.
+export const belongsTo = (entry: SaleQueueEntry, businessId: number | null | undefined) =>
+  entry.businessId === undefined || businessId == null || entry.businessId === businessId;

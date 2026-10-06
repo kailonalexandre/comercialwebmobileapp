@@ -1,12 +1,14 @@
 import { router } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
+import { getActiveBusinessId } from '@/infrastructure/business-scope';
+
 import { usePdvDraft } from '@/features/pdv/pdv-draft';
 import { usePreSaleDraft } from '@/features/presale/presale-draft';
 import { STATUS_LABEL } from '@/features/customers/quick-customer-model';
 import { estimateCents } from '@/features/presale/draft-model';
 import { discardSale, retrySale, syncSales, useSaleQueue } from '@/features/sales/sale-queue';
-import { KIND_LABEL, type SaleQueueEntry } from '@/features/sales/sale-queue-model';
+import { belongsTo, KIND_LABEL, type SaleQueueEntry } from '@/features/sales/sale-queue-model';
 import { StatusPill } from '@/shared/components/status-pill';
 import { Text } from '@/shared/components/text';
 import { makeStyles } from '@/shared/theme/theme-context';
@@ -20,7 +22,7 @@ export function PendingSales() {
   const styles = useStyles();
   const pdv = usePdvDraft();
   const presale = usePreSaleDraft();
-  const items = useSaleQueue().filter((e) => e.status !== 'synced');
+  const items = useSaleQueue().filter((e) => e.status !== 'synced' && belongsTo(e, getActiveBusinessId()));
   if (items.length === 0) return null;
   return (
     <View style={styles.box}>

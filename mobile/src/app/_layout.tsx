@@ -2,7 +2,7 @@ import { IBMPlexMono_400Regular, IBMPlexMono_500Medium } from '@expo-google-font
 import { InterTight_400Regular, InterTight_500Medium, InterTight_600SemiBold, InterTight_700Bold } from '@expo-google-fonts/inter-tight';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { StatusBar } from 'expo-status-bar';
 
 import { SessionProvider, useSession } from '@/features/auth/session-context';
@@ -42,6 +42,7 @@ function RootNavigator() {
           <Stack.Screen name="cliente-novo" />
           <Stack.Screen name="notificacoes" />
           <Stack.Screen name="configuracoes" />
+          <Stack.Screen name="trocar-empresa" />
           <Stack.Screen name="pedido/[id]" />
           <Stack.Screen name="nova-venda" />
           <Stack.Screen name="selecionar-produto" />
@@ -59,6 +60,13 @@ function RootNavigator() {
       </Stack>
     </>
   );
+}
+
+// Trocar de empresa recria tudo abaixo (telas, listas, rascunhos, tabelas de preço): nenhum dado em memória de uma empresa
+// sobrevive na outra, e a navegação volta ao início.
+function BusinessScoped({ children }: { children: ReactNode }) {
+  const { businessEpoch } = useSession();
+  return <Fragment key={businessEpoch}>{children}</Fragment>;
 }
 
 // O rascunho de pré-venda (e sua chave de idempotência) morre ao entrar/sair: nunca passa de um usuário a outro.
@@ -88,15 +96,17 @@ export default function RootLayout() {
       {ready ? (
         <OnboardingProvider>
           <SessionProvider>
-            <PriceTablesProvider>
-              <SessionScopedDraft>
-                <PushBridge />
-                <QuickCustomerSync />
-                <SaleQueueSync />
-                <ProductCacheSync />
-                <RootNavigator />
-              </SessionScopedDraft>
-            </PriceTablesProvider>
+            <BusinessScoped>
+              <PriceTablesProvider>
+                <SessionScopedDraft>
+                  <PushBridge />
+                  <QuickCustomerSync />
+                  <SaleQueueSync />
+                  <ProductCacheSync />
+                  <RootNavigator />
+                </SessionScopedDraft>
+              </PriceTablesProvider>
+            </BusinessScoped>
           </SessionProvider>
         </OnboardingProvider>
       ) : (

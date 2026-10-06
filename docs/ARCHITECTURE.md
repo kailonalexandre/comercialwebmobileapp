@@ -288,3 +288,12 @@ App ─POST /api/v1/pdv/quote|sales (Idempotency-Key)─► .NET ─POST /api/mo
 ## Gestão (somente leitura)
 
 Financeiro (contas a receber/pagar e resumo), Compras e Relatórios de vendas são consultas do .NET direto no banco do ComercialWeb (módulo `Management`), com as mesmas permissões e regras de situação/saldo da web e escopo da unidade atual (como a Consulta de Vendas). Nada é escrito: lançamentos, baixas e conferência de XML seguem no ComercialWeb. Offline não se aplica (sem escrita para enfileirar); sem conexão a tela mostra o erro com "Tentar novamente".
+
+## Troca de empresa
+
+O usuário com mais de uma empresa troca a ativa sem sair da conta (Início → nome da empresa, ou Configurações → Trocar empresa).
+
+- **API:** `POST /auth/switch-business` muda `mobile_sessions.business_id` (confere o vínculo ativo) e emite novo access token; o antigo morre na hora. A empresa do pareamento fica em `paired_business_id` (migration 0006): a revalidação do aparelho no ComercialWeb compara com ela, então trocar não derruba a sessão. Saldo e pedidos da Loja Virtual dependem do token do aparelho (da empresa do QR) e respondem 409 em outra empresa, em vez de misturar dados.
+- **App:** a empresa ativa é guardada (`infrastructure/business-scope.ts`) e a troca recria toda a árvore de telas (`businessEpoch`): rascunhos, listas e tabelas de preço em memória não sobrevivem. Tudo que fica no aparelho é por empresa: cópias de clientes, produtos e formas de pagamento (`*-b<id>.json`, apagadas ao sair da conta) e as filas de vendas e cadastros (`businessId` em cada item; só sobem e só aparecem na empresa que os gravou — voltar à empresa de origem envia o que ficou). Download em andamento durante a troca é descartado.
+- **Limite:** pedidos da Loja Virtual e saldo por produto só na empresa do QR; para ver em outra, parear de novo com o QR dela.
+
