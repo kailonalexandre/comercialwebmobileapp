@@ -31,10 +31,10 @@ export async function searchOffline(search: string, page: number, pageSize: numb
   return stored ? searchCached(stored.items, search, page, pageSize) : null;
 }
 
-export function refreshCustomerCache(): Promise<void> {
+export function refreshCustomerCache(force = false): Promise<void> {
   refreshing ??= (async () => {
     const stored = await read();
-    if (stored && Date.now() - stored.savedAt < REFRESH_MS) return;
+    if (!force && stored && Date.now() - stored.savedAt < REFRESH_MS) return;
     try {
       const items: Customer[] = [];
       for (let page = 1; page <= MAX_PAGES; page++) {
