@@ -29,22 +29,32 @@ public sealed record SalesByMethod(string Method, long Count, long TotalCents);
 public sealed record SalesReport(DateOnly From, DateOnly To, long Count, long TotalCents, long AverageTicketCents, IReadOnlyList<SalesDay> ByDay, IReadOnlyList<SalesByMethod> ByMethod);
 
 /// <summary>
-/// Consultas de gestão (financeiro, compras, relatórios), somente leitura, da empresa inteira da sessão
-/// (como o dashboard da web). Datas no horário local da empresa.
+/// Consultas de gestão (financeiro, compras, relatórios), somente leitura, da unidade atual do usuário (como as consultas
+/// da web: nunca consolida filiais em silêncio). Datas no horário local da empresa.
 /// </summary>
 public sealed class ManagementQueries(MySqlDataSource db)
 {
     public static readonly IReadOnlySet<string> TitleStatuses = new HashSet<string>(StringComparer.Ordinal) { "open", "overdue", "paid" };
+    public static readonly IReadOnlySet<string> PurchaseStatuses = new HashSet<string>(StringComparer.Ordinal) { "pendente", "orcamento", "recebido", "cancelado" };
 
-    // Títulos agrupados em outro (grouped_into_id) não contam duas vezes, como no dashboard.
-    private const string TitleScope = "f.business_id = @businessId AND f.deleted_at IS NULL AND f.grouped_into_id IS NULL AND f.type = @type";
+    // Unidade atual (como a consulta da web). Títulos agrupados em outro (grouped_into_id) não contam duas vezes.
+    private const string TitleScope = "f.business_id = @businessId AND f.location_id = @locationId AND f.deleted_at IS NULL AND f.grouped_into_id IS NULL AND f.type = @type";
 
-    public async Task<PagedResult<TitleItem>> TitlesAsync(long businessId, string type, string? status, string? search, DateOnly today, Paging paging, CancellationToken ct)
+    // Saldo como na web (FinancialTitleRepository): total com juros, multa e acréscimo, menos desconto e recebido. CAST evita
+    // erro de subtração em colunas unsigned.
+    private const string Total = "(CAST(f.amount_cents AS SIGNED) + CAST(f.interest_cents AS SIGNED) + CAST(f.fine_cents AS SIGNED) + CAST(f.surcharge_cents AS SIGNED) - CAST(f.discount_cents AS SIGNED))";
+    private const string Balance = $"({Total} - CAST(f.paid_cents AS SIGNED))";
+
+    // Pendente = aberto ou parcial (a web também agrupa os dois).
+    private const string Pending = "f.status IN ('open', 'partial')";
+
+    public async Task<PagedResult<TitleItem>> TitlesAsync(long businessId, long locationId, string type, string? status, string? search, DateOnly today, Paging paging, CancellationToken ct)
     {
         var term = SqlText.NormalizeSearch(search);
         var args = new
         {
             businessId,
+            locationId,
             type,
             status,
             today = today.ToDateTime(TimeOnly.MinValue),
@@ -53,12 +63,15 @@ public sealed class ManagementQueries(MySqlDataSource db)
             offset = paging.Offset,
             pageSize = paging.PageSize,
         };
-        // "overdue" = em aberto e vencido; "open" = em aberto (inclui vencidos); "paid" = quitado.
+        // Situações como na web: "open" = a vencer (hoje inclusive) com saldo; "overdue" = vencida com saldo; "paid" = baixada de fato
+        // (status baixado ou saldo zerado, nunca perdida nem liquidada fora do caixa).
         const string where = $"""
             FROM financial_lines f LEFT JOIN people p ON p.id = f.person_id AND p.business_id = f.business_id
             WHERE {TitleScope}
-              AND (@status IS NULL OR (@status = 'paid' AND f.status = 'paid') OR (@status IN ('open','overdue') AND f.status = 'open'
-                   AND (@status = 'open' OR f.due_date < @today)))
+              AND (@status IS NULL
+                   OR (@status = 'open' AND {Pending} AND {Balance} > 0 AND f.due_date >= @today)
+                   OR (@status = 'overdue' AND {Pending} AND {Balance} > 0 AND f.due_date < @today)
+                   OR (@status = 'paid' AND (f.status = 'settled' OR {Balance} <= 0) AND f.status <> 'lost' AND f.is_liquidated = 0))
               AND (@term IS NULL OR f.description LIKE @like OR f.document LIKE @like OR p.name LIKE @like)
             """;
         await using var conn = await db.OpenConnectionAsync(ct);
@@ -67,8 +80,8 @@ public sealed class ManagementQueries(MySqlDataSource db)
             $"""
             SELECT CAST(f.id AS SIGNED) AS Id, f.description AS Description, f.document AS Document, p.name AS PersonName, f.due_date AS DueDate,
                    CAST(f.amount_cents AS SIGNED) AS AmountCents, CAST(f.paid_cents AS SIGNED) AS PaidCents,
-                   CAST(GREATEST(f.amount_cents - f.paid_cents, 0) AS SIGNED) AS OpenCents, f.status AS Status,
-                   (f.status = 'open' AND f.due_date < @today) AS Overdue,
+                   CAST(GREATEST({Balance}, 0) AS SIGNED) AS OpenCents, f.status AS Status,
+                   ({Pending} AND {Balance} > 0 AND f.due_date < @today) AS Overdue,
                    CAST(f.installment_number AS SIGNED) AS InstallmentNumber, CAST(f.installment_count AS SIGNED) AS InstallmentCount
             {where}
             ORDER BY f.due_date, f.id LIMIT @pageSize OFFSET @offset
@@ -76,28 +89,29 @@ public sealed class ManagementQueries(MySqlDataSource db)
         return new PagedResult<TitleItem>(items, paging.Page, paging.PageSize, total);
     }
 
-    public async Task<(TitleTotals Open, TitleTotals Overdue)> TitleTotalsAsync(long businessId, string type, DateOnly today, CancellationToken ct)
+    public async Task<(TitleTotals Open, TitleTotals Overdue)> TitleTotalsAsync(long businessId, long locationId, string type, DateOnly today, CancellationToken ct)
     {
         await using var conn = await db.OpenConnectionAsync(ct);
+        // Como o resumo da web: "a vencer" (hoje inclusive) e "vencidas" são grupos separados, saldo com juros/multa/desconto.
         var rows = (await conn.QueryAsync<(bool Overdue, long Count, long TotalCents)>(new CommandDefinition(
             $"""
-            SELECT (f.due_date < @today) AS Overdue, COUNT(*) AS Count, CAST(COALESCE(SUM(f.amount_cents - f.paid_cents), 0) AS SIGNED) AS TotalCents
-            FROM financial_lines f WHERE {TitleScope} AND f.status = 'open' GROUP BY (f.due_date < @today)
+            SELECT (f.due_date < @today) AS Overdue, COUNT(*) AS Count, CAST(COALESCE(SUM(GREATEST({Balance}, 0)), 0) AS SIGNED) AS TotalCents
+            FROM financial_lines f WHERE {TitleScope} AND {Pending} GROUP BY (f.due_date < @today)
             """,
-            new { businessId, type, today = today.ToDateTime(TimeOnly.MinValue) }, cancellationToken: ct))).ToList();
+            new { businessId, locationId, type, today = today.ToDateTime(TimeOnly.MinValue) }, cancellationToken: ct))).ToList();
         var overdue = rows.FirstOrDefault(r => r.Overdue);
-        var current = rows.FirstOrDefault(r => !r.Overdue);
-        return (new TitleTotals(overdue.Count + current.Count, overdue.TotalCents + current.TotalCents), new TitleTotals(overdue.Count, overdue.TotalCents));
+        var upcoming = rows.FirstOrDefault(r => !r.Overdue);
+        return (new TitleTotals(upcoming.Count, upcoming.TotalCents), new TitleTotals(overdue.Count, overdue.TotalCents));
     }
 
-    public async Task<PagedResult<PurchaseItem>> PurchasesAsync(long businessId, string? status, string? search, Paging paging, CancellationToken ct)
+    public async Task<PagedResult<PurchaseItem>> PurchasesAsync(long businessId, long locationId, string? status, string? search, Paging paging, CancellationToken ct)
     {
         var term = SqlText.NormalizeSearch(search);
-        var args = new { businessId, status, term, like = term is null ? null : SqlText.ContainsPattern(term), offset = paging.Offset, pageSize = paging.PageSize };
+        var args = new { businessId, locationId, status, term, like = term is null ? null : SqlText.ContainsPattern(term), offset = paging.Offset, pageSize = paging.PageSize };
         const string where = """
             FROM purchase_orders o LEFT JOIN people s ON s.id = o.supplier_person_id AND s.business_id = o.business_id
-            WHERE o.business_id = @businessId AND (@status IS NULL OR o.status = @status)
-              AND (@term IS NULL OR o.number LIKE @like OR s.name LIKE @like)
+            WHERE o.business_id = @businessId AND o.location_id = @locationId AND (@status IS NULL OR o.status = @status)
+              AND (@term IS NULL OR o.number LIKE @like OR o.nfe_access_key LIKE @like OR s.name LIKE @like)
             """;
         await using var conn = await db.OpenConnectionAsync(ct);
         var total = await conn.ExecuteScalarAsync<long>(new CommandDefinition($"SELECT COUNT(*) {where}", args, cancellationToken: ct));
@@ -112,11 +126,11 @@ public sealed class ManagementQueries(MySqlDataSource db)
     }
 
     // Vendas finalizadas no período (inclusive nas duas pontas), pela data da venda no horário local da empresa.
-    public async Task<SalesReport> SalesAsync(long businessId, DateOnly from, DateOnly to, CancellationToken ct)
+    public async Task<SalesReport> SalesAsync(long businessId, long locationId, DateOnly from, DateOnly to, CancellationToken ct)
     {
-        var args = new { businessId, start = from.ToDateTime(TimeOnly.MinValue), end = to.AddDays(1).ToDateTime(TimeOnly.MinValue) };
+        var args = new { businessId, locationId, start = from.ToDateTime(TimeOnly.MinValue), end = to.AddDays(1).ToDateTime(TimeOnly.MinValue) };
         const string scope = """
-            s.business_id = @businessId AND s.deleted_at IS NULL AND s.status = 'finalizada'
+            s.business_id = @businessId AND s.location_id = @locationId AND s.deleted_at IS NULL AND s.status = 'finalizada'
             AND COALESCE(s.occurred_at, s.created_at) >= @start AND COALESCE(s.occurred_at, s.created_at) < @end
             """;
         await using var conn = await db.OpenConnectionAsync(ct);

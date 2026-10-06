@@ -26,9 +26,11 @@ export const TITLE_NAME: Record<TitleKind, string> = { receivable: 'Contas a rec
 export const formatDate = (iso: string) => formatLocal(iso).slice(0, 10);
 
 export function titleStatus(t: Pick<Title, 'status' | 'overdue'>): { label: string; tone: Tone } {
-  if (t.status === 'paid') return { label: 'Pago', tone: 'success' };
+  // Status gravados pela web: open, partial, settled (baixado) e lost (perdido).
+  if (t.status === 'settled') return { label: 'Baixado', tone: 'success' };
+  if (t.status === 'lost') return { label: 'Perdido', tone: 'danger' };
   if (t.overdue) return { label: 'Vencido', tone: 'danger' };
-  return { label: 'Em aberto', tone: 'primary' };
+  return t.status === 'partial' ? { label: 'Parcial', tone: 'info' } : { label: 'Em aberto', tone: 'primary' };
 }
 
 export const installmentLabel = (t: Pick<Title, 'installmentNumber' | 'installmentCount'>) =>

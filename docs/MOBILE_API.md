@@ -138,16 +138,16 @@ Legenda: AUTH = `Bearer` (access token) salvo indicação. Todas as rotas autent
 
 ### GET /financial/summary, /financial/receivables, /financial/payables
 - **PERMISSIONS:** `financial.receivables.view` / `financial.payables.view` (o resumo traz só o lado permitido; o outro vem `null`).
-- **REQUEST (listas):** `status` (`open|overdue|paid`; `open` inclui vencidos), `search` (descrição, documento, cliente/fornecedor), `page`, `pageSize`.
-- **RESPONSE:** lista paginada de `{ id, description, document, personName, dueDate, amountCents, paidCents, openCents, status, overdue, installmentNumber, installmentCount }`; resumo: `{ receivablesOpen, receivablesOverdue, payablesOpen, payablesOverdue }` cada um `{ count, totalCents }`. Empresa inteira, sem títulos excluídos nem agrupados em outro; "vencido" usa o hoje da empresa.
+- **REQUEST (listas):** `status` (`open` = a vencer, `overdue` = vencidas, `paid` = baixadas; como os cartões da web), `search` (descrição, documento, cliente/fornecedor), `page`, `pageSize`.
+- **RESPONSE:** lista paginada de `{ id, description, document, personName, dueDate, amountCents, paidCents, openCents, status, overdue, installmentNumber, installmentCount }`; resumo: `{ receivablesOpen, receivablesOverdue, payablesOpen, payablesOverdue }` cada um `{ count, totalCents }`. Unidade atual do usuário (como a web), sem títulos excluídos nem agrupados em outro. Saldo = valor + juros + multa + acréscimo − desconto − recebido; pendente = `open` ou `partial`; "vencido" usa o hoje da empresa. `receivablesOpen`/`payablesOpen` = a vencer (hoje inclusive), separados dos vencidos, como o resumo da web.
 
 ### GET /purchases
-- **PERMISSIONS:** `purchases.access`. **REQUEST:** `status`, `search` (número ou fornecedor), `page`, `pageSize`.
-- **RESPONSE:** lista paginada de `{ id, number, kind, status, supplierName, orderedAt, totalCents, isUrgent }` (mais recentes primeiro).
+- **PERMISSIONS:** `purchases.access`. **REQUEST:** `status` (`pendente|orcamento|recebido|cancelado`), `search` (número, chave da NF-e ou fornecedor), `page`, `pageSize`.
+- **RESPONSE:** lista paginada de `{ id, number, kind, status, supplierName, orderedAt, totalCents, isUrgent }` (mais recentes primeiro; unidade atual).
 
 ### GET /reports/sales
 - **PERMISSIONS:** `relatorios.access`. **REQUEST:** `from`, `to` (`yyyy-MM-dd`, inclusive; padrão: últimos 30 dias até hoje da empresa; máximo 366 dias, senão 422).
-- **RESPONSE:** `{ from, to, count, totalCents, averageTicketCents, byDay: [{ day, count, totalCents }], byMethod: [{ method, count, totalCents }] }` (só vendas finalizadas, pela data local da venda).
+- **RESPONSE:** `{ from, to, count, totalCents, averageTicketCents, byDay: [{ day, count, totalCents }], byMethod: [{ method, count, totalCents }] }` (só vendas finalizadas da unidade atual, pela data local da venda).
 
 ### GET /notifications
 - **PERMISSIONS:** `mobile.access`. **REQUEST:** `page`, `per_page`, `read` (`read|unread`).

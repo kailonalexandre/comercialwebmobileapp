@@ -287,4 +287,4 @@ App ─POST /api/v1/pdv/quote|sales (Idempotency-Key)─► .NET ─POST /api/mo
 
 ## Gestão (somente leitura)
 
-Financeiro (contas a receber/pagar e resumo), Compras e Relatórios de vendas são consultas do .NET direto no banco do ComercialWeb (módulo `Management`), com as mesmas permissões da web e escopo da empresa inteira (como o dashboard). Nada é escrito: lançamentos, baixas e conferência de XML seguem no ComercialWeb. Offline não se aplica (sem escrita para enfileirar); sem conexão a tela mostra o erro com "Tentar novamente".
+Financeiro (contas a receber/pagar e resumo), Compras e Relatórios de vendas são consultas do .NET direto no banco do ComercialWeb (módulo `Management`), com as mesmas permissões e regras de situação/saldo da web e escopo da unidade atual (como a Consulta de Vendas). Nada é escrito: lançamentos, baixas e conferência de XML seguem no ComercialWeb. Offline não se aplica (sem escrita para enfileirar); sem conexão a tela mostra o erro com "Tentar novamente".

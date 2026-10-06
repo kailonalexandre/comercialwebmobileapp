@@ -15,7 +15,7 @@ import { formatCents } from '@/shared/utils/format';
 const FILTERS: { key: TitleStatusFilter; label: string }[] = [
   { key: 'open', label: 'Em aberto' },
   { key: 'overdue', label: 'Vencidos' },
-  { key: 'paid', label: 'Pagos' },
+  { key: 'paid', label: 'Baixados' },
   { key: 'all', label: 'Todos' },
 ];
 
@@ -27,10 +27,10 @@ function TitleRow({ title: t }: { title: Title }) {
     <ListRow
       title={name}
       lines={lines}
-      label={`${name}, ${formatCents(t.status === 'paid' ? t.amountCents : t.openCents)}, ${status.label}`}
+      label={`${name}, ${formatCents(t.status === 'settled' ? t.amountCents : t.openCents)}, ${status.label}`}
       trailing={
         <View style={{ alignItems: 'flex-end', gap: spacing.xs }}>
-          <Text variant="label">{formatCents(t.status === 'paid' ? t.amountCents : t.openCents)}</Text>
+          <Text variant="label">{formatCents(t.status === 'settled' ? t.amountCents : t.openCents)}</Text>
           <StatusPill label={status.label} tone={status.tone} />
         </View>
       }

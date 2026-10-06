@@ -1,8 +1,10 @@
 import { formatDate, installmentLabel, methodLabel, periodStart, titleStatus } from '@/features/management/management-model';
 
 describe('management-model', () => {
-  it('status do título: pago > vencido > em aberto', () => {
-    expect(titleStatus({ status: 'paid', overdue: false }).label).toBe('Pago');
+  it('status do título: baixado/perdido > vencido > parcial/em aberto', () => {
+    expect(titleStatus({ status: 'settled', overdue: false }).label).toBe('Baixado');
+    expect(titleStatus({ status: 'lost', overdue: false }).label).toBe('Perdido');
+    expect(titleStatus({ status: 'partial', overdue: false }).label).toBe('Parcial');
     expect(titleStatus({ status: 'open', overdue: true })).toEqual({ label: 'Vencido', tone: 'danger' });
     expect(titleStatus({ status: 'open', overdue: false }).label).toBe('Em aberto');
   });

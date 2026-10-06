@@ -18,13 +18,13 @@ function SideCard({ kind, open, overdue }: { kind: TitleKind; open: Totals; over
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${TITLE_NAME[kind]}: ${formatCents(open.totalCents)} em aberto, ${formatCents(overdue.totalCents)} vencido`}
+      accessibilityLabel={`${TITLE_NAME[kind]}: ${formatCents(open.totalCents)} a vencer, ${formatCents(overdue.totalCents)} vencido`}
       onPress={() => router.push({ pathname: '/titulos/[type]', params: { type: kind } })}
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}
     >
       <Text variant="label">{TITLE_NAME[kind]}</Text>
       <Text variant="total">{formatCents(open.totalCents)}</Text>
-      <Text variant="caption" color="textMuted">{open.count} {open.count === 1 ? 'título em aberto' : 'títulos em aberto'}</Text>
+      <Text variant="caption" color="textMuted">{open.count} {open.count === 1 ? 'título a vencer' : 'títulos a vencer'}</Text>
       <Text variant="caption" color={overdue.count > 0 ? 'danger' : 'textMuted'}>
         {overdue.count > 0 ? `${formatCents(overdue.totalCents)} vencido (${overdue.count})` : 'Nada vencido'}
       </Text>
