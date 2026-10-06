@@ -1,16 +1,31 @@
+import { pricesOffline, searchProductsOffline } from '@/features/catalog/product-cache';
 import { DEFAULT_TABLE } from '@/features/pricing/price-table-model';
 import { api } from '@/infrastructure/api';
+import { ApiError } from '@/infrastructure/api/client';
 import type { Paged } from '@/shared/hooks/use-paged-list';
 
 // salePriceCents = preço do cadastro (varejo). priceCents = preço na tabela pedida (null = produto sem preço nela).
 export type Product = { id: number; code: number; name: string; sku: string | null; barcode: string | null; salePriceCents: number; isActive: boolean; priceCents: number | null };
 
+// Sem conexão a lista vem da cópia local (product-cache); outros erros seguem para a tela.
 export async function fetchProducts(page: number, search: string, priceTable: string = DEFAULT_TABLE): Promise<Paged<Product>> {
+  try {
+    return await fetchProductsRemote(page, search, priceTable, 20);
+  } catch (e) {
+    if (e instanceof ApiError && (e.kind === 'network' || e.kind === 'timeout')) {
+      const local = await searchProductsOffline(priceTable, search, page, 20);
+      if (local) return local;
+    }
+    throw e;
+  }
+}
+
+export async function fetchProductsRemote(page: number, search: string, priceTable: string, pageSize: number): Promise<Paged<Product>> {
   if (!api) {
     if (!__DEV__) throw new Error('API não configurada.');
     return { items: [{ id: 1, code: 1, name: 'Camiseta básica', sku: 'CAM-01', barcode: null, salePriceCents: 4_990, isActive: true, priceCents: priceTable === 'atacado' ? 3_990 : 4_990 }], page: 1, pageSize: 20, total: 1 };
   }
-  const query = new URLSearchParams({ page: String(page), pageSize: '20' });
+  const query = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
   if (search) query.set('search', search);
   query.set('priceTable', priceTable);
   return api.request<Paged<Product>>(`/v1/products?${query.toString()}`);
@@ -41,5 +56,14 @@ export async function fetchProduct(id: number): Promise<ProductDetail> {
 // Preços do carrinho numa tabela, calculados pelo ComercialWeb (null = produto sem preço nela).
 export async function fetchPricesIn(productIds: number[], priceTable: string): Promise<Record<string, number | null>> {
   if (!api) return Object.fromEntries(productIds.map((id) => [String(id), priceTable === 'atacado' ? 3_990 : 4_990]));
-  return (await api.request<{ prices: Record<string, number | null> }>('/v1/products/prices', { method: 'POST', body: { productIds, priceTable } })).prices;
+  try {
+    return (await api.request<{ prices: Record<string, number | null> }>('/v1/products/prices', { method: 'POST', body: { productIds, priceTable } })).prices;
+  } catch (e) {
+    // Sem conexão: preços da última cópia local (o ComercialWeb recalcula ao sincronizar a venda).
+    if (e instanceof ApiError && (e.kind === 'network' || e.kind === 'timeout')) {
+      const local = await pricesOffline(priceTable, productIds);
+      if (local) return local;
+    }
+    throw e;
+  }
 }
