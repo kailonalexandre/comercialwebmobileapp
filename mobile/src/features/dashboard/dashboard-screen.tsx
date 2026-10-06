@@ -18,7 +18,13 @@ import { formatCents } from '@/shared/utils/format';
 
 const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
-const soon = (title: string) => () => Alert.alert(title, 'Em breve.');
+// A empresa vem do QR lido no pareamento: trocar é entrar de novo com o QR da outra empresa. Vendas guardadas no aparelho
+// continuam na fila e só sobem na empresa que as gravou.
+const switchCompany = (signOut: () => Promise<void>) => () =>
+  Alert.alert('Trocar empresa?', 'Este aparelho será desconectado. Leia o QR Code da outra empresa para entrar. Vendas offline pendentes continuam guardadas.', [
+    { text: 'Cancelar', style: 'cancel' },
+    { text: 'Trocar', onPress: () => void signOut() },
+  ]);
 
 function greeting(hour: number): string {
   if (hour < 12) return 'Bom dia';
@@ -75,7 +81,7 @@ export function DashboardScreen() {
   const styles = useStyles();
   const { colors } = useTheme();
   const { data, failed, reload } = useDashboard();
-  const { profile } = useSession();
+  const { profile, signOut } = useSession();
   const unread = useUnreadCount();
 
   if (!data) return failed ? <StateView kind="error" onRetry={reload} /> : <StateView kind="loading" />;
@@ -89,7 +95,7 @@ export function DashboardScreen() {
     <SafeAreaView edges={['top']} style={styles.root}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={false} onRefresh={reload} />}>
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={`Empresa atual: ${profile?.businessName ?? ''}. Trocar empresa`} onPress={soon('Trocar empresa')} style={[styles.company, styles.flex]}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`Empresa atual: ${profile?.businessName ?? ''}. Trocar empresa`} onPress={switchCompany(signOut)} style={[styles.company, styles.flex]}>
             <Text variant="caption" color="textMuted" numberOfLines={1} style={styles.shrink}>
               {profile?.businessName ?? '…'}
             </Text>
@@ -190,7 +196,7 @@ export function DashboardScreen() {
                   tone="primary"
                   title={`${data.openConditionals.count} ${data.openConditionals.count === 1 ? 'condicional' : 'condicionais'}`}
                   detail={`${formatCents(data.openConditionals.totalCents)} em aberto`}
-                  onPress={soon('Condicionais')}
+                  onPress={() => router.navigate({ pathname: '/vendas', params: { status: 'condicional_aberto' } })}
                 />
               )}
             </View>

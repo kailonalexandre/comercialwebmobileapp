@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Alert, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { useSession } from '@/features/auth/session-context';
 import { useUnreadCount } from '@/features/shell/use-unread-count';
@@ -41,7 +41,7 @@ export function AppHeader() {
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={userName ? `Perfil de ${userName}` : 'Perfil'}
-        onPress={() => Alert.alert('Perfil', 'Em breve.')}
+        onPress={() => router.push('/configuracoes')}
         style={styles.avatar}
       >
         <Text variant="heading" color="onPrimary">

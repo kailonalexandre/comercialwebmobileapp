@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
@@ -22,6 +22,7 @@ const FILTERS: { key: SaleStatusFilter; label: string }[] = [
   { key: 'finalizada', label: 'Finalizadas' },
   { key: 'pre_venda', label: 'Pré-vendas' },
   { key: 'devolucao', label: 'Devoluções' },
+  { key: 'condicional_aberto', label: 'Condicionais' },
 ];
 
 function SaleRow({ sale }: { sale: SaleListItem }) {
@@ -51,7 +52,16 @@ export function SalesScreen() {
   const styles = useStyles();
   const { colors } = useTheme();
   const { profile } = useSession();
-  const [filter, setFilter] = useState<SaleStatusFilter>('all');
+  // Atalhos (ex.: card de condicionais do Início) abrem a lista já filtrada.
+  const { status } = useLocalSearchParams<{ status?: string }>();
+  const [filter, setFilter] = useState<SaleStatusFilter>(FILTERS.some((f) => f.key === status) ? (status as SaleStatusFilter) : 'all');
+  // A aba Vendas continua montada: um atalho novo (outro `status`) troca o filtro durante a renderização.
+  const [seen, setSeen] = useState(status);
+  if (seen !== status) {
+    setSeen(status);
+    const next = FILTERS.find((f) => f.key === status);
+    if (next) setFilter(next.key);
+  }
   const fetchPage = useCallback((page: number, search: string) => fetchSales(page, search, filter), [filter]);
 
   return (
