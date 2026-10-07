@@ -48,6 +48,11 @@ export function replaceSession(session: Session): Promise<void> {
   return saveSession(session, persisted);
 }
 
+// Troca de empresa: só o access token muda (a API emite um novo para a empresa escolhida); o refresh da sessão continua valendo.
+export async function replaceAccessToken(accessToken: string, expiresAt: string): Promise<void> {
+  if (current) await saveSession({ ...current, accessToken, expiresAt }, persisted);
+}
+
 export function getRefreshToken(): string | null {
   return current?.refreshToken ?? null;
 }

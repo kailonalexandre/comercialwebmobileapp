@@ -1,7 +1,6 @@
-import { File, Paths } from 'expo-file-system';
-
 import { searchProducts } from '@/features/catalog/product-cache-model';
 import { fetchProductsRemote, type Product } from '@/features/catalog/products-api';
+import { deleteScopedFiles, getActiveBusinessId, scopedFile } from '@/infrastructure/business-scope';
 
 // Cópia local dos produtos, uma por tabela de preço (o preço do app é o da tabela da operação). Baixada com o app
 // aberto e online (GET /products, 50 por página) e apagada ao sair da conta. Sem conexão, a busca do seletor usa a cópia.
@@ -10,18 +9,22 @@ const REFRESH_MS = 6 * 60 * 60 * 1000;
 
 type Stored = { savedAt: number; items: Product[] };
 
+// Uma cópia por empresa e por tabela de preço: a chave da memória e o arquivo levam a empresa.
 const memory = new Map<string, Stored>();
 let refreshing: Promise<void> | null = null;
 
-const fileOf = (table: string) => new File(Paths.document, `products-cache-${table.replace(/[^a-z0-9_-]/gi, '_')}.json`);
+const keyOf = (table: string) => `${getActiveBusinessId()}:${table}`;
+const fileOf = (table: string) => scopedFile(`products-cache-${table.replace(/[^a-z0-9_-]/gi, '_')}`);
 
 async function read(table: string): Promise<Stored | null> {
-  const cached = memory.get(table);
+  const file = fileOf(table);
+  if (!file) return null;
+  const cached = memory.get(keyOf(table));
   if (cached) return cached;
   try {
-    if (fileOf(table).exists) {
-      const stored = JSON.parse(await fileOf(table).text()) as Stored;
-      memory.set(table, stored);
+    if (file.exists) {
+      const stored = JSON.parse(await file.text()) as Stored;
+      memory.set(keyOf(table), stored);
       return stored;
     }
   } catch {
@@ -36,6 +39,9 @@ export async function searchProductsOffline(table: string, search: string, page:
 }
 
 async function refreshTable(table: string, force: boolean) {
+  const businessId = getActiveBusinessId();
+  const file = fileOf(table);
+  if (!file) return;
   const stored = await read(table);
   if (!force && stored && Date.now() - stored.savedAt < REFRESH_MS) return;
   const items: Product[] = [];
@@ -44,10 +50,12 @@ async function refreshTable(table: string, force: boolean) {
     items.push(...r.items);
     if (items.length >= r.total || r.items.length === 0) break;
   }
+  // Trocou de empresa durante o download: o que veio é da anterior e não pode ser gravado como da nova.
+  if (getActiveBusinessId() !== businessId) return;
   const next = { savedAt: Date.now(), items };
-  memory.set(table, next);
-  fileOf(table).create({ overwrite: true });
-  fileOf(table).write(JSON.stringify(next));
+  memory.set(keyOf(table), next);
+  file.create({ overwrite: true });
+  file.write(JSON.stringify(next));
 }
 
 export function refreshProductCache(tables: string[], force = false): Promise<void> {
@@ -65,15 +73,9 @@ export function refreshProductCache(tables: string[], force = false): Promise<vo
   return refreshing;
 }
 
-export function clearProductCache(tables: string[]) {
+export function clearProductCache() {
   memory.clear();
-  for (const table of tables) {
-    try {
-      if (fileOf(table).exists) fileOf(table).delete();
-    } catch {
-      // nada a fazer
-    }
-  }
+  deleteScopedFiles('products-cache');
 }
 
 // Preços da cópia local numa tabela (null = produto sem preço ou fora da cópia). Sem cópia da tabela: null no todo.

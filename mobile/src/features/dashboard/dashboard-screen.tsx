@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Alert, Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useSession } from '@/features/auth/session-context';
@@ -18,13 +18,6 @@ import { formatCents } from '@/shared/utils/format';
 
 const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
-// A empresa vem do QR lido no pareamento: trocar é entrar de novo com o QR da outra empresa. Vendas guardadas no aparelho
-// continuam na fila e só sobem na empresa que as gravou.
-const switchCompany = (signOut: () => Promise<void>) => () =>
-  Alert.alert('Trocar empresa?', 'Este aparelho será desconectado. Leia o QR Code da outra empresa para entrar. Vendas offline pendentes continuam guardadas.', [
-    { text: 'Cancelar', style: 'cancel' },
-    { text: 'Trocar', onPress: () => void signOut() },
-  ]);
 
 function greeting(hour: number): string {
   if (hour < 12) return 'Bom dia';
@@ -81,7 +74,7 @@ export function DashboardScreen() {
   const styles = useStyles();
   const { colors } = useTheme();
   const { data, failed, reload } = useDashboard();
-  const { profile, signOut } = useSession();
+  const { profile } = useSession();
   const unread = useUnreadCount();
 
   if (!data) return failed ? <StateView kind="error" onRetry={reload} /> : <StateView kind="loading" />;
@@ -95,7 +88,7 @@ export function DashboardScreen() {
     <SafeAreaView edges={['top']} style={styles.root}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={false} onRefresh={reload} />}>
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={`Empresa atual: ${profile?.businessName ?? ''}. Trocar empresa`} onPress={switchCompany(signOut)} style={[styles.company, styles.flex]}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`Empresa atual: ${profile?.businessName ?? ''}. Trocar empresa`} onPress={() => router.push('/trocar-empresa')} style={[styles.company, styles.flex]}>
             <Text variant="caption" color="textMuted" numberOfLines={1} style={styles.shrink}>
               {profile?.businessName ?? '…'}
             </Text>

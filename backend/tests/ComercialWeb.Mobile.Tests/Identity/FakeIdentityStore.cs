@@ -80,5 +80,22 @@ internal sealed class FakeIdentityStore : IIdentityStore
         return Task.CompletedTask;
     }
 
-    public Task<Profile?> GetProfileAsync(long userId, long businessId, CancellationToken ct) => Task.FromResult<Profile?>(null);
+    public Task<Profile?> GetProfileAsync(long userId, long businessId, CancellationToken ct) => Task.FromResult<Profile?>(new Profile("Usuário", businessId, $"Empresa {businessId}"));
+
+    public Task<IReadOnlyList<BusinessRef>> ListBusinessesAsync(long userId, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<BusinessRef>>([.. ActiveMemberships.Where(m => m.UserId == userId).Select(m => new BusinessRef(m.BusinessId, $"Empresa {m.BusinessId}")).OrderBy(b => b.Name)]);
+
+    public Dictionary<Guid, long> PairedBusiness { get; } = [];
+
+    public Task<bool> SwitchBusinessAsync(Guid sessionId, long userId, long businessId, CancellationToken ct)
+    {
+        if (!Sessions.TryGetValue(sessionId, out var s) || s.RevokedAt is not null || s.Session.UserId != userId || !ActiveMemberships.Contains((userId, businessId)))
+            return Task.FromResult(false);
+        PairedBusiness.TryAdd(sessionId, s.Session.BusinessId);
+        Sessions[sessionId] = (s.Session with { BusinessId = businessId }, s.RevokedAt, s.Reason);
+        return Task.FromResult(true);
+    }
+
+    public Task<long> GetPairedBusinessIdAsync(Guid sessionId, long current, CancellationToken ct) =>
+        Task.FromResult(PairedBusiness.TryGetValue(sessionId, out var b) ? b : current);
 }

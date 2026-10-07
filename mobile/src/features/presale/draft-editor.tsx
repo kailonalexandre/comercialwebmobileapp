@@ -17,7 +17,7 @@ import { radius, shadow, spacing, touchTarget } from '@/shared/theme/tokens';
 import { makeStyles, useTheme } from '@/shared/theme/theme-context';
 import { formatCents } from '@/shared/utils/format';
 
-export type DraftMode = 'presale' | 'pdv';
+export type DraftMode = 'presale' | 'pdv' | 'conditional';
 
 function QuantityField({ item, disabled, store, integer }: { item: DraftItem; disabled: boolean; store: DraftValue; integer: boolean }) {
   const styles = useStyles();
@@ -56,6 +56,8 @@ export function DraftEditor({ store, mode, locked, integerQuantity = false, canD
   const { draft, setDraft } = store;
   const { selected, select, label } = usePriceTables();
   const [switching, setSwitching] = useState(false);
+  // Condicional exige cliente identificado: não existe "Consumidor final" nele.
+  const emptyCustomer = mode === 'conditional' ? 'Selecione o cliente' : 'Consumidor final';
 
   // Operação nova (carrinho vazio) começa na tabela que o usuário vem usando.
   useEffect(() => {
@@ -101,7 +103,7 @@ export function DraftEditor({ store, mode, locked, integerQuantity = false, canD
     <>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Cliente: ${draft.customer?.name ?? 'Consumidor final'}. Alterar`}
+        accessibilityLabel={`Cliente: ${draft.customer?.name ?? emptyCustomer}. Alterar`}
         disabled={locked}
         onPress={() => router.push({ pathname: '/selecionar-cliente', params: { mode } })}
         style={[styles.card, styles.between]}
@@ -110,7 +112,7 @@ export function DraftEditor({ store, mode, locked, integerQuantity = false, canD
           <Text variant="caption" color="textMuted">
             Cliente
           </Text>
-          <Text variant="label">{draft.customer?.name ?? 'Consumidor final'}</Text>
+          <Text variant="label" color={draft.customer ? 'text' : mode === 'conditional' ? 'danger' : 'text'}>{draft.customer?.name ?? emptyCustomer}</Text>
         </View>
         {!locked && <Icon name="chevron-forward" size={20} color={colors.textMuted} />}
       </Pressable>

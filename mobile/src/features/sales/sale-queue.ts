@@ -2,10 +2,12 @@ import { File, Paths } from 'expo-file-system';
 import { useSyncExternalStore } from 'react';
 
 import { loadQueue, serverIdOf } from '@/features/customers/quick-customer-queue';
+import { sendConditional } from '@/features/conditional/conditional-api';
 import { sendPdvSale } from '@/features/pdv/pdv-api';
 import type { Draft } from '@/features/presale/draft-model';
 import { sendPreSale, type SendResult } from '@/features/presale/presale-api';
-import { applyResult, restore, type SaleKind, type SaleQueueEntry } from '@/features/sales/sale-queue-model';
+import { getActiveBusinessId } from '@/infrastructure/business-scope';
+import { applyResult, belongsTo, restore, type SaleKind, type SaleQueueEntry } from '@/features/sales/sale-queue-model';
 
 // Fila local de vendas e pré-vendas. Toda venda é gravada aqui ANTES de ir ao servidor, então queda de rede,
 // fechar o app ou travar no meio do envio nunca perde a venda. Fica no armazenamento privado, em dois arquivos
@@ -88,15 +90,17 @@ export async function failPendingCustomer(pendingId: string, message: string): P
   set(entries.map((e) => (e.draft.customer?.pendingId === pendingId && e.status === 'pending' ? { ...e, status: 'error' as const, error: `Cadastro do cliente recusado: ${message}` } : e)));
 }
 
-const sendOf = (kind: SaleKind) => (kind === 'pdv' ? sendPdvSale : sendPreSale);
+const sendOf = (kind: SaleKind) => (kind === 'pdv' ? sendPdvSale : kind === 'conditional' ? sendConditional : sendPreSale);
 
 // Envia os pendentes um a um (nada em paralelo). Relê a fila a cada volta: venda gravada durante o envio entra na mesma rodada.
 export function syncSales(businessId?: number): Promise<void> {
   running ??= (async () => {
     await loadSaleQueue();
+    // Sempre a empresa ativa (a da sessão): a chamada pode vir sem ela enquanto o perfil recarrega depois da troca.
+    const active = getActiveBusinessId() ?? businessId;
     const tried = new Set<string>();
     for (;;) {
-      const item = entries.find((e) => e.status === 'pending' && !e.draft.customer?.pendingId && !tried.has(e.id) && (e.businessId === undefined || businessId === undefined || e.businessId === businessId));
+      const item = entries.find((e) => e.status === 'pending' && !e.draft.customer?.pendingId && !tried.has(e.id) && belongsTo(e, active));
       if (!item) break;
       tried.add(item.id);
       update(item.id, { status: 'syncing' });
@@ -114,8 +118,9 @@ export function syncSales(businessId?: number): Promise<void> {
  * Grava a venda na fila e tenta enviar na hora. `queued` = continua guardada no aparelho e sobe sozinha quando
  * houver conexão. Recusa e falta de permissão saem da fila (nada foi criado) e voltam ao operador para corrigir.
  */
-export async function submitSale(kind: SaleKind, draft: Draft, key: string, businessId?: number): Promise<SendResult | { kind: 'queued' }> {
+export async function submitSale(kind: SaleKind, draft: Draft, key: string, sessionBusinessId?: number): Promise<SendResult | { kind: 'queued' }> {
   await Promise.all([loadSaleQueue(), loadQueue()]);
+  const businessId = getActiveBusinessId() ?? sessionBusinessId;
   // O cadastro do cliente pode ter subido enquanto a venda era montada: usa o id real na hora.
   const pending = draft.customer?.pendingId;
   const realId = pending ? serverIdOf(pending) : undefined;

@@ -2,9 +2,9 @@ import type { SyncStatus } from '@/features/customers/quick-customer-model';
 import type { Draft } from '@/features/presale/draft-model';
 import type { PreSaleCreated, SendResult } from '@/features/presale/presale-api';
 
-export type SaleKind = 'pdv' | 'presale';
+export type SaleKind = 'pdv' | 'presale' | 'conditional';
 
-export const KIND_LABEL: Record<SaleKind, string> = { pdv: 'Venda', presale: 'Pré-venda' };
+export const KIND_LABEL: Record<SaleKind, string> = { pdv: 'Venda', presale: 'Pré-venda', conditional: 'Condicional' };
 
 // Toda venda passa por aqui antes de ir ao servidor: `id` é a Idempotency-Key (client_sale_uuid) e nasce
 // com o pedido, então reenviar depois de queda, de toque duplo ou de app fechado nunca duplica a venda.
@@ -39,3 +39,7 @@ export function applyResult(entry: SaleQueueEntry, result: SendResult): SaleQueu
 // App fechado no meio do envio: volta para a fila (o reenvio é seguro por causa da chave).
 export const restore = (entries: SaleQueueEntry[]): SaleQueueEntry[] =>
   entries.map((e) => (e.status === 'syncing' ? { ...e, status: 'pending' as const } : e));
+
+// Venda de uma empresa nunca sobe nem aparece em outra. Sem empresa conhecida (dado antigo ou sessão ainda carregando), vale para qualquer uma.
+export const belongsTo = (entry: SaleQueueEntry, businessId: number | null | undefined) =>
+  entry.businessId === undefined || businessId == null || entry.businessId === businessId;

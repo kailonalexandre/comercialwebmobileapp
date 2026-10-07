@@ -41,11 +41,12 @@ public static class OrdersEndpoints
                 if (!await permissions.HasAsync(ids.UserId, ids.BusinessId, permission, ct)) return Results.Problem(statusCode: StatusCodes.Status403Forbidden);
 
             var query = new CwOrdersQuery(source, status, search, paging.Page, paging.PageSize);
-            var result = await link.CallAsync(ids.SessionId, (token, c) => cw.OrdersAsync(token, query, c), ct);
+            var result = await link.CallAsync(ids.SessionId, ids.BusinessId, (token, c) => cw.OrdersAsync(token, query, c), ct);
             return result switch
             {
                 { Status: CwStatus.Ok, Value: { } sections } => Results.Ok(new { sections }),
                 { Status: CwStatus.Unavailable } => Results.Problem(statusCode: StatusCodes.Status503ServiceUnavailable),
+                { Status: CwStatus.NotPaired } => Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "company_not_paired"),
                 _ => Results.Problem(statusCode: StatusCodes.Status403Forbidden),
             };
         }).RequireAnyPermission(StoreOrders, MarketplaceOrders);
@@ -53,11 +54,13 @@ public static class OrdersEndpoints
         // Só pedido de marketplace tem detalhe na API do ComercialWeb; o da Loja Virtual ainda não.
         orders.MapGet("/marketplace/{id:long}", async (long id, ClaimsPrincipal user, DeviceLink link, IComercialWebAuth cw, CancellationToken ct) =>
         {
-            var result = await link.CallAsync(SessionIds.From(user)!.SessionId, (token, c) => cw.MarketplaceOrderAsync(token, id, c), ct);
+            var ids = SessionIds.From(user)!;
+            var result = await link.CallAsync(ids.SessionId, ids.BusinessId, (token, c) => cw.MarketplaceOrderAsync(token, id, c), ct);
             return result switch
             {
                 { Status: CwStatus.Ok, Value: { } order } => Results.Ok(order),
                 { Status: CwStatus.Unavailable } => Results.Problem(statusCode: StatusCodes.Status503ServiceUnavailable),
+                { Status: CwStatus.NotPaired } => Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "company_not_paired"),
                 // O ComercialWeb responde 404 para inexistente ou de outra empresa; a permissão já foi conferida aqui.
                 _ => Results.Problem(statusCode: StatusCodes.Status404NotFound),
             };

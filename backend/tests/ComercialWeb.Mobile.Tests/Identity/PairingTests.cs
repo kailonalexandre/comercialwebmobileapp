@@ -154,6 +154,25 @@ public sealed class PairingTests
     }
 
     [Fact]
+    public async Task Trocar_de_empresa_nao_derruba_o_refresh_e_bloqueia_chamadas_do_aparelho_na_outra_empresa()
+    {
+        _store.ActiveMemberships.Add((1, 20));
+        var paired = (await _auth.PairAsync(Code, null, null, Ct)).Session!;
+        var id = _store.Sessions.Keys.Single();
+
+        Assert.NotNull(await _auth.SwitchBusinessAsync(id, 1, 20, Ct));
+        // O aparelho segue pareado na empresa do QR (10), mesmo com a sessão na 20: o refresh não pode revogar.
+        Assert.NotNull((await _auth.RefreshAsync(paired.RefreshToken, Ct)).Session);
+        Assert.Null(_store.Sessions[id].Reason);
+
+        // E o token do aparelho não serve para a empresa 20.
+        _cw.Calls.Clear();
+        Assert.Equal(CwStatus.NotPaired, (await _link.CallAsync(id, 20, (a, c) => _cw.ProductStockAsync(a, 1, c), Ct)).Status);
+        Assert.DoesNotContain(_cw.Calls, c => c.StartsWith("stock:", StringComparison.Ordinal));
+        Assert.Equal(CwStatus.Ok, (await _link.CallAsync(id, 10, (a, c) => _cw.ProductStockAsync(a, 1, c), Ct)).Status);
+    }
+
+    [Fact]
     public async Task Refresh_confere_o_aparelho_no_comercialweb()
     {
         var refresh = (await _auth.PairAsync(Code, null, null, Ct)).Session!.RefreshToken;
@@ -204,8 +223,8 @@ public sealed class PairingTests
         _cw.Calls.Clear();
 
         var results = await Task.WhenAll(
-            _link.CallAsync(id, (a, c) => _cw.ProductStockAsync(a, 1, c), Ct),
-            _link.CallAsync(id, (a, c) => _cw.ProductStockAsync(a, 2, c), Ct));
+            _link.CallAsync(id, 10, (a, c) => _cw.ProductStockAsync(a, 1, c), Ct),
+            _link.CallAsync(id, 10, (a, c) => _cw.ProductStockAsync(a, 2, c), Ct));
 
         Assert.All(results, r => Assert.Equal(CwStatus.Ok, r.Status));
         Assert.Single(_cw.Calls, c => c.StartsWith("refresh:", StringComparison.Ordinal));
@@ -218,7 +237,7 @@ public sealed class PairingTests
         var id = _store.Sessions.Keys.Single();
         _cw.Stock = (_, _) => new(CwStatus.TokenExpired);
 
-        var result = await _link.CallAsync(id, (a, c) => _cw.ProductStockAsync(a, 1, c), Ct);
+        var result = await _link.CallAsync(id, 10, (a, c) => _cw.ProductStockAsync(a, 1, c), Ct);
 
         Assert.Equal(CwStatus.Rejected, result.Status);
     }

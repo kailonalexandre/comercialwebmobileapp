@@ -1,8 +1,7 @@
-import { File, Paths } from 'expo-file-system';
-
 import { toRequest, toSaleRequest, type Draft } from '@/features/presale/draft-model';
 import type { SendResult } from '@/features/presale/presale-api';
 import { api } from '@/infrastructure/api';
+import { scopedFile } from '@/infrastructure/business-scope';
 import { ApiError } from '@/infrastructure/api/client';
 
 export type PaymentMethod = { code: string; name: string };
@@ -21,22 +20,24 @@ const devMethods: PaymentMethod[] = [
 ];
 
 // Última lista conhecida: sem conexão o operador ainda escolhe a forma de pagamento (o servidor confere ao sincronizar).
-const methodsFile = () => new File(Paths.document, 'payment-methods.json');
+const methodsFile = () => scopedFile('payment-methods'); // por empresa
 
 export async function fetchPaymentMethods(): Promise<PaymentMethod[]> {
   if (!api) return devMethods;
   try {
     const methods = (await api.request<{ methods: PaymentMethod[] }>('/v1/pdv/payment-methods')).methods;
     try {
-      methodsFile().create({ overwrite: true });
-      methodsFile().write(JSON.stringify(methods));
+      const file = methodsFile();
+      file?.create({ overwrite: true });
+      file?.write(JSON.stringify(methods));
     } catch {
       // sem cache, só perde o uso offline
     }
     return methods;
   } catch (e) {
     try {
-      if (methodsFile().exists) return JSON.parse(await methodsFile().text()) as PaymentMethod[];
+      const file = methodsFile();
+      if (file?.exists) return JSON.parse(await file.text()) as PaymentMethod[];
     } catch {
       // cache ilegível: segue o erro original
     }

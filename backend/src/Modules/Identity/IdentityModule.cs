@@ -21,6 +21,8 @@ public sealed record LoginRequest(string? Login, string? Password, string? Devic
 
 public sealed record RefreshRequest(string? RefreshToken);
 
+public sealed record SwitchBusinessRequest(long? BusinessId);
+
 public sealed record PairRequest(string? Code, string? DeviceName, string? Platform = null, string? AppVersion = null);
 
 public static class IdentityModule
@@ -118,10 +120,28 @@ public static class IdentityModule
         auth.MapPost("/refresh", async (RefreshRequest body, HttpContext http, AuthService service, CancellationToken ct) =>
             ToHttp(await service.RefreshAsync(body.RefreshToken ?? "", ct), http));
 
+        // Troca a empresa da sessão atual sem sair da conta. Empresa sem vínculo ativo: 403 (mesma resposta de qualquer recusa).
+        auth.MapPost("/switch-business", async (SwitchBusinessRequest body, ClaimsPrincipal user, AuthService service, CancellationToken ct) =>
+        {
+            if (body.BusinessId is not > 0) return Results.Problem(statusCode: 422);
+            var ids = SessionIds.From(user)!;
+            var switched = await service.SwitchBusinessAsync(ids.SessionId, ids.UserId, body.BusinessId.Value, ct);
+            return switched is null
+                ? Results.Problem(statusCode: 403)
+                : Results.Ok(new { switched.AccessToken, expiresAt = switched.ExpiresAt, switched.BusinessId, switched.BusinessName });
+        }).RequireAuthorization();
+
         auth.MapPost("/logout", async (ClaimsPrincipal user, AuthService service, CancellationToken ct) =>
         {
             await service.LogoutAsync(SessionIds.From(user)!.SessionId, ct);
             return Results.NoContent();
+        }).RequireAuthorization();
+
+        // Empresas que o usuário pode alternar (vínculo ativo) e qual está ativa na sessão.
+        app.MapGet("/api/v1/me/businesses", async (ClaimsPrincipal user, AuthService service, CancellationToken ct) =>
+        {
+            var ids = SessionIds.From(user)!;
+            return Results.Ok(new { businesses = await service.BusinessesAsync(ids.UserId, ct), currentBusinessId = ids.BusinessId });
         }).RequireAuthorization();
 
         app.MapGet("/api/v1/me", async (ClaimsPrincipal user, IIdentityStore store, OperationUnits units, CancellationToken ct) =>
