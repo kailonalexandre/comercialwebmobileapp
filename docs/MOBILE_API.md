@@ -154,6 +154,12 @@ Legenda: AUTH = `Bearer` (access token) salvo indicação. Todas as rotas autent
 - **POST /auth/switch-business** `{ businessId }`: troca a empresa da sessão sem novo login. Só empresa com vínculo ativo (senão 403; id inválido 422). Resposta `{ accessToken, expiresAt, businessId, businessName }`: o token antigo (outra empresa) deixa de valer na hora; o refresh token da sessão continua o mesmo e já renova na empresa nova.
 - Rotas que usam o token do aparelho pareado no ComercialWeb (saldo `GET /products/{id}/stock` e pedidos `GET /orders*`) só valem na empresa do QR: depois da troca respondem **409** `company_not_paired` em vez de servir dados de outra empresa. O restante (vendas, clientes, produtos, financeiro etc.) acompanha a empresa ativa.
 
+### POST /conditionals
+- **PERMISSIONS:** `sales.access` (a mesma do Novo Condicional da web). Header `Idempotency-Key` (UUID gerado no app quando a sacola é montada) vira `client_uuid` no ComercialWeb.
+- **REQUEST:** `{ customerId (obrigatório), sellerPersonId?, observation?, priceTable?, items: [{ productId, quantity }] }`. Preço e total nunca são enviados.
+- **RESPONSE:** 201 salvo / 200 já existia (reenvio): `{ conditionalId, number, status, totalCents, priceMode, alreadyExisted }`. 403 sem permissão; 422 regra do condicional (cliente bloqueado ou consumidor final sem alçada, sem vendedor, estoque insuficiente) com `message` para o operador; 503 ComercialWeb fora do ar.
+- **Só salva** (o `save()` da web, que baixa o estoque); finalizar e receber continuam no ComercialWeb. Rota de máquina no ComercialWeb: `POST /api/mobile/v1/conditionals` (assinada), idempotente pelo índice único `(business_id, client_uuid)` gravado na mesma transação da baixa de estoque.
+
 ### GET /notifications
 - **PERMISSIONS:** `mobile.access`. **REQUEST:** `page`, `per_page`, `read` (`read|unread`).
 - **RESPONSE:** `{ data: [ { id, type, severity, title, body, read, created_at } ], meta, unread }`. É o mesmo armazenamento do sino do web (usuário + empresa do aparelho).

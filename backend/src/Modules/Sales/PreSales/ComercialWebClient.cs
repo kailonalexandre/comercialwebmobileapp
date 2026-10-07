@@ -18,6 +18,16 @@ public sealed record PreSaleCommand(
 
 public sealed record PreSaleCreated(long SaleId, string Number, string Status, long TotalCents, bool AlreadyExisted);
 
+public sealed record ConditionalLine(long ProductId, decimal Quantity);
+
+/// <summary>Condicional já validado; usuário e empresa vêm da sessão, nunca do app.</summary>
+public sealed record ConditionalCommand(
+    long UserId, long BusinessId, Guid ClientUuid, long CustomerId, long? SellerPersonId, string? Observation, IReadOnlyList<ConditionalLine> Items, string? PriceTable = null);
+
+public sealed record ConditionalCreated(long ConditionalId, string Number, string Status, long TotalCents, bool AlreadyExisted);
+
+public sealed record ConditionalOutcome(ConditionalCreated? Created, PreSaleFailure? Failure, string? Message = null, string? Code = null);
+
 public enum PreSaleFailure { Forbidden, BusinessRule, Unavailable }
 
 public sealed record PreSaleOutcome(PreSaleCreated? Created, PreSaleFailure? Failure, string? Message = null, string? Code = null);
@@ -31,6 +41,7 @@ public sealed record PreSaleOutcome(PreSaleCreated? Created, PreSaleFailure? Fai
 public sealed partial class ComercialWebClient(HttpClient http, IConfiguration config, TimeProvider clock, ILogger<ComercialWebClient> logger)
 {
     public const string PreSalesPath = "/api/mobile/v1/pre-sales";
+    public const string ConditionalsPath = "/api/mobile/v1/conditionals";
 
     private static readonly JsonSerializerOptions Json = new()
     {
@@ -80,6 +91,64 @@ public sealed partial class ComercialWebClient(HttpClient http, IConfiguration c
         }
     }
 
+    /// <summary>Salva o condicional no ComercialWeb (POST /api/mobile/v1/conditionals). Mesma assinatura e mesma regra de reenvio da pré-venda.</summary>
+    public async Task<ConditionalOutcome> SendConditionalAsync(ConditionalCommand command, CancellationToken ct)
+    {
+        var secret = config["ComercialWeb:MobileApiSecret"];
+        if (string.IsNullOrEmpty(secret) || http.BaseAddress is null)
+        {
+            LogNotConfigured(logger);
+            return new ConditionalOutcome(null, PreSaleFailure.Unavailable);
+        }
+
+        var body = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            user_id = command.UserId,
+            business_id = command.BusinessId,
+            client_uuid = command.ClientUuid.ToString(),
+            customer_id = command.CustomerId,
+            seller_person_id = command.SellerPersonId,
+            observation = command.Observation,
+            items = command.Items.Select(i => new { product_id = i.ProductId, quantity = i.Quantity }),
+            price_mode = command.PriceTable,
+        }, Json);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, ConditionalsPath) { Content = new ByteArrayContent(body) };
+        request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        var timestamp = clock.GetUtcNow().ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
+        request.Headers.Add("X-Mobile-Timestamp", timestamp);
+        request.Headers.Add("X-Mobile-Signature", MobileSignature.Sign(secret, timestamp, "POST", ConditionalsPath, body));
+
+        try
+        {
+            using var response = await http.SendAsync(request, ct);
+            switch (response.StatusCode)
+            {
+                case HttpStatusCode.Created or HttpStatusCode.OK:
+                    var ok = await response.Content.ReadFromJsonAsync<ConditionalDto>(Json, ct);
+                    return ok is null
+                        ? new ConditionalOutcome(null, PreSaleFailure.Unavailable)
+                        : new ConditionalOutcome(new ConditionalCreated(ok.ConditionalId, ok.Number, ok.Status, ok.TotalCents, ok.AlreadyExisted), null);
+                case HttpStatusCode.Forbidden:
+                    return new ConditionalOutcome(null, PreSaleFailure.Forbidden);
+                case HttpStatusCode.UnprocessableEntity:
+                    var error = await response.Content.ReadFromJsonAsync<ErrorDto>(Json, ct);
+                    return error?.Error?.Code is "business_rule"
+                        ? new ConditionalOutcome(null, PreSaleFailure.BusinessRule, error.Error.Message, error.Error.Code)
+                        : new ConditionalOutcome(null, PreSaleFailure.BusinessRule);
+                default:
+                    LogUnexpectedStatus(logger, (int)response.StatusCode);
+                    return new ConditionalOutcome(null, PreSaleFailure.Unavailable);
+            }
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
+        {
+            LogUnreachable(logger, e.GetType().Name);
+            return new ConditionalOutcome(null, PreSaleFailure.Unavailable);
+        }
+    }
+
     private async Task<PreSaleOutcome> ReadAsync(HttpResponseMessage response, CancellationToken ct)
     {
         switch (response.StatusCode)
@@ -103,6 +172,7 @@ public sealed partial class ComercialWebClient(HttpClient http, IConfiguration c
         }
     }
 
+    private sealed record ConditionalDto(long ConditionalId, string Number, string Status, long TotalCents, bool AlreadyExisted);
     private sealed record CreatedDto(long SaleId, string Number, string Status, long TotalCents, bool AlreadyExisted);
     private sealed record ErrorBody(string? Code, string? Message);
     private sealed record ErrorDto(ErrorBody? Error);

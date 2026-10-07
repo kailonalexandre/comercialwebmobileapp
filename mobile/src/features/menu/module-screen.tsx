@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useSession } from '@/features/auth/session-context';
 import { moduleLinks } from '@/features/menu/modules';
 import { Icon } from '@/shared/components/icon';
 import { ListRow } from '@/shared/components/list-row';
@@ -15,7 +16,9 @@ export function ModuleScreen() {
   const styles = useStyles();
   const { colors } = useTheme();
   const { key } = useLocalSearchParams<{ key: string }>();
+  const { profile } = useSession();
   const module = moduleLinks[key];
+  const links = module?.links.filter((l) => !l.permissions || l.permissions.some((p) => profile?.permissions.includes(p)));
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
       <View style={styles.top}>
@@ -26,7 +29,7 @@ export function ModuleScreen() {
       </View>
       {module ? (
         <ScrollView contentContainerStyle={styles.content}>
-          {module.links.map((l) => (
+          {links?.map((l) => (
             <ListRow key={l.title} title={l.title} lines={[l.description]} label={`${l.title}. ${l.description}`} onPress={() => router.push(l.href)} />
           ))}
         </ScrollView>

@@ -6,6 +6,7 @@ using ComercialWeb.Mobile.Identity;
 using ComercialWeb.Mobile.Identity.Authorization;
 using ComercialWeb.Mobile.Management;
 using ComercialWeb.Mobile.Sales;
+using ComercialWeb.Mobile.Sales.Conditionals;
 using ComercialWeb.Mobile.Sales.Orders;
 using ComercialWeb.Mobile.Sales.Pdv;
 using ComercialWeb.Mobile.Sales.PreSales;
@@ -25,6 +26,7 @@ internal static class PermissionsEndpoint
         CustomersModule.ViewPeople,
         SalesModule.ViewSales,
         PreSaleEndpoints.CreatePreSale,
+        ConditionalEndpoints.SaveConditional,
         PdvEndpoints.UsePdv,
         PdvEndpoints.DiscountPdv,
         DashboardModule.ViewReceivables,

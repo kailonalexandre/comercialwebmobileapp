@@ -7,6 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 
 import { SessionProvider, useSession } from '@/features/auth/session-context';
 import { UpdateRequiredScreen } from '@/features/auth/update-required-screen';
+import { ConditionalDraftProvider } from '@/features/conditional/conditional-draft';
 import { PdvDraftProvider } from '@/features/pdv/pdv-draft';
 import { PreSaleDraftProvider } from '@/features/presale/presale-draft';
 import { PriceTablesProvider } from '@/features/pricing/price-tables';
@@ -45,6 +46,7 @@ function RootNavigator() {
           <Stack.Screen name="trocar-empresa" />
           <Stack.Screen name="pedido/[id]" />
           <Stack.Screen name="nova-venda" />
+          <Stack.Screen name="novo-condicional" />
           <Stack.Screen name="selecionar-produto" />
           <Stack.Screen name="selecionar-cliente" />
         </Stack.Protected>
@@ -74,7 +76,9 @@ function SessionScopedDraft({ children }: { children: ReactNode }) {
   const { status } = useSession();
   return (
     <PreSaleDraftProvider key={status}>
-      <PdvDraftProvider key={status}>{children}</PdvDraftProvider>
+      <PdvDraftProvider key={status}>
+        <ConditionalDraftProvider key={status}>{children}</ConditionalDraftProvider>
+      </PdvDraftProvider>
     </PreSaleDraftProvider>
   );
 }
