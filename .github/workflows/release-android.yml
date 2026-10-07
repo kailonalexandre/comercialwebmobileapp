@@ -1,0 +1,39 @@
+name: Release Android
+
+# Publica o app no Google Play (faixa definida em mobile/eas.json > submit) a cada tag vX.Y.Z.
+# O build e o envio rodam no EAS: keystore, google-services.json e a chave da service account do Play ficam lá
+# (eas credentials / eas env), nunca neste repositório. Requer só o secret EXPO_TOKEN.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: release-android
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - run: npm ci
+      - run: npm run check
+
+      # versionCode sobe sozinho no EAS (appVersionSource: remote + autoIncrement). --auto-submit envia o AAB ao Play.
+      - run: eas build --platform android --profile production --non-interactive --auto-submit

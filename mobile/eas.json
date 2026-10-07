@@ -1,19 +1,30 @@
 {
-  "cli": { "version": ">= 16.0.0", "appVersionSource": "remote" },
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
   "build": {
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "env": { "EXPO_PUBLIC_APP_ENV": "local" }
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "local"
+      }
     },
     "preview": {
       "distribution": "internal",
-      "android": { "buildType": "apk" },
-      "env": { "EXPO_PUBLIC_APP_ENV": "vps" }
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "vps"
+      }
     },
     "dev-vps": {
       "distribution": "internal",
-      "android": { "buildType": "apk" },
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
         "EXPO_PUBLIC_APP_ENV": "vps",
         "EXPO_PUBLIC_API_URL": "https://api.dev.infinitsolucoesweb.com.br/api",
@@ -21,7 +32,20 @@
       }
     },
     "production": {
-      "env": { "EXPO_PUBLIC_APP_ENV": "vps" }
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "vps",
+        "EXPO_PUBLIC_API_URL": "https://api.infinitsolucoesweb.com.br/api",
+        "EXPO_PUBLIC_ALLOWED_SERVER_HOSTS": "comercial.infinitsolucoesweb.com.br"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "track": "internal",
+        "releaseStatus": "completed"
+      }
     }
   }
 }
