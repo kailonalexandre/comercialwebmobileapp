@@ -1,0 +1,51 @@
+name: Release Android
+
+# Publica o app no Google Play pelo EAS (build + envio automático):
+#   - push na dev que mexe em mobile/  -> perfil "staging" (API de dev), faixa de teste interno;
+#   - tag vX.Y.Z                       -> perfil "production" (API de produção), faixa definida em eas.json > submit.
+# Keystore, google-services.json e a chave da service account do Play ficam no EAS (eas credentials / eas env),
+# nunca neste repositório. Requer só o secret EXPO_TOKEN.
+on:
+  push:
+    branches: [dev]
+    paths: ['mobile/**', '.github/workflows/release-android.yml']
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Perfil do EAS
+        type: choice
+        options: [staging, production]
+        default: staging
+
+concurrency:
+  group: release-android
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      PROFILE: ${{ github.event.inputs.profile || (startsWith(github.ref, 'refs/tags/v') && 'production' || 'staging') }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - run: npm ci
+      - run: npm run check
+
+      # versionCode sobe sozinho no EAS (appVersionSource: remote + autoIncrement). --auto-submit envia o AAB ao Play.
+      - run: eas build --platform android --profile "$PROFILE" --non-interactive --auto-submit
