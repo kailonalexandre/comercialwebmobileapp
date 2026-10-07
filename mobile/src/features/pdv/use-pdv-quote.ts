@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 
 import { fetchQuote, type Quote } from '@/features/pdv/pdv-api';
-import { toRequest, type Draft } from '@/features/presale/draft-model';
+import { estimateCents, toRequest, type Draft } from '@/features/presale/draft-model';
 import { ApiError } from '@/infrastructure/api/client';
 import { userMessage } from '@/shared/utils/error-message';
 
 const DEBOUNCE_MS = 400;
 
-export type QuoteState = { status: 'idle' | 'loading' | 'ready' | 'error'; quote: Quote | null; error: string | null; registerClosed: boolean };
+export type QuoteState = { status: 'idle' | 'loading' | 'ready' | 'error'; quote: Quote | null; error: string | null; registerClosed: boolean; offline?: boolean };
 
 /**
  * Cotação do servidor para o carrinho atual: é dela o total que o operador vê e contra o qual o
@@ -26,6 +26,11 @@ export function usePdvQuote(draft: Draft, enabled: boolean): QuoteState {
         .then((quote) => active && setState({ status: 'ready', quote, error: null, registerClosed: false, forRequest: request }))
         .catch((e: unknown) => {
           if (!active) return;
+          if (e instanceof ApiError && (e.kind === 'network' || e.kind === 'timeout')) {
+            // Sem conexão: vale a estimativa do app. O ComercialWeb recalcula tudo ao sincronizar e pode recusar.
+            setState({ status: 'ready', quote: null, error: null, registerClosed: false, offline: true, forRequest: request });
+            return;
+          }
           const refusal = e instanceof ApiError ? e.refusal : undefined;
           setState({
             status: 'error',
@@ -45,5 +50,9 @@ export function usePdvQuote(draft: Draft, enabled: boolean): QuoteState {
   // Sem itens não há o que cotar: o estado antigo não vale.
   if (request === null) return { status: 'idle', quote: null, error: null, registerClosed: false };
   if (state.forRequest !== request) return { status: 'loading', quote: null, error: null, registerClosed: false };
+  if (state.offline) {
+    const total = estimateCents(draft.items, draft.saleDiscount);
+    return { ...state, quote: { subtotalCents: total, discountCents: 0, totalCents: total, items: [] } };
+  }
   return state;
 }

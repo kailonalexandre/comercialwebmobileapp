@@ -46,7 +46,8 @@ public sealed record CwMarketplaceOrder(
     long Id, string Channel, string? ExternalOrderId, string Status, string? ExternalStatus, long TotalCents, string? BuyerName,
     string? PlacedAt, IReadOnlyList<CwMarketplaceOrderItem> Items);
 
-public enum CwStatus { Ok, TokenExpired, Rejected, Unavailable }
+// NotPaired: a sessão já trocou de empresa e o aparelho do ComercialWeb continua o da empresa do QR (não serve para a atual).
+public enum CwStatus { Ok, TokenExpired, Rejected, Unavailable, NotPaired }
 
 public sealed record CwResult<T>(CwStatus Status, T? Value = default);
 

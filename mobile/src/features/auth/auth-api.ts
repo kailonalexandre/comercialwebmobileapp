@@ -52,3 +52,19 @@ export async function logout(): Promise<void> {
   // Revogação server-side; falha de rede não impede limpar o aparelho.
   await api?.request('/v1/auth/logout', { method: 'POST' }).catch(() => undefined);
 }
+
+export type BusinessOption = { id: number; name: string };
+
+// Empresas com vínculo ativo do usuário e a ativa na sessão.
+export async function fetchBusinesses(): Promise<{ businesses: BusinessOption[]; currentBusinessId: number }> {
+  if (!api) return { businesses: [{ id: 0, name: 'Empresa Demonstração' }, { id: 1, name: 'Filial Demonstração' }], currentBusinessId: 0 };
+  return api.request('/v1/me/businesses');
+}
+
+export type SwitchedBusiness = { accessToken: string; expiresAt: string; businessId: number; businessName: string };
+
+// A API confere o vínculo do usuário com a empresa e emite o access token dela; o app só escolhe entre as suas.
+export async function switchBusinessRequest(businessId: number): Promise<SwitchedBusiness> {
+  if (!api) return { accessToken: 'dev-mock-access', expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(), businessId, businessName: businessId === 0 ? 'Empresa Demonstração' : 'Filial Demonstração' };
+  return api.request<SwitchedBusiness>('/v1/auth/switch-business', { method: 'POST', body: { businessId } });
+}

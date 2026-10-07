@@ -53,8 +53,6 @@ export default function AppTabsLayout() {
       />
       <Tabs.Screen name="pedidos" options={tab('Pedidos', 'cube-outline', 'cube')} />
       <Tabs.Screen name="menu" options={tab('Menu', 'grid-outline', 'grid')} />
-      {/* Financeiro ainda não tem endpoints no ComercialWeb: fora da barra, a rota segue existindo. */}
-      <Tabs.Screen name="financeiro" options={{ href: null }} />
     </Tabs>
   );
 }

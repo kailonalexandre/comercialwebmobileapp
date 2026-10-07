@@ -200,7 +200,33 @@ CREATE TABLE financial_lines (
     grouped_into_id BIGINT UNSIGNED NULL,
     amount_cents BIGINT NOT NULL DEFAULT 0,
     paid_cents BIGINT NOT NULL DEFAULT 0,
+    location_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    interest_cents BIGINT NOT NULL DEFAULT 0,
+    fine_cents BIGINT NOT NULL DEFAULT 0,
+    surcharge_cents BIGINT NOT NULL DEFAULT 0,
+    discount_cents BIGINT NOT NULL DEFAULT 0,
+    is_liquidated TINYINT(1) NOT NULL DEFAULT 0,
+    person_id BIGINT UNSIGNED NULL,
+    document VARCHAR(80) NULL,
+    description VARCHAR(255) NULL,
+    installment_number INT UNSIGNED NOT NULL DEFAULT 1,
+    installment_count INT UNSIGNED NOT NULL DEFAULT 1,
+    due_date DATE NOT NULL DEFAULT '2000-01-01',
     deleted_at TIMESTAMP NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE purchase_orders (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    business_id BIGINT UNSIGNED NOT NULL,
+    location_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    supplier_person_id BIGINT UNSIGNED NULL,
+    nfe_access_key VARCHAR(44) NULL,
+    number VARCHAR(255) NOT NULL,
+    kind VARCHAR(255) NOT NULL DEFAULT 'order',
+    status VARCHAR(255) NOT NULL DEFAULT 'pendente',
+    ordered_at DATE NOT NULL,
+    total_cents BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    is_urgent TINYINT(1) NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE conditionals (

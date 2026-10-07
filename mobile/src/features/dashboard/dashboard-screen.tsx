@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Alert, Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useSession } from '@/features/auth/session-context';
@@ -18,7 +18,6 @@ import { formatCents } from '@/shared/utils/format';
 
 const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
-const soon = (title: string) => () => Alert.alert(title, 'Em breve.');
 
 function greeting(hour: number): string {
   if (hour < 12) return 'Bom dia';
@@ -89,7 +88,7 @@ export function DashboardScreen() {
     <SafeAreaView edges={['top']} style={styles.root}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={false} onRefresh={reload} />}>
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={`Empresa atual: ${profile?.businessName ?? ''}. Trocar empresa`} onPress={soon('Trocar empresa')} style={[styles.company, styles.flex]}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`Empresa atual: ${profile?.businessName ?? ''}. Trocar empresa`} onPress={() => router.push('/trocar-empresa')} style={[styles.company, styles.flex]}>
             <Text variant="caption" color="textMuted" numberOfLines={1} style={styles.shrink}>
               {profile?.businessName ?? '…'}
             </Text>
@@ -190,7 +189,7 @@ export function DashboardScreen() {
                   tone="primary"
                   title={`${data.openConditionals.count} ${data.openConditionals.count === 1 ? 'condicional' : 'condicionais'}`}
                   detail={`${formatCents(data.openConditionals.totalCents)} em aberto`}
-                  onPress={soon('Condicionais')}
+                  onPress={() => router.navigate({ pathname: '/vendas', params: { status: 'condicional_aberto' } })}
                 />
               )}
             </View>

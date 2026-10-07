@@ -17,11 +17,12 @@ public sealed class StockFixture : ApiFixture
     protected override Task SeedAsync() => Db.ExecuteAsync("""
         INSERT INTO businesses (id, name, status) VALUES (10, 'Empresa A', 'active'), (20, 'Empresa B', 'active');
         INSERT INTO users (id, name, username, email, password) VALUES (1, 'Ana', 'ana', 'ana@a.com', @hash);
-        INSERT INTO business_user (business_id, user_id, status) VALUES (10, 1, 'active');
+        INSERT INTO business_user (business_id, user_id, status) VALUES (10, 1, 'active'), (20, 1, 'active');
         INSERT INTO permissions (id, name, guard_name) VALUES (1, 'products.view', 'web');
         INSERT INTO roles (id, business_id, name, guard_name) VALUES (1, 10, 'Vendedor', 'web');
         INSERT INTO role_has_permissions (permission_id, role_id) VALUES (1, 1);
         INSERT INTO model_has_roles (role_id, model_type, model_id, business_id) VALUES (1, 'App\\Models\\User', 1, 10);
+        INSERT INTO model_has_permissions (permission_id, model_type, model_id, business_id) VALUES (1, 'App\\Models\\User', 1, 20);
         INSERT INTO products (id, business_id, code, name, sku, barcode, description, cost_price, sale_price, is_active, deleted_at) VALUES
           (100, 10, 1, 'Camiseta Azul', 'CAM-AZ', NULL, NULL, 20.00, 59.90, 1, NULL),
           (200, 20, 1, 'Produto da empresa B', NULL, NULL, NULL, 1.00, 9.99, 1, NULL);
@@ -64,6 +65,21 @@ public sealed class StockApiTests(StockFixture api) : IClassFixture<StockFixture
         Assert.Equal(7, body.GetProperty("unitId").GetInt64());
         Assert.Equal(12_500, body.GetProperty("totalMilli").GetInt64());
         Assert.Contains("stock:cw-access-1:100", api.ComercialWeb.Calls);
+    }
+
+    [Fact]
+    public async Task Depois_de_trocar_de_empresa_o_saldo_do_aparelho_nao_e_servido_para_a_outra()
+    {
+        TestDatabase.RequireMySql();
+        var client = await PairedAsync();
+        var switched = await client.PostAsJsonAsync("/api/v1/auth/switch-business", new { businessId = 20 }, Ct);
+        Assert.Equal(HttpStatusCode.OK, switched.StatusCode);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", (await switched.Content.ReadFromJsonAsync<SessionDto>(Ct))!.AccessToken);
+        api.ComercialWeb.Calls.Clear();
+
+        // O token do aparelho é da empresa A: servir o saldo dele para a B misturaria dados das duas.
+        Assert.Equal(HttpStatusCode.Conflict, (await client.GetAsync("/api/v1/products/200/stock", Ct)).StatusCode);
+        Assert.DoesNotContain(api.ComercialWeb.Calls, c => c.StartsWith("stock:", StringComparison.Ordinal));
     }
 
     [Fact]

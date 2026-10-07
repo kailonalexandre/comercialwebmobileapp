@@ -4,7 +4,9 @@ import { useSyncExternalStore } from 'react';
 
 import { createQuickCustomer } from '@/features/customers/customers-api';
 import type { QueueEntry, QuickCustomerInput } from '@/features/customers/quick-customer-model';
+import { failPendingCustomer, resolvePendingCustomer } from '@/features/sales/sale-queue';
 import { ApiError } from '@/infrastructure/api/client';
+import { getActiveBusinessId } from '@/infrastructure/business-scope';
 
 // Fila local de cadastros rápidos. Fica no armazenamento privado do app (arquivo único) e cada item carrega a
 // própria Idempotency-Key, então reenviar depois de queda, de toque duplo ou de app fechado nunca duplica o cliente.
@@ -33,6 +35,9 @@ function set(next: QueueEntry[]) {
   persist();
   listeners.forEach((l) => l());
 }
+
+// Cadastro de uma empresa nunca sobe nem aparece em outra. Sem empresa conhecida (dado antigo), vale para qualquer uma.
+export const inActiveBusiness = (e: QueueEntry) => e.businessId === undefined || getActiveBusinessId() === null || e.businessId === getActiveBusinessId();
 
 const update = (id: string, change: Partial<QueueEntry>) => set(entries.map((e) => (e.id === id ? { ...e, ...change } : e)));
 
@@ -66,12 +71,15 @@ export function useQuickCustomerQueue(): QueueEntry[] {
 
 export async function enqueueQuickCustomer(input: QuickCustomerInput): Promise<QueueEntry> {
   await loadQueue();
-  const entry: QueueEntry = { id: randomUUID(), input, status: 'pending', createdAt: new Date().toISOString() };
+  const entry: QueueEntry = { id: randomUUID(), input, status: 'pending', businessId: getActiveBusinessId() ?? undefined, createdAt: new Date().toISOString() };
   set([...entries, entry]);
   return entry;
 }
 
 export const clearQueue = () => entries.length > 0 && set([]);
+// Id do servidor de um cadastro já sincronizado (undefined = ainda na fila ou recusado).
+export const serverIdOf = (id: string) => entries.find((e) => e.id === id)?.serverId;
+
 export const discardEntry = (id: string) => set(entries.filter((e) => e.id !== id));
 export const retryEntry = (id: string) => update(id, { status: 'pending', error: undefined });
 
@@ -89,11 +97,12 @@ function failureMessage(e: unknown): string {
 export function syncQuickCustomers(): Promise<void> {
   running ??= (async () => {
     await loadQueue();
-    for (const item of entries.filter((e) => e.status === 'pending')) {
+    for (const item of entries.filter((e) => e.status === 'pending' && inActiveBusiness(e))) {
       update(item.id, { status: 'syncing' });
       try {
         const created = await createQuickCustomer(item.input, item.id);
         update(item.id, { status: 'synced', serverId: created.id, incomplete: created.incomplete, error: undefined });
+        void resolvePendingCustomer(item.id, created.id);
       } catch (e) {
         const offline = e instanceof ApiError && (e.kind === 'network' || e.kind === 'timeout' || e.kind === 'server');
         if (offline) {
@@ -101,6 +110,7 @@ export function syncQuickCustomers(): Promise<void> {
           break; // sem conexão para o próximo também: tenta de novo mais tarde
         }
         update(item.id, { status: 'error', error: failureMessage(e) });
+        void failPendingCustomer(item.id, failureMessage(e));
       }
     }
   })().finally(() => {

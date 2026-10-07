@@ -114,6 +114,21 @@ public sealed class AuthService(IIdentityStore store, TokenIssuer tokens, LoginT
         return AuthResult.Ok(Issue(state.SessionId, state.UserId, state.BusinessId, refresh, now, check.MinAppVersion));
     }
 
+    /// <summary>
+    /// Troca a empresa ativa da sessão sem novo login. Só empresas com vínculo ativo do usuário; o tenant continua vindo do
+    /// servidor (o app só escolhe entre as suas). O access token antigo (outra empresa) deixa de valer na hora.
+    /// </summary>
+    public async Task<SwitchedBusiness?> SwitchBusinessAsync(Guid sessionId, long userId, long businessId, CancellationToken ct)
+    {
+        if (!await store.SwitchBusinessAsync(sessionId, userId, businessId, ct)) return null;
+        var profile = await store.GetProfileAsync(userId, businessId, ct);
+        if (profile is null) return null;
+        var (access, expiresAt) = tokens.CreateAccessToken(userId, sessionId, businessId, clock.GetUtcNow());
+        return new SwitchedBusiness(access, expiresAt, profile.BusinessId, profile.BusinessName);
+    }
+
+    public Task<IReadOnlyList<BusinessRef>> BusinessesAsync(long userId, CancellationToken ct) => store.ListBusinessesAsync(userId, ct);
+
     public async Task LogoutAsync(Guid sessionId, CancellationToken ct)
     {
         await link.LogoutAsync(sessionId, ct);

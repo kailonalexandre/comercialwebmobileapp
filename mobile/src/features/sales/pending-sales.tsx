@@ -1,0 +1,72 @@
+import { router } from 'expo-router';
+import { Pressable, View } from 'react-native';
+
+import { getActiveBusinessId } from '@/infrastructure/business-scope';
+
+import { useConditionalDraft } from '@/features/conditional/conditional-draft';
+import { usePdvDraft } from '@/features/pdv/pdv-draft';
+import { usePreSaleDraft } from '@/features/presale/presale-draft';
+import { STATUS_LABEL } from '@/features/customers/quick-customer-model';
+import { estimateCents } from '@/features/presale/draft-model';
+import { discardSale, retrySale, syncSales, useSaleQueue } from '@/features/sales/sale-queue';
+import { belongsTo, KIND_LABEL, type SaleQueueEntry } from '@/features/sales/sale-queue-model';
+import { StatusPill } from '@/shared/components/status-pill';
+import { Text } from '@/shared/components/text';
+import { makeStyles } from '@/shared/theme/theme-context';
+import { radius, spacing } from '@/shared/theme/tokens';
+import { formatCents } from '@/shared/utils/format';
+
+const tone = (e: SaleQueueEntry) => (e.status === 'error' ? 'danger' : 'primary');
+
+// Vendas deste aparelho ainda não confirmadas pelo ComercialWeb (aguardando, enviando ou com erro).
+export function PendingSales() {
+  const styles = useStyles();
+  const pdv = usePdvDraft();
+  const presale = usePreSaleDraft();
+  const conditional = useConditionalDraft();
+  const items = useSaleQueue().filter((e) => e.status !== 'synced' && belongsTo(e, getActiveBusinessId()));
+  if (items.length === 0) return null;
+  return (
+    <View style={styles.box}>
+      {items.map((e) => (
+        <View key={e.id} style={styles.row}>
+          <View style={styles.flex}>
+            <Text variant="label" numberOfLines={1}>
+              {KIND_LABEL[e.kind]} · {e.draft.customer?.name ?? (e.kind === 'conditional' ? 'Sem cliente' : 'Consumidor final')}
+            </Text>
+            <Text variant="caption" color="textMuted">
+              {formatCents(e.totalCents ?? estimateCents(e.draft.items, e.draft.saleDiscount))} · {e.draft.items.length} {e.draft.items.length === 1 ? 'item' : 'itens'}
+            </Text>
+            {e.status === 'pending' && e.draft.customer?.pendingId && <Text variant="caption" color="textMuted">Aguardando o cadastro do cliente</Text>}
+            {e.error && <Text variant="caption" color="danger">{e.error}</Text>}
+          </View>
+          <StatusPill label={STATUS_LABEL[e.status]} tone={tone(e)} />
+          {e.status === 'error' && (
+            <View style={styles.actions}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  // Recusada pelo servidor = nada foi criado: volta ao carrinho para corrigir e reenviar.
+                  (e.kind === 'pdv' ? pdv : e.kind === 'conditional' ? conditional : presale).load(e.draft);
+                  discardSale(e.id);
+                  router.navigate(e.kind === 'pdv' ? '/pdv' : e.kind === 'conditional' ? '/novo-condicional' : '/nova-venda');
+                }}
+              >
+                <Text variant="label" color="primary">Editar</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" onPress={() => { retrySale(e.id); void syncSales(); }}><Text variant="label" color="primary">Tentar de novo</Text></Pressable>
+              <Pressable accessibilityRole="button" onPress={() => discardSale(e.id)}><Text variant="label" color="danger">Descartar</Text></Pressable>
+            </View>
+          )}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const useStyles = makeStyles((colors) => ({
+  box: { gap: spacing.sm, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.primarySoft },
+  row: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm },
+  flex: { flex: 1, minWidth: 140 },
+  actions: { flexDirection: 'row', gap: spacing.lg, width: '100%' },
+}));

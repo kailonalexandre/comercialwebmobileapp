@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import { router } from 'expo-router';
 import { Alert, StyleSheet, View } from 'react-native';
 
 import { useSession } from '@/features/auth/session-context';
@@ -63,6 +64,7 @@ export function SettingsScreen() {
           ]}
         />
       </View>
+      <Button label="Trocar empresa" variant="outline" icon="swap-horizontal-outline" onPress={() => router.push('/trocar-empresa')} />
       <Button label="Desconectar" variant="outline" icon="log-out-outline" onPress={() => confirmDisconnect(signOut)} />
     </DetailFrame>
   );

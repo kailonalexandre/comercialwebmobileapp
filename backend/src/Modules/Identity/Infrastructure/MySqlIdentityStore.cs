@@ -121,6 +121,36 @@ public sealed class MySqlIdentityStore(MySqlDataSource db) : IIdentityStore
             new { userId, businessId }, cancellationToken: ct));
     }
 
+    public async Task<IReadOnlyList<BusinessRef>> ListBusinessesAsync(long userId, CancellationToken ct)
+    {
+        await using var conn = await db.OpenConnectionAsync(ct);
+        return (await conn.QueryAsync<BusinessRef>(new CommandDefinition(
+            $"SELECT CAST(b.id AS SIGNED) AS Id, b.name AS Name {ActiveMembership} ORDER BY b.name, b.id",
+            new { userId }, cancellationToken: ct))).AsList();
+    }
+
+    public async Task<bool> SwitchBusinessAsync(Guid sessionId, long userId, long businessId, CancellationToken ct)
+    {
+        await using var conn = await db.OpenConnectionAsync(ct);
+        // O primeiro SET fixa a empresa do pareamento antes do segundo trocar business_id (MySQL avalia da esquerda para a direita).
+        var changed = await conn.ExecuteAsync(new CommandDefinition(
+            $"""
+            UPDATE mobile_sessions s
+            SET s.paired_business_id = COALESCE(s.paired_business_id, s.business_id), s.business_id = @businessId
+            WHERE s.id = @sessionId AND s.user_id = @userId AND s.revoked_at IS NULL
+              AND EXISTS (SELECT 1 {ActiveMembership} AND bu.business_id = @businessId)
+            """,
+            new { sessionId = sessionId.ToString(), userId, businessId }, cancellationToken: ct));
+        return changed == 1;
+    }
+
+    public async Task<long> GetPairedBusinessIdAsync(Guid sessionId, long current, CancellationToken ct)
+    {
+        await using var conn = await db.OpenConnectionAsync(ct);
+        return await conn.ExecuteScalarAsync<long?>(new CommandDefinition(
+            "SELECT CAST(paired_business_id AS SIGNED) FROM mobile_sessions WHERE id = @id", new { id = sessionId.ToString() }, cancellationToken: ct)) ?? current;
+    }
+
     public async Task<string?> GetCwTokensAsync(Guid sessionId, CancellationToken ct)
     {
         await using var conn = await db.OpenConnectionAsync(ct);

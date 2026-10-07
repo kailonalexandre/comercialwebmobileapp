@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useSession } from '@/features/auth/session-context';
@@ -14,16 +14,16 @@ import { layout, radius, shadow, spacing, type Tone } from '@/shared/theme/token
 import { makeStyles } from '@/shared/theme/theme-context';
 import { normalizeSearch } from '@/shared/utils/format';
 
-type Module = { title: string; description: string; icon: IconName; tone: Tone; href?: '/configuracoes' | '/pedidos' };
+type Module = { title: string; description: string; icon: IconName; tone: Tone; permissions?: string[]; href: '/configuracoes' | '/pedidos' | '/financeiro' | '/compras' | '/relatorios' | '/modulo/comercial' | '/modulo/cadastros' | '/modulo/estoque' };
 
-// Espelha os módulos do ComercialWeb (app/Modules). Cada item vira rota quando a feature existir.
+// Módulos do ComercialWeb com tela no app. `permissions`: basta uma (mesma regra da web); só esconde o atalho, o servidor confere de novo.
 const modules: Module[] = [
-  { title: 'Comercial', description: 'Vendas, PDV, condicionais e caixa', icon: 'cart-outline', tone: 'primary' },
-  { title: 'Cadastros', description: 'Clientes, produtos, fornecedores e mais', icon: 'person-outline', tone: 'primary' },
-  { title: 'Financeiro', description: 'Contas a receber, a pagar e fluxo de caixa', icon: 'cash-outline', tone: 'success' },
-  { title: 'Estoque', description: 'Movimentações, inventário e relatórios', icon: 'cube-outline', tone: 'info' },
-  { title: 'Compras e Entradas', description: 'Pedidos, entradas e notas fiscais', icon: 'bus-outline', tone: 'primary' },
-  { title: 'Relatórios', description: 'Vendas, estoque, financeiro e mais', icon: 'bar-chart-outline', tone: 'primary' },
+  { title: 'Comercial', description: 'Vendas, PDV e condicionais', icon: 'cart-outline', tone: 'primary', href: '/modulo/comercial' },
+  { title: 'Cadastros', description: 'Clientes e produtos', icon: 'person-outline', tone: 'primary', href: '/modulo/cadastros' },
+  { title: 'Financeiro', description: 'Contas a receber e a pagar', icon: 'cash-outline', tone: 'success', permissions: ['financial.receivables.view', 'financial.payables.view'], href: '/financeiro' },
+  { title: 'Estoque', description: 'Consulta de saldo por produto', icon: 'cube-outline', tone: 'info', href: '/modulo/estoque' },
+  { title: 'Compras e Entradas', description: 'Consulta de pedidos de compra', icon: 'bus-outline', tone: 'primary', permissions: ['purchases.access'], href: '/compras' },
+  { title: 'Relatórios', description: 'Vendas por período e forma de pagamento', icon: 'bar-chart-outline', tone: 'primary', permissions: ['relatorios.access'], href: '/relatorios' },
   { title: 'Loja Virtual', description: 'Produtos, pedidos e configurações', icon: 'storefront-outline', tone: 'accent', href: '/pedidos' },
   { title: 'Configurações', description: 'Empresa, usuários e preferências', icon: 'settings-outline', tone: 'info', href: '/configuracoes' },
 ];
@@ -35,9 +35,10 @@ export function MenuScreen() {
 
   const visible = useMemo(() => {
     const q = normalizeSearch(query);
-    if (!q) return modules;
-    return modules.filter((m) => normalizeSearch(`${m.title} ${m.description}`).includes(q));
-  }, [query]);
+    const allowed = modules.filter((m) => !m.permissions || m.permissions.some((p) => profile?.permissions.includes(p)));
+    if (!q) return allowed;
+    return allowed.filter((m) => normalizeSearch(`${m.title} ${m.description}`).includes(q));
+  }, [query, profile]);
 
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
@@ -68,7 +69,7 @@ export function MenuScreen() {
               key={m.title}
               accessibilityRole="button"
               accessibilityLabel={`${m.title}. ${m.description}`}
-              onPress={() => (m.href ? router.push(m.href) : Alert.alert(m.title, 'Em breve.'))}
+              onPress={() => router.push(m.href)}
               style={({ pressed }) => [styles.item, pressed && styles.pressed]}
             >
               <IconTile icon={m.icon} tone={m.tone} size={40} />
