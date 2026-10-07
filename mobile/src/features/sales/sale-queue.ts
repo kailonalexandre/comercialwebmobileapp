@@ -2,6 +2,7 @@ import { File, Paths } from 'expo-file-system';
 import { useSyncExternalStore } from 'react';
 
 import { loadQueue, serverIdOf } from '@/features/customers/quick-customer-queue';
+import { sendConditional } from '@/features/conditional/conditional-api';
 import { sendPdvSale } from '@/features/pdv/pdv-api';
 import type { Draft } from '@/features/presale/draft-model';
 import { sendPreSale, type SendResult } from '@/features/presale/presale-api';
@@ -89,7 +90,7 @@ export async function failPendingCustomer(pendingId: string, message: string): P
   set(entries.map((e) => (e.draft.customer?.pendingId === pendingId && e.status === 'pending' ? { ...e, status: 'error' as const, error: `Cadastro do cliente recusado: ${message}` } : e)));
 }
 
-const sendOf = (kind: SaleKind) => (kind === 'pdv' ? sendPdvSale : sendPreSale);
+const sendOf = (kind: SaleKind) => (kind === 'pdv' ? sendPdvSale : kind === 'conditional' ? sendConditional : sendPreSale);
 
 // Envia os pendentes um a um (nada em paralelo). Relê a fila a cada volta: venda gravada durante o envio entra na mesma rodada.
 export function syncSales(businessId?: number): Promise<void> {

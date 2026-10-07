@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 
 import { getActiveBusinessId } from '@/infrastructure/business-scope';
 
+import { useConditionalDraft } from '@/features/conditional/conditional-draft';
 import { usePdvDraft } from '@/features/pdv/pdv-draft';
 import { usePreSaleDraft } from '@/features/presale/presale-draft';
 import { STATUS_LABEL } from '@/features/customers/quick-customer-model';
@@ -22,6 +23,7 @@ export function PendingSales() {
   const styles = useStyles();
   const pdv = usePdvDraft();
   const presale = usePreSaleDraft();
+  const conditional = useConditionalDraft();
   const items = useSaleQueue().filter((e) => e.status !== 'synced' && belongsTo(e, getActiveBusinessId()));
   if (items.length === 0) return null;
   return (
@@ -30,7 +32,7 @@ export function PendingSales() {
         <View key={e.id} style={styles.row}>
           <View style={styles.flex}>
             <Text variant="label" numberOfLines={1}>
-              {KIND_LABEL[e.kind]} · {e.draft.customer?.name ?? 'Consumidor final'}
+              {KIND_LABEL[e.kind]} · {e.draft.customer?.name ?? (e.kind === 'conditional' ? 'Sem cliente' : 'Consumidor final')}
             </Text>
             <Text variant="caption" color="textMuted">
               {formatCents(e.totalCents ?? estimateCents(e.draft.items, e.draft.saleDiscount))} · {e.draft.items.length} {e.draft.items.length === 1 ? 'item' : 'itens'}
@@ -45,9 +47,9 @@ export function PendingSales() {
                 accessibilityRole="button"
                 onPress={() => {
                   // Recusada pelo servidor = nada foi criado: volta ao carrinho para corrigir e reenviar.
-                  (e.kind === 'pdv' ? pdv : presale).load(e.draft);
+                  (e.kind === 'pdv' ? pdv : e.kind === 'conditional' ? conditional : presale).load(e.draft);
                   discardSale(e.id);
-                  router.navigate(e.kind === 'pdv' ? '/pdv' : '/nova-venda');
+                  router.navigate(e.kind === 'pdv' ? '/pdv' : e.kind === 'conditional' ? '/novo-condicional' : '/nova-venda');
                 }}
               >
                 <Text variant="label" color="primary">Editar</Text>

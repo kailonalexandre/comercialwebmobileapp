@@ -297,3 +297,7 @@ O usuário com mais de uma empresa troca a ativa sem sair da conta (Início → 
 - **App:** a empresa ativa é guardada (`infrastructure/business-scope.ts`) e a troca recria toda a árvore de telas (`businessEpoch`): rascunhos, listas e tabelas de preço em memória não sobrevivem. Tudo que fica no aparelho é por empresa: cópias de clientes, produtos e formas de pagamento (`*-b<id>.json`, apagadas ao sair da conta) e as filas de vendas e cadastros (`businessId` em cada item; só sobem e só aparecem na empresa que os gravou — voltar à empresa de origem envia o que ficou). Download em andamento durante a troca é descartado.
 - **Limite:** pedidos da Loja Virtual e saldo por produto só na empresa do QR; para ver em outra, parear de novo com o QR dela.
 
+## Condicional
+
+Comercial → Novo condicional: monta a sacola (cliente obrigatório, sem desconto nem recebimento) e **só salva**; finalizar continua no ComercialWeb. Usa a mesma fila das vendas (`kind: 'conditional'` em `sale-queue`): grava no aparelho antes de enviar, reenvia sozinho e nunca duplica. `POST /api/v1/conditionals` (.NET) repassa à rota de máquina `POST /api/mobile/v1/conditionals` do ComercialWeb, que usa o `ConditionalDraftService` (cliente, vendedor e estoque como na tela). Salvar condicional baixa estoque, então a idempotência é pelo `client_uuid` (índice único por empresa) gravado na mesma transação da baixa: reenvio devolve o mesmo condicional sem mexer no estoque de novo. Cliente cadastrado offline pode ser usado: o condicional espera o cadastro subir, como as vendas.
+
