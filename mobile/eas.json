@@ -58,7 +58,7 @@
     },
     "staging": {
       "android": {
-        "track": "internal",
+        "track": "alpha",
         "releaseStatus": "completed"
       }
     }

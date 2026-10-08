@@ -1,7 +1,7 @@
 name: Release Android
 
 # Publica o app no Google Play pelo EAS (build + envio automático):
-#   - push na dev que mexe em mobile/  -> perfil "staging" (API de dev), faixa de teste interno;
+#   - push na dev que mexe em mobile/  -> perfil "staging" (API de dev), faixa de teste fechado "alpha";
 #   - tag vX.Y.Z                       -> perfil "production" (API de produção), faixa definida em eas.json > submit.
 # Keystore, google-services.json e a chave da service account do Play ficam no EAS (eas credentials / eas env),
 # nunca neste repositório. Requer só o secret EXPO_TOKEN.
