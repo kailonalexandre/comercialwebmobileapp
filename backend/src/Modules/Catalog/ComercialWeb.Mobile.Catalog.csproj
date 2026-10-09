@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="..\Customers\ComercialWeb.Mobile.Customers.csproj" />
     <ProjectReference Include="..\Identity\ComercialWeb.Mobile.Identity.csproj" />
     <ProjectReference Include="..\..\Common\ComercialWeb.Mobile.Common.csproj" />
   </ItemGroup>

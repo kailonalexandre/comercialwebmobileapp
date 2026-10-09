@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using System.Net;
+using ComercialWeb.Mobile.Customers;
 using ComercialWeb.Mobile.Identity;
 using ComercialWeb.Mobile.Identity.Application;
 using ComercialWeb.Mobile.Identity.Infrastructure;
@@ -16,6 +18,18 @@ public static class CatalogModule
 {
     // Mesma permissão da web (App\Modules\Cadastros\Products\ProductPermissions::VIEW).
     public const string ViewProducts = "products.view";
+
+    // Criar produto: mesma permissão da web (ProductPermissions::CREATE); o ComercialWeb confere de novo.
+    public const string CreateProducts = "products.create";
+
+    public sealed record QuickProductRequest(string? Name, string? Sku, string? Barcode, long? SalePriceCents, long? CostPriceCents);
+
+    private const long MaxCents = 99_999_999_999;
+
+    internal static bool IsValid(QuickProductRequest b) =>
+        !string.IsNullOrWhiteSpace(b.Name) && b.Name.Length <= 200
+        && (b.Sku?.Length ?? 0) <= 80 && (b.Barcode?.Length ?? 0) <= 80
+        && b.SalePriceCents is >= 0 and <= MaxCents && (b.CostPriceCents ?? 0) is >= 0 and <= MaxCents;
 
     public sealed record PricesRequest(IReadOnlyList<long>? ProductIds, string? PriceTable);
 
@@ -84,6 +98,33 @@ public static class CatalogModule
                     i => i, i => table.TryGetValue(i, out var byTable) && byTable.TryGetValue(body.PriceTable, out var cents) ? (long?)cents : null),
             });
         });
+
+        // Cadastro rápido: o ComercialWeb aplica as regras de Produto e deduplica por Idempotency-Key (client_uuid).
+        // ponytail: reaproveita o cliente assinado de Customers (genérico); extrair para Common se um 3º módulo precisar.
+        products.MapPost("/", async (QuickProductRequest body, HttpContext http, ClaimsPrincipal user, CustomerWebClient web, CancellationToken ct) =>
+        {
+            if (!Guid.TryParse(http.Request.Headers["Idempotency-Key"].ToString(), out var key) || key == Guid.Empty || !IsValid(body))
+                return Results.Problem(statusCode: StatusCodes.Status422UnprocessableEntity);
+            var ids = SessionIds.From(user)!;
+            var r = await web.PostAsync("/api/mobile/v1/products/quick", new
+            {
+                user_id = ids.UserId,
+                business_id = ids.BusinessId,
+                client_uuid = key.ToString(),
+                name = body.Name!.Trim(),
+                sku = body.Sku?.Trim(),
+                barcode = body.Barcode?.Trim(),
+                sale_price_cents = body.SalePriceCents,
+                cost_price_cents = body.CostPriceCents,
+            }, ct);
+            return r.Status switch
+            {
+                HttpStatusCode.OK or HttpStatusCode.Created or HttpStatusCode.UnprocessableEntity =>
+                    Results.Content(System.Text.Encoding.UTF8.GetString(r.Body), "application/json", System.Text.Encoding.UTF8, (int)r.Status),
+                HttpStatusCode.Forbidden => Results.Problem(statusCode: StatusCodes.Status403Forbidden),
+                _ => Results.Problem(statusCode: StatusCodes.Status503ServiceUnavailable),
+            };
+        }).RequirePermission(CreateProducts);
 
         // O saldo tem regras do ComercialWeb (grade, endereços da unidade): a API só repassa o que ele calcula para o aparelho.
         products.MapGet("/{id:long}/stock", async (long id, ClaimsPrincipal user, ProductQueries queries, DeviceLink link, IComercialWebAuth cw, CancellationToken ct) =>
