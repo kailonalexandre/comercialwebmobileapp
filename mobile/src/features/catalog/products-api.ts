@@ -1,3 +1,4 @@
+import { toProductRequest, type QuickProductInput } from '@/features/catalog/quick-product-model';
 import { pricesOffline, searchProductsOffline } from '@/features/catalog/product-cache';
 import { DEFAULT_TABLE } from '@/features/pricing/price-table-model';
 import { api } from '@/infrastructure/api';
@@ -66,4 +67,16 @@ export async function fetchPricesIn(productIds: number[], priceTable: string): P
     }
     throw e;
   }
+}
+
+// Cadastro rápido: o ComercialWeb aplica as regras de Produto e deduplica pela Idempotency-Key.
+export async function createQuickProduct(input: QuickProductInput, idempotencyKey: string): Promise<{ id: number }> {
+  if (!api) {
+    if (!__DEV__) throw new Error('API não configurada.');
+    return { id: 1 };
+  }
+  const res = await api.request<{ data: { id: number } }>('/v1/products', {
+    method: 'POST', body: toProductRequest(input), idempotencyKey, timeoutMs: 15_000,
+  });
+  return { id: res.data.id };
 }

@@ -274,6 +274,12 @@ App ─POST /api/v1/pdv/quote|sales (Idempotency-Key)─► .NET ─POST /api/mo
 - Código do lado Laravel: worktree `~/comercialWeb/comercial-web-mobile-bridge`, branch `feature/mobile-pdv-sales` (commit f59abdf2, sem push nem merge; a integração no ComercialWeb é decisão do usuário).
 - Pendente: parcelamento e cartão com operadora, abertura/fechamento de caixa e nota fiscal pelo app; emissão fiscal segue as regras da web (pode enfileirar NFC-e conforme a configuração da empresa).
 
+## Cadastro rápido de produto (app → .NET → ComercialWeb)
+- App: Produtos → Novo (só com `products.create`). Nome e preço de venda obrigatórios; custo, código de barras e SKU opcionais (SKU vazio vira o código sequencial). **Online apenas**, sem fila local; a `Idempotency-Key` muda a cada alteração do formulário, então repetir o mesmo envio (timeout) devolve o produto já criado. Preço trafega em centavos.
+- .NET: `POST /api/v1/products` (`products.create`) assina e repassa a `POST /api/mobile/v1/products/quick`; 201/200/422 são repassados, o resto vira 403/503. Reaproveita o `CustomerWebClient` (cliente HTTP assinado genérico).
+- ComercialWeb (branch `feature/mobile-quick-product`, sem merge): `MobileProductService` usa o `ProductWriter` (mesmas regras de SKU/código de barras/preço da web); idempotência por `products.mobile_client_uuid` (único por empresa). **Ordem de deploy:** migration do ComercialWeb antes da API .NET.
+- Fora do escopo por ora: unidade, categoria, foto, estoque inicial, variações e dados fiscais.
+
 ## Cadastro rápido de cliente (app → .NET → ComercialWeb)
 - App: Clientes → Novo. Só nome e telefone são obrigatórios; sem CPF/CNPJ o cliente nasce "incompleto". Fila local (`quick-customers.json`, armazenamento privado) com Idempotency-Key por item; estados Aguardando/Sincronizando/Sincronizado/Erro; reenvio ao entrar e ao voltar ao primeiro plano; a fila é apagada ao sair da conta. Antes de salvar (online) consulta duplicidade (documento, telefone, e-mail) sem bloquear, exceto mesmo CPF/CNPJ.
 - .NET: `POST /api/v1/customers` (+ `/duplicates`, `/lookup/postal-code`, `/lookup/company`), permissão `people.create`; só assina e repassa ao ComercialWeb (`/api/mobile/v1/customers/*`), que aplica as regras de Pessoa, deduplica por `client_uuid` e marca `people.registration_incomplete`. A marca cai sozinha quando a pessoa fica completa (nome + documento + telefone), por qualquer caminho de gravação.
