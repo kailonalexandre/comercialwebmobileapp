@@ -9,6 +9,7 @@ import { usePreSaleDraft } from '@/features/presale/presale-draft';
 import { STATUS_LABEL } from '@/features/customers/quick-customer-model';
 import { estimateCents } from '@/features/presale/draft-model';
 import { discardSale, retrySale, syncSales, useSaleQueue } from '@/features/sales/sale-queue';
+import { getActiveAccountId } from '@/infrastructure/security/session-store';
 import { belongsTo, KIND_LABEL, type SaleQueueEntry } from '@/features/sales/sale-queue-model';
 import { StatusPill } from '@/shared/components/status-pill';
 import { Text } from '@/shared/components/text';
@@ -24,7 +25,7 @@ export function PendingSales() {
   const pdv = usePdvDraft();
   const presale = usePreSaleDraft();
   const conditional = useConditionalDraft();
-  const items = useSaleQueue().filter((e) => e.status !== 'synced' && belongsTo(e, getActiveBusinessId()));
+  const items = useSaleQueue().filter((e) => e.status !== 'synced' && belongsTo(e, getActiveBusinessId(), getActiveAccountId()));
   if (items.length === 0) return null;
   return (
     <View style={styles.box}>

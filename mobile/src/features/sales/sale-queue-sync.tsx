@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 
 import { useSession } from '@/features/auth/session-context';
 import { syncSales, useSaleQueue } from '@/features/sales/sale-queue';
+import { getActiveAccountId } from '@/infrastructure/security/session-store';
 import { belongsTo } from '@/features/sales/sale-queue-model';
 
 // Sem conexão a venda fica na fila; aqui ela é reenviada ao entrar, ao voltar ao primeiro plano e a cada 30 s
@@ -13,7 +14,7 @@ const RETRY_MS = 30_000;
 export function SaleQueueSync() {
   const { status, profile } = useSession();
   const businessId = profile?.businessId;
-  const waiting = useSaleQueue().some((e) => e.status === 'pending' && belongsTo(e, businessId));
+  const waiting = useSaleQueue().some((e) => e.status === 'pending' && belongsTo(e, businessId, getActiveAccountId()));
 
   useEffect(() => {
     if (status !== 'signedIn') return;

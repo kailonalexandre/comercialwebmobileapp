@@ -7,6 +7,7 @@ import type { QueueEntry, QuickCustomerInput } from '@/features/customers/quick-
 import { failPendingCustomer, resolvePendingCustomer } from '@/features/sales/sale-queue';
 import { ApiError } from '@/infrastructure/api/client';
 import { getActiveBusinessId } from '@/infrastructure/business-scope';
+import { getActiveAccountId } from '@/infrastructure/security/session-store';
 
 // Fila local de cadastros rápidos. Fica no armazenamento privado do app (arquivo único) e cada item carrega a
 // própria Idempotency-Key, então reenviar depois de queda, de toque duplo ou de app fechado nunca duplica o cliente.
@@ -37,7 +38,9 @@ function set(next: QueueEntry[]) {
 }
 
 // Cadastro de uma empresa nunca sobe nem aparece em outra. Sem empresa conhecida (dado antigo), vale para qualquer uma.
-export const inActiveBusiness = (e: QueueEntry) => e.businessId === undefined || getActiveBusinessId() === null || e.businessId === getActiveBusinessId();
+export const inActiveBusiness = (e: QueueEntry) =>
+  (e.businessId === undefined || getActiveBusinessId() === null || e.businessId === getActiveBusinessId()) &&
+  (e.accountId === undefined || getActiveAccountId() === null || e.accountId === getActiveAccountId());
 
 const update = (id: string, change: Partial<QueueEntry>) => set(entries.map((e) => (e.id === id ? { ...e, ...change } : e)));
 
@@ -71,7 +74,7 @@ export function useQuickCustomerQueue(): QueueEntry[] {
 
 export async function enqueueQuickCustomer(input: QuickCustomerInput): Promise<QueueEntry> {
   await loadQueue();
-  const entry: QueueEntry = { id: randomUUID(), input, status: 'pending', businessId: getActiveBusinessId() ?? undefined, createdAt: new Date().toISOString() };
+  const entry: QueueEntry = { id: randomUUID(), input, status: 'pending', businessId: getActiveBusinessId() ?? undefined, accountId: getActiveAccountId() ?? undefined, createdAt: new Date().toISOString() };
   set([...entries, entry]);
   return entry;
 }

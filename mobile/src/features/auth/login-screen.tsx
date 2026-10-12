@@ -35,7 +35,7 @@ function messageFor(e: unknown): string {
 export function LoginScreen({ deepLink }: { deepLink?: string }) {
   const styles = useStyles();
   const { colors } = useTheme();
-  const { connect } = useSession();
+  const { connect, accounts, cancelAdding } = useSession();
   const [scanning, setScanning] = useState(false);
   const [link, setLink] = useState('');
   const [deviceName, setDeviceName] = useState(defaultDeviceName);
@@ -127,6 +127,7 @@ export function LoginScreen({ deepLink }: { deepLink?: string }) {
                   autoCorrect={false}
                 />
                 <Button label="Ler QR Code" icon="qr-code-outline" onPress={() => setScanning(true)} loading={submitting} />
+                {accounts.length > 0 && <Button label="Voltar às contas do aparelho" variant="outline" onPress={cancelAdding} disabled={submitting} />}
 
                 {appEnv.allowManualPairing && (
                   <>

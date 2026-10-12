@@ -22,14 +22,15 @@ const APPEARANCE: { key: ThemePreference; label: string }[] = [
 ];
 
 function confirmDisconnect(signOut: () => Promise<void>) {
-  Alert.alert('Desconectar este aparelho?', 'Para entrar de novo será preciso gerar e ler um novo QR Code no ComercialWeb.', [
+  Alert.alert('Desconectar esta conta?', 'Ela sai deste aparelho. Para voltar será preciso gerar e ler um novo QR Code no ComercialWeb.', [
     { text: 'Cancelar', style: 'cancel' },
     { text: 'Desconectar', style: 'destructive', onPress: () => void signOut() },
   ]);
 }
 
 export function SettingsScreen() {
-  const { profile, signOut } = useSession();
+  const { profile, signOut, lock, accounts, activeAccountId, setBiometric } = useSession();
+  const biometric = accounts.find((a) => a.id === activeAccountId)?.biometric ?? false;
   const { preference, setPreference } = useTheme();
 
   return (
@@ -64,6 +65,13 @@ export function SettingsScreen() {
           ]}
         />
       </View>
+      <Button
+        label={biometric ? 'Desativar digital/Face ID' : 'Entrar com digital/Face ID'}
+        variant="outline"
+        icon="finger-print-outline"
+        onPress={() => void setBiometric(!biometric).then((ok) => !ok && !biometric && Alert.alert('Biometria indisponível', 'Cadastre uma digital ou rosto nas configurações do celular e confirme para ativar.'))}
+      />
+      <Button label="Trocar de usuário" variant="outline" icon="people-outline" onPress={() => void lock()} />
       <Button label="Trocar empresa" variant="outline" icon="swap-horizontal-outline" onPress={() => router.push('/trocar-empresa')} />
       <Button label="Desconectar" variant="outline" icon="log-out-outline" onPress={() => confirmDisconnect(signOut)} />
     </DetailFrame>

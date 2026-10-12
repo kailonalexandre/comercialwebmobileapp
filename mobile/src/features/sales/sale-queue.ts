@@ -7,6 +7,7 @@ import { sendPdvSale } from '@/features/pdv/pdv-api';
 import type { Draft } from '@/features/presale/draft-model';
 import { sendPreSale, type SendResult } from '@/features/presale/presale-api';
 import { getActiveBusinessId } from '@/infrastructure/business-scope';
+import { getActiveAccountId } from '@/infrastructure/security/session-store';
 import { applyResult, belongsTo, restore, type SaleKind, type SaleQueueEntry } from '@/features/sales/sale-queue-model';
 
 // Fila local de vendas e pré-vendas. Toda venda é gravada aqui ANTES de ir ao servidor, então queda de rede,
@@ -100,7 +101,7 @@ export function syncSales(businessId?: number): Promise<void> {
     const active = getActiveBusinessId() ?? businessId;
     const tried = new Set<string>();
     for (;;) {
-      const item = entries.find((e) => e.status === 'pending' && !e.draft.customer?.pendingId && !tried.has(e.id) && belongsTo(e, active));
+      const item = entries.find((e) => e.status === 'pending' && !e.draft.customer?.pendingId && !tried.has(e.id) && belongsTo(e, active, getActiveAccountId()));
       if (!item) break;
       tried.add(item.id);
       update(item.id, { status: 'syncing' });
@@ -127,7 +128,7 @@ export async function submitSale(kind: SaleKind, draft: Draft, key: string, sess
   if (pending && realId !== undefined && draft.customer) draft = { ...draft, customer: { id: realId, name: draft.customer.name } };
   // Mesma chave = mesmo pedido: reenviar ou tocar duas vezes nunca cria segunda entrada.
   if (!entries.some((e) => e.id === key)) {
-    set([...entries, { id: key, kind, draft, status: 'pending', businessId, createdAt: new Date().toISOString() }]);
+    set([...entries, { id: key, kind, draft, status: 'pending', businessId, accountId: getActiveAccountId() ?? undefined, createdAt: new Date().toISOString() }]);
   }
   await syncSales(businessId);
   const entry = entries.find((e) => e.id === key);

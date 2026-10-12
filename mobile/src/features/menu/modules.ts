@@ -15,6 +15,7 @@ export const moduleLinks: Record<string, { title: string; links: ModuleLink[] }>
       { title: 'PDV', description: 'Vender e receber', icon: 'cart-outline', href: '/pdv' },
       { title: 'Nova pré-venda', description: 'Montar um pedido para fechar depois', icon: 'create-outline', href: '/nova-venda' },
       { title: 'Novo condicional', description: 'Montar a sacola e salvar, mesmo sem internet', icon: 'bag-add-outline', href: '/novo-condicional', permissions: ['sales.access'] },
+      { title: 'Minhas sacolas', description: 'Dar baixa nas peças vendidas e devolvidas', icon: 'bag-handle-outline', href: '/condicionais', permissions: ['sales.access'] },
       { title: 'Condicionais abertos', description: 'Vendas condicionais em andamento', icon: 'swap-horizontal-outline', href: { pathname: '/vendas', params: { status: 'condicional_aberto' } } },
     ],
   },

@@ -14,3 +14,15 @@ describe('belongsTo (fila separada por empresa)', () => {
     expect(belongsTo(entry(10), undefined)).toBe(true);
   });
 });
+
+describe('belongsTo (fila separada por conta do aparelho)', () => {
+  const byAccount = (accountId?: string): SaleQueueEntry => ({ ...entry(10), accountId });
+  it('venda de um vendedor não sobe na sessão de outro, mesmo na mesma empresa', () => {
+    expect(belongsTo(byAccount('ana'), 10, 'ana')).toBe(true);
+    expect(belongsTo(byAccount('ana'), 10, 'bia')).toBe(false);
+  });
+  it('dado antigo (sem conta) ou conta ainda não aberta vale para qualquer uma', () => {
+    expect(belongsTo(byAccount(undefined), 10, 'bia')).toBe(true);
+    expect(belongsTo(byAccount('ana'), 10, null)).toBe(true);
+  });
+});
