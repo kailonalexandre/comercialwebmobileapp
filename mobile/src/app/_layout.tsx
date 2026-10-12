@@ -13,6 +13,7 @@ import { PreSaleDraftProvider } from '@/features/presale/presale-draft';
 import { PriceTablesProvider } from '@/features/pricing/price-tables';
 import { QuickCustomerSync } from '@/features/customers/quick-customer-sync';
 import { ProductCacheSync } from '@/features/catalog/product-cache-sync';
+import { BagQueueSync } from '@/features/conditional/bag-queue-sync';
 import { SaleQueueSync } from '@/features/sales/sale-queue-sync';
 import { PushBridge } from '@/features/push/push-bridge';
 import { OnboardingProvider, useOnboarding } from '@/features/onboarding/onboarding-context';
@@ -27,6 +28,7 @@ function RootNavigator() {
   if (status === 'signedIn' && updateRequired) return <UpdateRequiredScreen />;
 
   const signedOut = status === 'signedOut';
+  const locked = status === 'locked';
 
   // Guarda de navegação é UX; autorização real acontece na API.
   return (
@@ -48,8 +50,13 @@ function RootNavigator() {
           <Stack.Screen name="pedido/[id]" />
           <Stack.Screen name="nova-venda" />
           <Stack.Screen name="novo-condicional" />
+          <Stack.Screen name="condicionais" />
+          <Stack.Screen name="condicional/[id]" />
           <Stack.Screen name="selecionar-produto" />
           <Stack.Screen name="selecionar-cliente" />
+        </Stack.Protected>
+        <Stack.Protected guard={locked}>
+          <Stack.Screen name="contas" />
         </Stack.Protected>
         <Stack.Protected guard={signedOut && !seen}>
           <Stack.Screen name="onboarding" />
@@ -107,6 +114,7 @@ export default function RootLayout() {
                   <PushBridge />
                   <QuickCustomerSync />
                   <SaleQueueSync />
+                  <BagQueueSync />
                   <ProductCacheSync />
                   <RootNavigator />
                 </SessionScopedDraft>

@@ -30,6 +30,13 @@ public sealed record PdvSaleCreated(long SaleId, string Number, string Status, l
 /// <summary>Recusa com código estável do ComercialWeb (cash_register_closed, payment_incomplete, business_rule...).</summary>
 public sealed record PdvRefusal(string Code, string? Message, long? TotalCents, long? RemainingCents);
 
+/// <summary>Sacola do vendedor (condicional aberto) com o que já foi vendido, devolvido e o que ainda está com ele.</summary>
+public sealed record BagItem(long Id, long ProductId, string Description, string? Sku, long UnitPriceCents, decimal Quantity, decimal Sold, decimal Returned, decimal Pending);
+
+public sealed record Bag(long Id, string Number, string Status, long? CustomerId, string? CustomerName, long TotalCents, string? CreatedAt, IReadOnlyList<BagItem> Items);
+
+public sealed record BagUpdate(Bag Conditional, bool AlreadyExisted);
+
 public enum PdvFailure { Forbidden, Refused, Unavailable }
 
 public sealed record PdvResult<T>(T? Value, PdvFailure? Failure = null, PdvRefusal? Refusal = null);
@@ -80,6 +87,32 @@ public sealed partial class PdvClient(HttpClient http, IConfiguration config, Ti
         return dto is null
             ? new PdvResult<PdvSaleCreated>(default, PdvFailure.Unavailable)
             : new PdvResult<PdvSaleCreated>(new PdvSaleCreated(dto.SaleId, dto.Number, dto.Status, dto.TotalCents, dto.ChangeCents, dto.AlreadyExisted));
+    }
+
+    // Sacola na rua (condicional). Mesma assinatura e mesmos resultados do PDV; a baixa repete a Idempotency-Key do app.
+    public Task<PdvResult<IReadOnlyList<Bag>>> OpenBagsAsync(long userId, long businessId, CancellationToken ct) =>
+        SendAsync<BagsDto, IReadOnlyList<Bag>>("/api/mobile/v1/conditionals/open", new { user_id = userId, business_id = businessId }, [HttpStatusCode.OK], d => d.Conditionals, ct);
+
+    public Task<PdvResult<Bag>> BagAsync(long userId, long businessId, long id, CancellationToken ct) =>
+        SendAsync<BagDto, Bag>($"/api/mobile/v1/conditionals/{id}", new { user_id = userId, business_id = businessId }, [HttpStatusCode.OK], d => d.Conditional, ct);
+
+    public Task<PdvResult<BagUpdate>> MoveAsync(long userId, long businessId, long id, Guid key, long itemId, string kind, decimal quantity, CancellationToken ct) =>
+        SendAsync<BagUpdateDto, BagUpdate>($"/api/mobile/v1/conditionals/{id}/movements",
+            new { user_id = userId, business_id = businessId, client_uuid = key.ToString(), item_id = itemId, kind, quantity },
+            [HttpStatusCode.OK, HttpStatusCode.Created], d => new BagUpdate(d.Conditional, d.AlreadyExisted), ct);
+
+    public Task<PdvResult<BagUpdate>> FinalizeBagAsync(long userId, long businessId, long id, IReadOnlyList<PdvPayment> payments, CancellationToken ct) =>
+        SendAsync<BagUpdateDto, BagUpdate>($"/api/mobile/v1/conditionals/{id}/finalize",
+            new { user_id = userId, business_id = businessId, payments = payments.Select(p => new { method = p.Method, amount_cents = p.AmountCents }) },
+            [HttpStatusCode.OK, HttpStatusCode.Created], d => new BagUpdate(d.Conditional, d.AlreadyExisted), ct);
+
+    private async Task<PdvResult<TOut>> SendAsync<TDto, TOut>(string path, object payload, HttpStatusCode[] success, Func<TDto, TOut?> map, CancellationToken ct) where TDto : class
+    {
+        var (status, body) = await PostAsync(path, payload, ct);
+        if (!success.Contains(status)) return Failed<TOut>(status, body);
+        var dto = Read<TDto>(body);
+        var value = dto is null ? default : map(dto);
+        return value is null ? new PdvResult<TOut>(default, PdvFailure.Unavailable) : new PdvResult<TOut>(value);
     }
 
     private static object Payload(PdvOrder o, bool includePayments) => new
@@ -156,6 +189,9 @@ public sealed partial class PdvClient(HttpClient http, IConfiguration config, Ti
         }
     }
 
+    private sealed record BagsDto(List<Bag>? Conditionals);
+    private sealed record BagDto(Bag? Conditional);
+    private sealed record BagUpdateDto(Bag Conditional, bool AlreadyExisted);
     private sealed record MethodDto(string Code, string Name);
     private sealed record MethodsDto(List<MethodDto>? Methods);
     private sealed record QuoteItemDto(long ProductId, string Name, int Quantity, long UnitPriceCents, long TotalCents, long DiscountCents = 0);

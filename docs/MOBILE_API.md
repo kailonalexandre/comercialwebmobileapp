@@ -160,6 +160,13 @@ Legenda: AUTH = `Bearer` (access token) salvo indicação. Todas as rotas autent
 - **RESPONSE:** 201 salvo / 200 já existia (reenvio): `{ conditionalId, number, status, totalCents, priceMode, alreadyExisted }`. 403 sem permissão; 422 regra do condicional (cliente bloqueado ou consumidor final sem alçada, sem vendedor, estoque insuficiente) com `message` para o operador; 503 ComercialWeb fora do ar.
 - **Só salva** (o `save()` da web, que baixa o estoque); finalizar e receber continuam no ComercialWeb. Rota de máquina no ComercialWeb: `POST /api/mobile/v1/conditionals` (assinada), idempotente pelo índice único `(business_id, client_uuid)` gravado na mesma transação da baixa de estoque.
 
+### Sacola do vendedor (baixa e fechamento do condicional)
+O vendedor sai com o condicional aberto e dá baixa por peça pelo app; o ComercialWeb recebe na hora (o admin acompanha), a fila offline do app sobe sozinha quando voltar a conexão. Todas as rotas: `sales.access`, e o vendedor só enxerga condicionais que criou ou em que é o vendedor (senão 403).
+- `GET /conditionals/open` → `{ data: Bag[] }`. `GET /conditionals/{id}` → `Bag`. `Bag = { id, number, status, customerId, customerName, totalCents, createdAt, items: [{ id, productId, description, sku, unitPriceCents, quantity, sold, returned, pending }] }`. `pending` = o que ainda está com o vendedor.
+- `POST /conditionals/{id}/movements` `{ itemId, kind: "sold"|"returned", quantity }` + `Idempotency-Key` (uuid da baixa, gerado no app e repetido em todo reenvio) → `{ conditional: Bag, alreadyExisted }`. `returned` devolve ao estoque e recalcula o total (mesmo caminho da conferência da web); `sold` só marca a peça como vendida. 422 se a quantidade passa do que está com o vendedor.
+- `POST /conditionals/{id}/finalize` `{ payments: [{ method, amountCents }] }` → `{ conditional: Bag, alreadyExisted }`. Só fecha com tudo baixado (422 senão); a soma dos pagamentos tem que fechar com `totalCents`; lista vazia só se o total for zero (cliente devolveu tudo). Formas imediatas: `cash`, `pix_transfer`, `debit_card`, `credit_card`. Reenvio de um condicional já finalizado responde 200 `alreadyExisted`.
+- ComercialWeb: `POST /api/mobile/v1/conditionals/open|{id}|{id}/movements|{id}/finalize` (assinadas). Migration nova: `conditional_items.sold_quantity` e `conditional_movements` (índice único `(business_id, client_uuid)` = idempotência da baixa).
+
 ### GET /notifications
 - **PERMISSIONS:** `mobile.access`. **REQUEST:** `page`, `per_page`, `read` (`read|unread`).
 - **RESPONSE:** `{ data: [ { id, type, severity, title, body, read, created_at } ], meta, unread }`. É o mesmo armazenamento do sino do web (usuário + empresa do aparelho).

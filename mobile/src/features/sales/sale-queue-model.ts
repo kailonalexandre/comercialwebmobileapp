@@ -19,6 +19,8 @@ export type SaleQueueEntry = {
   sale?: PreSaleCreated;
   // Empresa da sessão que gravou o pedido (se já conhecida): venda de uma empresa nunca sobe na sessão de outra.
   businessId?: number;
+  // Conta do aparelho (vendedor/caixa) que gravou: venda de um usuário nunca sobe na sessão de outro. Ausente em dado antigo.
+  accountId?: string;
   createdAt: string;
 };
 
@@ -41,5 +43,6 @@ export const restore = (entries: SaleQueueEntry[]): SaleQueueEntry[] =>
   entries.map((e) => (e.status === 'syncing' ? { ...e, status: 'pending' as const } : e));
 
 // Venda de uma empresa nunca sobe nem aparece em outra. Sem empresa conhecida (dado antigo ou sessão ainda carregando), vale para qualquer uma.
-export const belongsTo = (entry: SaleQueueEntry, businessId: number | null | undefined) =>
-  entry.businessId === undefined || businessId == null || entry.businessId === businessId;
+export const belongsTo = (entry: SaleQueueEntry, businessId: number | null | undefined, accountId?: string | null) =>
+  (entry.businessId === undefined || businessId == null || entry.businessId === businessId) &&
+  (entry.accountId === undefined || accountId == null || entry.accountId === accountId);

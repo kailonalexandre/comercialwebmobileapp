@@ -28,6 +28,12 @@
       "expo-router",
       "expo-secure-store",
       [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Usar o Face ID para abrir sua conta no Infinit Comercial."
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "backgroundColor": "#6D28D9",
