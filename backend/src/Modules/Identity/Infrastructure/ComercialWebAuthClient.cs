@@ -142,9 +142,17 @@ public sealed partial class ComercialWebAuthClient(HttpClient http, IConfigurati
     {
         var reply = await SendDetailedAsync<LoginDto>(HttpMethod.Post, "/terminals/login", null, new
         {
-            terminal_id = terminal.Id, terminal_secret = terminal.Secret, method = input.Method, login = input.Login, password = input.Password,
-            user_id = input.UserId, pin = input.Pin, invite_code = input.InviteCode, new_password = input.NewPassword,
-            platform = device.Platform, app_version = device.AppVersion,
+            terminal_id = terminal.Id,
+            terminal_secret = terminal.Secret,
+            method = input.Method,
+            login = input.Login,
+            password = input.Password,
+            user_id = input.UserId,
+            pin = input.Pin,
+            invite_code = input.InviteCode,
+            new_password = input.NewPassword,
+            platform = device.Platform,
+            app_version = device.AppVersion,
         }, ct, sign: true, clientIp);
         return reply.Body is { Device: not null, User: not null, Terminal: not null } b
             ? new(reply.Status, new CwLogin(new CwTokens(b.AccessToken, b.RefreshToken), b.Device.Id, b.User.Id, b.User.Name, Terminal(b.Terminal)))

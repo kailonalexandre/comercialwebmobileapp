@@ -1,8 +1,7 @@
 name: CI
 
+# Só depois do merge (push em dev/main): PR não roda CI, para poupar minutos do GitHub Actions.
 on:
-  pull_request:
-    branches: [main, dev]
   push:
     branches: [main, dev]
 
@@ -29,15 +28,26 @@ jobs:
           cache-dependency-path: mobile/package-lock.json
 
       - run: npm ci
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm test -- --ci
-      # node-forge (GHSA-86w9-cpqp-85rv) entra só via @expo/cli (ferramenta de build, não roda no app)
+      # Tudo em paralelo no mesmo job (mesmo custo de minutos, menos espera). Falha se qualquer um falhar.
+      # Audit: node-forge (GHSA-86w9-cpqp-85rv) entra só via @expo/cli (ferramenta de build, não roda no app)
       # e ainda não tem versão corrigida; voltar para high quando o Expo publicar o fix.
-      - name: Dependency audit (falha em critical)
-        run: npm audit --omit=dev --audit-level=critical
-      - name: Bundle Android (valida build JS)
-        run: npx expo export --platform android --output-dir dist
+      - name: Lint, typecheck, testes, audit e bundle (paralelo)
+        shell: bash
+        run: |
+          declare -A jobs
+          start() { local name=$1; shift; "$@" > "/tmp/ci-$name.log" 2>&1 & jobs[$name]=$!; }
+          start lint npm run lint
+          start typecheck npm run typecheck
+          start test npm test -- --ci
+          start audit npm audit --omit=dev --audit-level=critical
+          start bundle npx expo export --platform android --output-dir dist
+          status=0
+          for name in "${!jobs[@]}"; do
+            if wait "${jobs[$name]}"; then result=ok; else result=FALHOU; status=1; fi
+            echo "::group::$name ($result)"; cat "/tmp/ci-$name.log"; echo "::endgroup::"
+            [ "$result" = ok ] || echo "::error::$name falhou"
+          done
+          exit $status
 
   backend:
     runs-on: ubuntu-latest
@@ -69,9 +79,20 @@ jobs:
 
       - run: dotnet restore
       - run: dotnet build --no-restore
-      - run: dotnet format --verify-no-changes --no-restore
-      - name: Pacotes vulneráveis (falha se houver)
+      # Formatação, pacotes vulneráveis e testes em paralelo (os testes já rodam classes em paralelo no xUnit).
+      - name: Format, vulneráveis e testes (paralelo)
+        shell: bash
         run: |
-          dotnet package list --vulnerable --include-transitive | tee vulnerable.txt
-          ! grep -q "has the following vulnerable packages" vulnerable.txt
-      - run: dotnet test --no-build
+          declare -A jobs
+          start() { local name=$1; shift; "$@" > "/tmp/ci-$name.log" 2>&1 & jobs[$name]=$!; }
+          vulnerable() { dotnet package list --vulnerable --include-transitive | tee vulnerable.txt && ! grep -q "has the following vulnerable packages" vulnerable.txt; }
+          start format dotnet format --verify-no-changes --no-restore
+          start vulnerable vulnerable
+          start test dotnet test --no-build
+          status=0
+          for name in "${!jobs[@]}"; do
+            if wait "${jobs[$name]}"; then result=ok; else result=FALHOU; status=1; fi
+            echo "::group::$name ($result)"; cat "/tmp/ci-$name.log"; echo "::endgroup::"
+            [ "$result" = ok ] || echo "::error::$name falhou"
+          done
+          exit $status
