@@ -14,7 +14,7 @@ export function ProductCacheSync() {
   const keys = tables.map((t) => t.key).join(',');
   useEffect(() => {
     const list = keys.split(',');
-    if (status === 'signedOut') {
+    if (status === 'signedOut' || status === 'revoked') {
       clearProductCache();
       return;
     }

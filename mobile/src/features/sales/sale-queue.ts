@@ -7,7 +7,8 @@ import { sendPdvSale } from '@/features/pdv/pdv-api';
 import type { Draft } from '@/features/presale/draft-model';
 import { sendPreSale, type SendResult } from '@/features/presale/presale-api';
 import { getActiveBusinessId } from '@/infrastructure/business-scope';
-import { getActiveAccountId } from '@/infrastructure/security/session-store';
+import { rememberCreatedAt } from '@/infrastructure/api/client';
+import { getActiveAccountId, offlineAllowed } from '@/infrastructure/security/session-store';
 import { applyResult, belongsTo, restore, type SaleKind, type SaleQueueEntry } from '@/features/sales/sale-queue-model';
 
 // Fila local de vendas e pré-vendas. Toda venda é gravada aqui ANTES de ir ao servidor, então queda de rede,
@@ -91,6 +92,14 @@ export async function failPendingCustomer(pendingId: string, message: string): P
   set(entries.map((e) => (e.draft.customer?.pendingId === pendingId && e.status === 'pending' ? { ...e, status: 'error' as const, error: `Cadastro do cliente recusado: ${message}` } : e)));
 }
 
+export const OFFLINE_EXPIRED = 'Este aparelho está sem falar com o servidor há tempo demais. Conecte-se à internet para registrar novas operações.';
+
+/** Contas com operação ainda não sincronizada (vincular/desvincular o aparelho espera elas subirem). */
+export async function pendingSaleAccounts(): Promise<string[]> {
+  await loadSaleQueue();
+  return entries.filter((e) => e.status !== 'synced').map((e) => e.accountId ?? '');
+}
+
 const sendOf = (kind: SaleKind) => (kind === 'pdv' ? sendPdvSale : kind === 'conditional' ? sendConditional : sendPreSale);
 
 // Envia os pendentes um a um (nada em paralelo). Relê a fila a cada volta: venda gravada durante o envio entra na mesma rodada.
@@ -105,6 +114,7 @@ export function syncSales(businessId?: number): Promise<void> {
       if (!item) break;
       tried.add(item.id);
       update(item.id, { status: 'syncing' });
+      rememberCreatedAt(item.id, item.createdAt);
       const result = await sendOf(item.kind)(item.draft, item.id);
       update(item.id, applyResult(item, result));
       if (result.kind === 'uncertain') break; // sem conexão para a próxima também: tenta de novo mais tarde
@@ -128,6 +138,8 @@ export async function submitSale(kind: SaleKind, draft: Draft, key: string, sess
   if (pending && realId !== undefined && draft.customer) draft = { ...draft, customer: { id: realId, name: draft.customer.name } };
   // Mesma chave = mesmo pedido: reenviar ou tocar duas vezes nunca cria segunda entrada.
   if (!entries.some((e) => e.id === key)) {
+    // Janela offline do aparelho vencida: não grava nada novo até falar com o servidor (que revalida a sessão).
+    if (!offlineAllowed()) return { kind: 'rejected', message: OFFLINE_EXPIRED };
     set([...entries, { id: key, kind, draft, status: 'pending', businessId, accountId: getActiveAccountId() ?? undefined, createdAt: new Date().toISOString() }]);
   }
   await syncSales(businessId);

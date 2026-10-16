@@ -23,6 +23,37 @@ public sealed class FakeComercialWebAuth : IComercialWebAuth
         new CwMarketplaceOrder(id, "mercadolivre", "2000001", "Pago", "paid", 9_990, "João", "2026-09-29T09:00:00-03:00", [new CwMarketplaceOrderItem("Camiseta", "CAM-01", 100, 2, 4_995)]));
     public List<string> Calls { get; } = [];
 
+    public static readonly CwTerminal SharedTerminal = new("6a1f0c2e-0000-4000-8000-0000000000aa", "Caixa 1", "shared", 10, "Empresa A", null);
+    public CwResult<CwBinding> Bind { get; set; } = new(CwStatus.Ok, new CwBinding(SharedTerminal, new string('s', 60)));
+    public CwResult<CwTerminalState> State { get; set; } = new(CwStatus.Ok, new CwTerminalState(SharedTerminal, [new CwOperator(1, "Ana", true)]));
+    public Func<TerminalLoginInput, CwResult<CwLogin>> Login { get; set; } = _ =>
+        new(CwStatus.Ok, new CwLogin(new CwTokens("cw-access-1", "cw-refresh-1"), "3f2b8c1e-0000-4000-8000-000000000002", 1, "Ana", SharedTerminal));
+    public CwResult<bool> Pin { get; set; } = new(CwStatus.Ok, true);
+
+    public Task<CwResult<CwBinding>> BindTerminalAsync(string code, string installationId, string deviceName, string? clientIp, DeviceInfo device, CancellationToken ct)
+    {
+        Calls.Add($"bind:{code}:{installationId}:{clientIp}");
+        return Task.FromResult(Bind);
+    }
+
+    public Task<CwResult<CwTerminalState>> TerminalStateAsync(TerminalCredentials terminal, string? clientIp, CancellationToken ct)
+    {
+        Calls.Add($"state:{terminal.Id}");
+        return Task.FromResult(State);
+    }
+
+    public Task<CwResult<CwLogin>> TerminalLoginAsync(TerminalCredentials terminal, TerminalLoginInput input, string? clientIp, DeviceInfo device, CancellationToken ct)
+    {
+        Calls.Add($"login:{terminal.Id}:{input.Method}");
+        return Task.FromResult(Login(input));
+    }
+
+    public Task<CwResult<bool>> SetPinAsync(string accessToken, string password, string pin, CancellationToken ct)
+    {
+        Calls.Add($"pin:{accessToken}");
+        return Task.FromResult(Pin);
+    }
+
     public Task<CwResult<CwPairing>> PairAsync(string code, string? deviceName, string? clientIp, CancellationToken ct, DeviceInfo? device = null)
     {
         Calls.Add($"pair:{code}");

@@ -65,6 +65,7 @@ if (!app.Environment.IsDevelopment())
 }
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseSyncAudit();
 
 // Health check para blue-green: só responde 200 com banco acessível.
 app.MapGet("/health", async (MySqlDataSource db, CancellationToken ct) =>

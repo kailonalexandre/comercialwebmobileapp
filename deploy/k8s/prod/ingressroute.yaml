@@ -19,6 +19,17 @@ spec:
       match: Host(`api.infinitsolucoesweb.com.br`) && Path(`/api/v1/auth/refresh`)
       middlewares: [{ name: mobile-rl-refresh }]
       services: [{ name: mobile-api, port: http }]
+    # Aparelho vinculado: vínculo no balde do pareamento; login e estado no do refresh.
+    - kind: Rule
+      priority: 30
+      match: Host(`api.infinitsolucoesweb.com.br`) && Path(`/api/v1/terminal/bind`)
+      middlewares: [{ name: mobile-rl-pair }]
+      services: [{ name: mobile-api, port: http }]
+    - kind: Rule
+      priority: 30
+      match: Host(`api.infinitsolucoesweb.com.br`) && (Path(`/api/v1/auth/terminal-login`) || Path(`/api/v1/terminal/state`))
+      middlewares: [{ name: mobile-rl-refresh }]
+      services: [{ name: mobile-api, port: http }]
     - kind: Rule
       priority: 30
       match: Host(`api.infinitsolucoesweb.com.br`) && PathRegexp(`^/api/v1/sales/[0-9]+/receipt/(whatsapp|pdf)$`)

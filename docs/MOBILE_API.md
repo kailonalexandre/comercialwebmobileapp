@@ -196,6 +196,24 @@ Regras:
 
 ---
 
+### Aparelho vinculado (.NET → ComercialWeb, assinadas)
+
+Todas assinadas (HMAC, como `/pair`) com `X-Mobile-Client-Ip`. Recusa de negócio é 4xx com `error.code`, **nunca 401**
+(401 numa rota assinada = assinatura recusada).
+
+- `POST /terminals/bind {code, installation_id, device_name, platform, app_version}` → 201
+  `{terminal: {id, name, mode, business: {id, name}, assigned_user_id}, terminal_secret}`; 422 `invalid_binding_code`.
+- `POST /terminals/state {terminal_id, terminal_secret}` → `{terminal, operators: [{id, name, has_pin}]}`; 422 `terminal_revoked`.
+- `POST /terminals/login {terminal_id, terminal_secret, method: password|pin|invite, login, password, user_id, pin,
+  invite_code, new_password, platform, app_version}` → 201 (mesmo corpo do `/pair` + `user {id, name}` + `terminal`);
+  422 `invalid_credentials` | `terminal_revoked`, 403 `terminal_assigned`, 429 `account_locked` + Retry-After.
+- `PUT /me/pin {password, pin}` (Bearer do aparelho) → 204; 422 `invalid_credentials` | `weak_pin`.
+
+Na API do app: `POST /api/v1/terminal/bind`, `POST /api/v1/terminal/state`, `POST /api/v1/auth/terminal-login`
+(`{accessToken, refreshToken, expiresAt, minAppVersion, user, terminal, policy: {mode, idleLockSeconds, offlineHours,
+biometric}}`), `PUT /api/v1/me/pin`, `POST /api/v1/auth/logout {reason?: operator_switch|idle}`. Detalhes em
+ARCHITECTURE.md, "Aparelho vinculado e login individual".
+
 ## 6. Tempo real e push
 
 Não há WebSocket/broadcasting no ComercialWeb, e não foi introduzido. Estratégia:

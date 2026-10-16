@@ -2,10 +2,13 @@ namespace ComercialWeb.Mobile.Identity.Application;
 
 public sealed record UserCredentials(long Id, string PasswordHash);
 
-/// <summary>CwDeviceId/CwTokens só existem em sessão pareada por QR; CwTokens já chega cifrado.</summary>
+/// <summary>
+/// CwDeviceId/CwTokens só existem em sessão ligada ao ComercialWeb (QR antigo ou login no aparelho); CwTokens já chega
+/// cifrado. TerminalId/Mode só na sessão aberta por login num aparelho vinculado.
+/// </summary>
 public sealed record NewSession(
     Guid Id, long UserId, long BusinessId, string? DeviceName, DateTimeOffset CreatedAt, DateTimeOffset ExpiresAt,
-    string? CwDeviceId = null, string? CwTokens = null);
+    string? CwDeviceId = null, string? CwTokens = null, string? TerminalId = null, string? Mode = null);
 
 public sealed record NewRefreshToken(byte[] Hash, Guid SessionId, DateTimeOffset CreatedAt, DateTimeOffset ExpiresAt);
 
@@ -16,7 +19,13 @@ public sealed record RefreshTokenState(
     DateTimeOffset TokenExpiresAt,
     DateTimeOffset? UsedAt,
     DateTimeOffset SessionExpiresAt,
-    DateTimeOffset? RevokedAt);
+    DateTimeOffset? RevokedAt,
+    DateTimeOffset? LastUsedAt = null,
+    string? Mode = null,
+    string? TerminalId = null);
+
+/// <summary>Linha da trilha `mobile_audit_events` (tabela do ComercialWeb). Meta nunca leva senha, PIN, token ou código.</summary>
+public sealed record AuditEvent(string Event, long? BusinessId, long? UserId, string? TerminalId = null, string? Ip = null, IReadOnlyDictionary<string, string?>? Meta = null);
 
 public sealed record Profile(string UserName, long BusinessId, string BusinessName);
 
@@ -67,4 +76,7 @@ public interface IIdentityStore
     Task<string?> GetCwTokensAsync(Guid sessionId, CancellationToken ct);
 
     Task SaveCwTokensAsync(Guid sessionId, string protectedTokens, CancellationToken ct);
+
+    /// <summary>Melhor esforço: falha ao gravar a trilha nunca derruba a operação (fica no log).</summary>
+    Task RecordAuditAsync(AuditEvent audit, CancellationToken ct);
 }
