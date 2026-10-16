@@ -3,6 +3,7 @@ import { InterTight_400Regular, InterTight_500Medium, InterTight_600SemiBold, In
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { Fragment, type ReactNode } from 'react';
+import { View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 
 import { SessionProvider, useSession } from '@/features/auth/session-context';
@@ -21,7 +22,7 @@ import { StateView } from '@/shared/components/state-view';
 import { ThemeProvider, useTheme } from '@/shared/theme/theme-context';
 
 function RootNavigator() {
-  const { status, updateRequired } = useSession();
+  const { status, updateRequired, touch } = useSession();
   const { seen } = useOnboarding();
   const { colors, scheme } = useTheme();
   if (status === 'loading' || seen === null) return <StateView kind="loading" />;
@@ -31,8 +32,9 @@ function RootNavigator() {
   const locked = status === 'locked';
 
   // Guarda de navegação é UX; autorização real acontece na API.
+  // onTouchStart vê todo toque das telas filhas: é o relógio do bloqueio por inatividade.
   return (
-    <>
+    <View style={{ flex: 1 }} onTouchStart={touch}>
       <StatusBar style={(signedOut && !seen) || scheme === 'dark' ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.page } }}>
         <Stack.Protected guard={status === 'signedIn'}>
@@ -58,17 +60,21 @@ function RootNavigator() {
         <Stack.Protected guard={locked}>
           <Stack.Screen name="contas" />
         </Stack.Protected>
+        <Stack.Protected guard={status === 'revoked'}>
+          <Stack.Screen name="aparelho-revogado" />
+        </Stack.Protected>
         <Stack.Protected guard={signedOut && !seen}>
           <Stack.Screen name="onboarding" />
         </Stack.Protected>
         <Stack.Protected guard={signedOut}>
           <Stack.Screen name="pair" />
+          <Stack.Screen name="bind" />
         </Stack.Protected>
         <Stack.Protected guard={signedOut && seen}>
           <Stack.Screen name="login" />
         </Stack.Protected>
       </Stack>
-    </>
+    </View>
   );
 }
 

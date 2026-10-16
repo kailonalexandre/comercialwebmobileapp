@@ -1,6 +1,6 @@
 import { createApiClient, type RefreshOutcome } from '@/infrastructure/api/client';
 import { apiBaseUrl, appEnv } from '@/infrastructure/config';
-import { getAccessToken, getRefreshToken, isSession, replaceSession } from '@/infrastructure/security/session-store';
+import { getAccessToken, getRefreshToken, isSession, markOnline, replaceSession } from '@/infrastructure/security/session-store';
 
 let unauthorizedHandler = () => {};
 
@@ -46,5 +46,6 @@ export const api = apiBaseUrl
       refreshSession,
       // Só no flavor local; a linha nunca contém token.
       log: appEnv.verboseLogs ? (line) => console.debug(`[api] ${line}`) : undefined,
+      onReachable: () => void markOnline(),
     })
   : null;

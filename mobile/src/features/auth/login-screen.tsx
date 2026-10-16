@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { defaultDeviceName } from '@/features/auth/auth-api';
-import { useSession } from '@/features/auth/session-context';
+import { PendingOperationsError, useSession } from '@/features/auth/session-context';
 import { parsePairingLink, type PairingLink } from '@/features/auth/pairing';
 import { ApiError } from '@/infrastructure/api/client';
 import { appEnv } from '@/infrastructure/config';
@@ -16,9 +16,10 @@ import { TextField } from '@/shared/components/text-field';
 import { radius, shadow, spacing } from '@/shared/theme/tokens';
 import { makeStyles, useTheme } from '@/shared/theme/theme-context';
 
-const STEPS = ['No ComercialWeb, abra Configurações → Aplicativo Mobile', 'Clique em Gerar QR Code', 'Aponte a câmera do celular para o código'];
+const STEPS = ['No ComercialWeb, abra Configurações → Aplicativo Mobile', 'Clique em Gerar QR Code de vínculo', 'Aponte a câmera do celular para o código'];
 
 function messageFor(e: unknown): string {
+  if (e instanceof PendingOperationsError) return 'Há vendas ou cadastros da conta antiga ainda não enviados. Abra a conta, conecte-se e aguarde a sincronização antes de vincular.';
   if (e instanceof ApiError) {
     if (e.kind === 'network' || e.kind === 'timeout') return 'Sem conexão com o servidor. Verifique a internet e tente de novo.';
     if (e.status === 429) {
@@ -35,7 +36,7 @@ function messageFor(e: unknown): string {
 export function LoginScreen({ deepLink }: { deepLink?: string }) {
   const styles = useStyles();
   const { colors } = useTheme();
-  const { connect, accounts, cancelAdding } = useSession();
+  const { connect, bind, accounts, cancelAdding } = useSession();
   const [scanning, setScanning] = useState(false);
   const [link, setLink] = useState('');
   const [deviceName, setDeviceName] = useState(defaultDeviceName);
@@ -45,11 +46,17 @@ export function LoginScreen({ deepLink }: { deepLink?: string }) {
   const [error, setError] = useState<string | null>(fromLink && !fromLink.ok ? fromLink.message : null);
   const [submitting, setSubmitting] = useState(false);
 
-  async function connectWith({ code }: PairingLink) {
+  async function connectWith({ kind, code }: PairingLink) {
+    if (kind === 'invite') return setError('Este é um convite de funcionário. Primeiro vincule o aparelho com o QR Code de vínculo; depois use "Primeiro acesso".');
     setError(null);
     setSubmitting(true);
+    const name = deviceName.trim() || defaultDeviceName;
     try {
-      await connect(code, deviceName.trim() || defaultDeviceName);
+      if (kind === 'bind') {
+        // Identificação da empresa: o servidor diz a qual empresa e em qual modo o aparelho ficou.
+        const bound = await bind(code, name);
+        Alert.alert('Aparelho vinculado', `${bound.name} agora pertence a ${bound.businessName} (${bound.mode === 'shared' ? 'uso compartilhado' : 'uso pessoal'}). Cada funcionário entra com o próprio acesso.`);
+      } else await connect(code, name);
     } catch (e) {
       setError(messageFor(e));
       setSubmitting(false);
@@ -107,7 +114,7 @@ export function LoginScreen({ deepLink }: { deepLink?: string }) {
 
             {pending ? (
               <View style={styles.form}>
-                <Text style={styles.center}>{`Conectar este aparelho ao ComercialWeb ${new URL(pending.server).host}?`}</Text>
+                <Text style={styles.center}>{`${pending.kind === 'bind' ? 'Vincular' : 'Conectar'} este aparelho ao ComercialWeb ${new URL(pending.server).host}?`}</Text>
                 {error && (
                   <Text variant="caption" color="danger" accessibilityLiveRegion="polite">
                     {error}

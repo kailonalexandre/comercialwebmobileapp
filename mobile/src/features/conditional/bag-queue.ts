@@ -5,7 +5,11 @@ import { useSyncExternalStore } from 'react';
 import { sendMove } from '@/features/conditional/bag-api';
 import type { BagMove, BagMoveKind } from '@/features/conditional/bag-model';
 import { getActiveBusinessId } from '@/infrastructure/business-scope';
-import { getActiveAccountId } from '@/infrastructure/security/session-store';
+import { Alert } from 'react-native';
+
+import { OFFLINE_EXPIRED } from '@/features/sales/sale-queue';
+import { rememberCreatedAt } from '@/infrastructure/api/client';
+import { getActiveAccountId, offlineAllowed } from '@/infrastructure/security/session-store';
 
 // Fila local de baixas da sacola. A baixa é gravada aqui ANTES de ir ao servidor, então sem internet (ou com o app
 // fechado no meio do envio) o vendedor continua vendendo e nada se perde. Em dois arquivos (principal + cópia),
@@ -64,12 +68,18 @@ export function useBagQueue(): BagMove[] {
 
 const update = (id: string, change: Partial<BagMove>) => set(moves.map((m) => (m.id === id ? { ...m, ...change } : m)));
 
+export async function pendingBagAccounts(): Promise<string[]> {
+  await loadBagQueue();
+  return moves.map((m) => m.accountId ?? '');
+}
+
 export const retryMove = (id: string) => update(id, { status: 'pending', error: undefined });
 export const discardMove = (id: string) => set(moves.filter((m) => m.id !== id));
 
 /** Anota a baixa e tenta enviar na hora. Volta sem esperar o envio terminar quando não há conexão. */
 export async function queueMove(conditionalId: number, itemId: number, kind: BagMoveKind, quantity: number): Promise<void> {
   await loadBagQueue();
+  if (!offlineAllowed()) return Alert.alert('Sem conexão', OFFLINE_EXPIRED);
   const businessId = getActiveBusinessId() ?? undefined;
   set([...moves, { id: randomUUID(), conditionalId, itemId, kind, quantity, status: 'pending', businessId, accountId: getActiveAccountId() ?? undefined, createdAt: new Date().toISOString() }]);
   await syncBagMoves();
@@ -85,6 +95,7 @@ export function syncBagMoves(): Promise<void> {
       const next = moves.find((m) => m.status === 'pending' && (m.businessId === undefined || active == null || m.businessId === active) && (m.accountId === undefined || getActiveAccountId() === null || m.accountId === getActiveAccountId()));
       if (!next) break;
       update(next.id, { status: 'syncing' });
+      rememberCreatedAt(next.id, next.createdAt);
       const result = await sendMove(next.conditionalId, next.itemId, next.kind, next.quantity, next.id);
       if (result.kind === 'ok') discardMove(next.id);
       else if (result.kind === 'uncertain') {

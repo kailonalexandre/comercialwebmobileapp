@@ -255,3 +255,32 @@ CREATE TABLE notifications (
     created_at TIMESTAMP NULL,
     updated_at TIMESTAMP NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Aplicativo mobile no ComercialWeb (2026_10_15_000001): só as colunas que a API lê ou grava.
+CREATE TABLE mobile_terminals (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    uuid CHAR(36) NOT NULL UNIQUE,
+    business_id BIGINT UNSIGNED NOT NULL,
+    revoked_at TIMESTAMP NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE mobile_devices (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    uuid CHAR(36) NOT NULL UNIQUE,
+    business_id BIGINT UNSIGNED NOT NULL,
+    user_id BIGINT UNSIGNED NOT NULL,
+    terminal_id BIGINT UNSIGNED NULL,
+    revoked_at TIMESTAMP NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE mobile_audit_events (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    business_id BIGINT UNSIGNED NULL,
+    user_id BIGINT UNSIGNED NULL,
+    actor_user_id BIGINT UNSIGNED NULL,
+    terminal_id BIGINT UNSIGNED NULL,
+    event VARCHAR(60) NOT NULL,
+    ip VARCHAR(45) NULL,
+    meta JSON NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

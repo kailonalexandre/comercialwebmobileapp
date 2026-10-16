@@ -1,4 +1,5 @@
 import * as LocalAuthentication from 'expo-local-authentication';
+import * as SecureStore from 'expo-secure-store';
 import { Alert } from 'react-native';
 
 // Digital ou Face ID, o que o aparelho tiver cadastrado. Sem sensor ou sem biometria cadastrada, o recurso não é oferecido.
@@ -42,4 +43,49 @@ export async function offerBiometric(userName: string): Promise<boolean> {
     ], { cancelable: true, onDismiss: () => resolve(false) }),
   );
   return accepted && (await confirmBiometric(`Confirme para ativar o acesso com ${name}`));
+}
+
+// Aparelho vinculado (pessoal): a biometria fica presa a um item do Keychain/Keystore gravado com requireAuthentication.
+// O sistema invalida esse item quando as digitais/rosto do celular mudam: aí a leitura volta null e o desbloqueio local
+// deixa de valer (só com a senha). Isso o authenticateAsync sozinho não detecta.
+const keyFor = (accountId: string) => `cw.bio.${accountId}`;
+
+/** Grava a marca protegida (o sistema pede a biometria agora). false = indisponível ou recusada. */
+export async function enrollBiometricKey(accountId: string): Promise<boolean> {
+  try {
+    if (!SecureStore.canUseBiometricAuthentication()) return false;
+    await SecureStore.setItemAsync(keyFor(accountId), '1', {
+      requireAuthentication: true, authenticationPrompt: 'Confirme para ativar o desbloqueio biométrico',
+      keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** ok = biometria conferiu; cancelled = recusou/cancelou/sensor indisponível; invalidated = biometria do celular mudou. */
+export async function verifyBiometricKey(accountId: string, prompt: string): Promise<'ok' | 'cancelled' | 'invalidated'> {
+  try {
+    const value = await SecureStore.getItemAsync(keyFor(accountId), {
+      requireAuthentication: true, authenticationPrompt: prompt, keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+    });
+    return value === '1' ? 'ok' : 'invalidated';
+  } catch {
+    return 'cancelled';
+  }
+}
+
+export const dropBiometricKey = (accountId: string) => SecureStore.deleteItemAsync(keyFor(accountId)).catch(() => undefined);
+
+/** Só a pergunta (sem confirmar): no aparelho vinculado quem confirma é a gravação da marca protegida. */
+export async function askBiometric(userName: string): Promise<boolean> {
+  if (!(await biometricAvailable())) return false;
+  const name = await biometricName();
+  return new Promise<boolean>((resolve) =>
+    Alert.alert(`Desbloquear com ${name}?`, `Neste celular, ${userName || 'você'} poderá desbloquear o app com ${name}. Se as digitais/rosto do celular mudarem, será pedida a senha.`, [
+      { text: 'Agora não', style: 'cancel', onPress: () => resolve(false) },
+      { text: 'Ativar', onPress: () => resolve(true) },
+    ], { cancelable: true, onDismiss: () => resolve(false) }),
+  );
 }

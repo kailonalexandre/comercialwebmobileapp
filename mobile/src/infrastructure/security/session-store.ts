@@ -10,9 +10,19 @@ export type Session = {
   minAppVersion?: string | null;
 };
 
-// Cada QR pareado vira uma conta guardada no aparelho (vendedor, caixa...). O índice só tem o que a tela de escolha
+// Regras da sessão aberta num aparelho vinculado, vindas do servidor no login (o app não decide sozinho).
+export type SessionPolicy = { mode: 'personal' | 'shared'; idleLockSeconds: number; offlineHours: number; biometric: boolean };
+
+// Cada login vira uma conta guardada no aparelho (vendedor, caixa...). O índice só tem o que a tela de escolha
 // mostra; os tokens de cada conta ficam num item próprio do Keychain/Keystore (que tem limite de tamanho por item).
-export type Account = { id: string; userName: string; businessName: string; biometric: boolean };
+// Conta de aparelho vinculado tem id fixo por empresa+funcionário: quem volta (mesmo depois de revincular o aparelho)
+// reencontra a própria fila offline, e a fila de um nunca sobe na sessão de outro.
+export type Account = {
+  id: string; userName: string; businessName: string; biometric: boolean;
+  terminalId?: string; userId?: number; policy?: SessionPolicy; lastOnlineAt?: string;
+};
+
+export const accountIdFor = (businessId: number, userId: number) => `b${businessId}-u${userId}`;
 
 const INDEX = 'cw.accounts';
 const LEGACY = 'cw.session'; // versão com uma conta só
@@ -21,8 +31,10 @@ const sessionKey = (id: string) => `cw.session.${id}`;
 // Cópia em memória evita ler o Keychain/Keystore a cada requisição. `activeId` = conta aberta (null = bloqueado).
 let current: Session | null = null;
 let activeId: string | null = null;
+let activeMeta: Account | null = null;
 
 export const getActiveAccountId = () => activeId;
+export const getActiveAccount = () => activeMeta;
 
 export function isSession(value: unknown): value is Session {
   const v = value as Partial<Session> | null;
@@ -64,6 +76,7 @@ export async function openAccount(id: string): Promise<Session | null> {
     if (isSession(parsed)) {
       current = parsed;
       activeId = id;
+      activeMeta = (await readIndex()).find((a) => a.id === id) ?? null;
       return parsed;
     }
   } catch {
@@ -73,14 +86,43 @@ export async function openAccount(id: string): Promise<Session | null> {
   return null;
 }
 
-/** Conta nova a partir do pareamento; fica aberta. Nome e empresa chegam depois, com o perfil (`describeAccount`). */
-export async function createAccount(session: Session): Promise<string> {
-  const id = randomUUID();
+/**
+ * Conta nova a partir do pareamento/login; fica aberta. Nome e empresa chegam depois, com o perfil (`describeAccount`).
+ * Com `meta.id` (login no aparelho vinculado) a conta do mesmo funcionário é reaproveitada: tokens novos, mesma biometria.
+ */
+export async function createAccount(session: Session, meta: Partial<Omit<Account, 'biometric'>> = {}): Promise<string> {
+  const id = meta.id ?? randomUUID();
+  const index = await readIndex();
+  const previous = index.find((a) => a.id === id);
+  const account: Account = { userName: '', businessName: '', ...previous, ...meta, id, biometric: previous?.biometric ?? false, lastOnlineAt: new Date().toISOString() };
   await secureStorage.set(sessionKey(id), JSON.stringify(session));
-  await writeIndex([...(await readIndex()), { id, userName: '', businessName: '', biometric: false }]);
+  await writeIndex([...index.filter((a) => a.id !== id), account]);
   current = session;
   activeId = id;
+  activeMeta = account;
   return id;
+}
+
+const ONLINE_PERSIST_MS = 5 * 60_000;
+
+/** O servidor respondeu: renova a janela offline. Grava no Keychain no máximo a cada 5 min. */
+export async function markOnline(now = Date.now()): Promise<void> {
+  if (!activeMeta) return;
+  const last = activeMeta.lastOnlineAt ? Date.parse(activeMeta.lastOnlineAt) : 0;
+  activeMeta = { ...activeMeta, lastOnlineAt: new Date(now).toISOString() };
+  if (now - last < ONLINE_PERSIST_MS) return;
+  const meta = activeMeta;
+  await writeIndex((await readIndex()).map((a) => (a.id === meta.id ? meta : a)));
+}
+
+/**
+ * Pode gravar operação para sincronizar depois? Só dentro da janela offline do aparelho (`policy.offlineHours`) desde a
+ * última resposta do servidor. Conta antiga (QR antigo, sem política) segue como antes.
+ */
+export function offlineAllowed(account: Account | null = activeMeta, now = Date.now()): boolean {
+  if (!account?.policy) return true;
+  const last = account.lastOnlineAt ? Date.parse(account.lastOnlineAt) : 0;
+  return now - last <= account.policy.offlineHours * 3_600_000;
 }
 
 /**
@@ -116,6 +158,16 @@ export async function removeAccount(id: string): Promise<Account[]> {
 export function lockSession(): void {
   current = null;
   activeId = null;
+  activeMeta = null;
+}
+
+/**
+ * Aparelho compartilhado: ao trocar de operador os tokens somem do aparelho (a próxima pessoa entra com o PIN dela).
+ * A conta fica no índice só como nome, para a fila offline dela continuar reconhecível; nada de sessão sobra.
+ */
+export async function forgetTokens(id: string): Promise<void> {
+  await secureStorage.remove(sessionKey(id));
+  if (activeId === id) lockSession();
 }
 
 // Salva na conta aberta; sem conta aberta (bloqueado no meio de uma requisição) não grava em lugar nenhum.

@@ -44,10 +44,14 @@ public sealed class MySqlIdentityStore(MySqlDataSource db) : IIdentityStore
         await using var tx = await conn.BeginTransactionAsync(ct);
         await conn.ExecuteAsync(new CommandDefinition(
             """
-            INSERT INTO mobile_sessions (id, user_id, business_id, device_name, cw_device_id, cw_tokens, created_at, last_used_at, expires_at)
-            VALUES (@Id, @UserId, @BusinessId, @DeviceName, @CwDeviceId, @CwTokens, @CreatedAt, @CreatedAt, @ExpiresAt)
+            INSERT INTO mobile_sessions (id, user_id, business_id, device_name, cw_device_id, terminal_id, mode, cw_tokens, created_at, last_used_at, expires_at)
+            VALUES (@Id, @UserId, @BusinessId, @DeviceName, @CwDeviceId, @TerminalId, @Mode, @CwTokens, @CreatedAt, @CreatedAt, @ExpiresAt)
             """,
-            new { Id = session.Id.ToString(), session.UserId, session.BusinessId, session.DeviceName, session.CwDeviceId, session.CwTokens, CreatedAt = session.CreatedAt.UtcDateTime, ExpiresAt = session.ExpiresAt.UtcDateTime },
+            new
+            {
+                Id = session.Id.ToString(), session.UserId, session.BusinessId, session.DeviceName, session.CwDeviceId, session.TerminalId, session.Mode,
+                session.CwTokens, CreatedAt = session.CreatedAt.UtcDateTime, ExpiresAt = session.ExpiresAt.UtcDateTime,
+            },
             tx, cancellationToken: ct));
         await InsertTokenAsync(conn, tx, token, ct);
         await tx.CommitAsync(ct);
@@ -59,13 +63,15 @@ public sealed class MySqlIdentityStore(MySqlDataSource db) : IIdentityStore
         var row = await conn.QuerySingleOrDefaultAsync<RefreshRow>(new CommandDefinition(
             """
             SELECT s.id AS SessionId, CAST(s.user_id AS SIGNED) AS UserId, CAST(s.business_id AS SIGNED) AS BusinessId, t.expires_at AS TokenExpiresAt,
-                   t.used_at AS UsedAt, s.expires_at AS SessionExpiresAt, s.revoked_at AS RevokedAt
+                   t.used_at AS UsedAt, s.expires_at AS SessionExpiresAt, s.revoked_at AS RevokedAt, s.last_used_at AS LastUsedAt,
+                   s.mode AS Mode, s.terminal_id AS TerminalId
             FROM mobile_refresh_tokens t JOIN mobile_sessions s ON s.id = t.session_id
             WHERE t.token_hash = @hash
             """,
             new { hash }, cancellationToken: ct));
         return row is null ? null : new RefreshTokenState(
-            row.SessionId, row.UserId, row.BusinessId, Utc(row.TokenExpiresAt), UtcOrNull(row.UsedAt), Utc(row.SessionExpiresAt), UtcOrNull(row.RevokedAt));
+            row.SessionId, row.UserId, row.BusinessId, Utc(row.TokenExpiresAt), UtcOrNull(row.UsedAt), Utc(row.SessionExpiresAt), UtcOrNull(row.RevokedAt),
+            Utc(row.LastUsedAt), row.Mode, row.TerminalId);
     }
 
     public async Task<bool> RotateRefreshTokenAsync(byte[] usedHash, NewRefreshToken replacement, DateTimeOffset now, CancellationToken ct)
@@ -104,6 +110,8 @@ public sealed class MySqlIdentityStore(MySqlDataSource db) : IIdentityStore
                 WHERE s.id = @sessionId AND s.user_id = @userId AND s.business_id = @businessId
                   AND s.revoked_at IS NULL AND s.expires_at > @now
                   AND EXISTS (SELECT 1 {ActiveMembership} AND bu.business_id = @businessId)
+                  -- Sessão do ComercialWeb (aparelho/funcionário) revogada no painel: cai na hora, sem esperar o próximo refresh.
+                  AND NOT EXISTS (SELECT 1 FROM mobile_devices d WHERE d.uuid = s.cw_device_id AND d.revoked_at IS NOT NULL)
             )
             """,
             new { sessionId = sessionId.ToString(), userId, businessId, now = now.UtcDateTime }, cancellationToken: ct));
@@ -138,6 +146,8 @@ public sealed class MySqlIdentityStore(MySqlDataSource db) : IIdentityStore
             UPDATE mobile_sessions s
             SET s.paired_business_id = COALESCE(s.paired_business_id, s.business_id), s.business_id = @businessId
             WHERE s.id = @sessionId AND s.user_id = @userId AND s.revoked_at IS NULL
+              -- Aparelho compartilhado é da empresa que o vinculou: lá não se troca de empresa.
+              AND (s.mode IS NULL OR s.mode <> 'shared')
               AND EXISTS (SELECT 1 {ActiveMembership} AND bu.business_id = @businessId)
             """,
             new { sessionId = sessionId.ToString(), userId, businessId }, cancellationToken: ct));
@@ -166,6 +176,19 @@ public sealed class MySqlIdentityStore(MySqlDataSource db) : IIdentityStore
             new { protectedTokens, id = sessionId.ToString() }, cancellationToken: ct));
     }
 
+    public async Task RecordAuditAsync(AuditEvent audit, CancellationToken ct)
+    {
+        await using var conn = await db.OpenConnectionAsync(ct);
+        // terminal_id da trilha é o id numérico do aparelho no ComercialWeb; aqui só se conhece o uuid.
+        await conn.ExecuteAsync(new CommandDefinition(
+            """
+            INSERT INTO mobile_audit_events (business_id, user_id, terminal_id, event, ip, meta, created_at)
+            VALUES (@BusinessId, @UserId, (SELECT id FROM mobile_terminals WHERE uuid = @TerminalId), @Event, @Ip, @Meta, UTC_TIMESTAMP())
+            """,
+            new { audit.BusinessId, audit.UserId, audit.TerminalId, audit.Event, audit.Ip, Meta = audit.Meta is null ? null : System.Text.Json.JsonSerializer.Serialize(audit.Meta) },
+            cancellationToken: ct));
+    }
+
     private static Task<int> InsertTokenAsync(MySqlConnection conn, MySqlTransaction tx, NewRefreshToken t, CancellationToken ct) =>
         conn.ExecuteAsync(new CommandDefinition(
             "INSERT INTO mobile_refresh_tokens (token_hash, session_id, created_at, expires_at) VALUES (@Hash, @SessionId, @CreatedAt, @ExpiresAt)",
@@ -186,5 +209,8 @@ public sealed class MySqlIdentityStore(MySqlDataSource db) : IIdentityStore
         public DateTime? UsedAt { get; set; }
         public DateTime SessionExpiresAt { get; set; }
         public DateTime? RevokedAt { get; set; }
+        public DateTime LastUsedAt { get; set; }
+        public string? Mode { get; set; }
+        public string? TerminalId { get; set; }
     }
 }

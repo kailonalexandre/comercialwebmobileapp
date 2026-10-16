@@ -3,7 +3,7 @@ import { AppState } from 'react-native';
 
 import { useSession } from '@/features/auth/session-context';
 import { clearCustomerCache, refreshCustomerCache } from '@/features/customers/customer-cache';
-import { clearQueue, syncQuickCustomers, useQuickCustomerQueue } from '@/features/customers/quick-customer-queue';
+import { clearUnowned, syncQuickCustomers, useQuickCustomerQueue } from '@/features/customers/quick-customer-queue';
 
 // Sem UI: mantém a cópia local de clientes (offline) e reenvia a fila ao entrar e sempre que o app volta ao primeiro plano; ao sair da conta a fila e a cópia de clientes são apagadas,
 // para um cadastro pendente nunca ser enviado depois em nome de outro usuário.
@@ -12,8 +12,9 @@ export function QuickCustomerSync() {
   const businessId = profile?.businessId;
   const waiting = useQuickCustomerQueue().some((e) => e.status === 'pending');
   useEffect(() => {
-    if (status === 'signedOut') {
-      clearQueue();
+    // Cadastros pendentes são de uma conta (accountId) e só sobem na sessão dela: saem só os antigos, sem dono.
+    if (status === 'signedOut' || status === 'revoked') {
+      clearUnowned();
       clearCustomerCache();
       return;
     }

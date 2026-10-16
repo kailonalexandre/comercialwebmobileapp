@@ -61,7 +61,14 @@ type ClientDeps = {
   sleep?: (ms: number) => Promise<void>;
   // Linha de diagnóstico (método, caminho, status, tempo): nunca recebe token nem query string.
   log?: (line: string) => void;
+  // O servidor respondeu (qualquer status): marca o aparelho como online para a janela de operação offline.
+  onReachable?: () => void;
 };
+
+// Quando a operação da fila foi criada no aparelho (Idempotency-Key -> ISO). Vai em X-Client-Created-At para a trilha
+// do servidor separar "quando o vendedor fez" de "quando sincronizou". A fila registra antes de enviar.
+const createdAtByKey = new Map<string, string>();
+export const rememberCreatedAt = (key: string, iso: string) => void createdAtByKey.set(key, iso);
 
 // fetch não separa conexão de leitura: 30 s cobrem a requisição inteira.
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -124,6 +131,7 @@ export function createApiClient({
   newId = randomUUID,
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   log,
+  onReachable,
 }: ClientDeps) {
   // Várias requisições com 401 ao mesmo tempo compartilham uma única renovação:
   // o servidor aceita cada refresh token uma vez só e trataria a segunda como reuso (roubo).
@@ -145,6 +153,8 @@ export function createApiClient({
     if (token) headers.Authorization = `Bearer ${token}`;
     if (options.body !== undefined) headers['Content-Type'] = 'application/json';
     if (options.idempotencyKey) headers['Idempotency-Key'] = options.idempotencyKey;
+    const createdAt = options.idempotencyKey ? createdAtByKey.get(options.idempotencyKey) : undefined;
+    if (createdAt) headers['X-Client-Created-At'] = createdAt;
 
     const startedAt = Date.now();
     const route = `${options.method ?? 'GET'} ${path.split('?')[0]}`;
@@ -166,8 +176,10 @@ export function createApiClient({
     }
 
     log?.(`${route} -> ${response.status} ${Date.now() - startedAt}ms [${correlationId}]`);
+    onReachable?.();
     if (!response.ok) {
-      const refusal = response.status === 422 ? await readRefusal(response) : undefined;
+      // 401/403/429 do login no aparelho também trazem `code` (invalid_credentials, terminal_revoked, account_locked…).
+      const refusal = [401, 403, 422, 429].includes(response.status) ? await readRefusal(response) : undefined;
       const wait = response.status === 429 ? Number(response.headers?.get('Retry-After')) : NaN;
       throw new ApiError(
         kindFromStatus(response.status),

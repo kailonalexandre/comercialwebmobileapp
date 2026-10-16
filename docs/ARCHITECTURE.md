@@ -61,6 +61,7 @@ GRANT INSERT, UPDATE, DELETE ON <banco>.mobile_push_tokens TO 'mobile_api'@'%';
 GRANT INSERT ON <banco>.mobile_sale_origins TO 'mobile_api'@'%';
 GRANT INSERT ON <banco>.mobile_schema_migrations TO 'mobile_api'@'%';       -- só para o comando migrate
 GRANT UPDATE (read_at, archived_at, updated_at) ON <banco>.notifications TO 'mobile_api'@'%';
+GRANT INSERT ON <banco>.mobile_audit_events TO 'mobile_api'@'%';           -- trilha do app (tabela do ComercialWeb)
 ```
 
   (`migrate` precisa de DDL em `mobile_*`; rode-o com uma conta de deploy separada, não com a da API em execução.)
@@ -314,3 +315,58 @@ Comercial → Novo condicional: monta a sacola (cliente obrigatório, sem descon
 ## Várias contas no aparelho e biometria
 
 Vendedores, caixas etc. usam o mesmo app: cada um pareia o próprio QR e vira uma **conta guardada no aparelho** (`session-store.ts`: índice `cw.accounts` + tokens em `cw.session.<id>`, tudo no Keychain/Keystore; a sessão única de versões anteriores migra sozinha para a primeira conta). Ao abrir o app: sem conta, QR; uma conta sem biometria, abre direto (como antes); caso contrário a tela **Quem está usando?** (`/contas`, status `locked`). Depois do pareamento o app pergunta se a conta deve entrar com **digital/Face ID** (`expo-local-authentication`, só se o aparelho tem sensor e biometria cadastrada); com ela ativa, abrir a conta exige a biometria, com o PIN/padrão do celular como alternativa (padrão do sistema). Configurações: ativar/desativar biometria, **Trocar de usuário** (volta à escolha sem apagar nada), Desconectar (remove só a conta aberta). Trocar de usuário cancela o registro de push da conta que saiu. Filas offline (vendas, clientes, baixas de sacola) guardam o `accountId` de quem gravou e só sobem na sessão dele, mesmo na mesma empresa. Limites conhecidos: remover uma conta da tela de escolha apaga só o aparelho (a sessão no servidor expira sozinha); o app não bloqueia sozinho por inatividade; exige novo build nativo (módulo `expo-local-authentication`).
+
+## Aparelho vinculado e login individual (2026-10-15)
+
+Substitui aos poucos o QR antigo (que emprestava a sessão do usuário Web que gerou o código). Quatro coisas separadas:
+**empresa** (isolamento), **aparelho** (`mobile_terminals`, no ComercialWeb), **funcionário** (`users` + `business_user`) e
+**sessão** (`mobile_devices` no ComercialWeb + `mobile_sessions` aqui). Autoridade de identidade, credencial, bloqueio,
+permissão e aparelho: ComercialWeb. A API .NET continua a única porta do app.
+
+- **Vínculo (QR):** Configurações → Aplicativo Mobile → *Vincular aparelho* (modo pessoal/compartilhado, unidade, dono
+  opcional no pessoal; exige `mobile.devices.manage`). QR `comercialweb://bind?code=…&server=…`, uso único, 5 min
+  (`MOBILE_BINDING_TTL_SECONDS`). App → `POST /api/v1/terminal/bind {code, installationId, deviceName}` → .NET (HMAC) →
+  `POST /api/mobile/v1/terminals/bind`. Volta só o **segredo do aparelho** (60 caracteres, Keychain/Keystore no app, digest
+  SHA-256 no servidor), nunca sessão: sem login individual nenhum dado sai. Consumo do código é UPDATE condicional (dois
+  aparelhos com o mesmo QR: um vence). `installationId` (UUID gerado na instalação) tem um vínculo ativo: vincular de novo
+  derruba o anterior e as sessões dele. Quem gerou o QR precisa ainda ter a permissão no momento da leitura.
+- **Login no aparelho:** `POST /api/v1/auth/terminal-login {terminalId, terminalSecret, method, …}`:
+  `password` (e-mail ou usuário + senha; usuário é único por empresa, então a busca fica presa à empresa do aparelho),
+  `pin` (6 dígitos, **só aparelho compartilhado**, operador escolhido na lista de `POST /api/v1/terminal/state`) ou
+  `invite` (convite de uso único + nova senha ≥ 8). O ComercialWeb confere segredo do aparelho, credencial, usuário ativo,
+  vínculo ativo, `mobile.access` no perfil, acesso mobile não revogado e, no pessoal, o dono (primeiro login vira dono;
+  outro funcionário: 403 `terminal_assigned`). Respostas: 401 `invalid_credentials` (única para senha errada, usuário
+  inexistente, sem permissão ou desligado), 403 `terminal_revoked`/`terminal_assigned`, 429 `account_locked` + Retry-After.
+- **Bloqueio por erros:** 5 erros seguidos (senha ou PIN) por pessoa+empresa → 15 min bloqueado (`MOBILE_MAX_FAILED_ATTEMPTS`,
+  `MOBILE_LOCKOUT_MINUTES`); erro de PIN que bloqueia **apaga o PIN** (volta a senha). O PIN nunca vale sozinho: exige o
+  segredo do aparelho vinculado, rate limit por aparelho/IP e o bloqueio. Definir PIN (`PUT /api/v1/me/pin`) exige a senha
+  atual; sequências e repetições recusadas (`weak_pin`).
+- **Funcionário sem acesso Web:** *Novo funcionário só do app* cria um `users` comum pelo `SystemUserService` (perfil,
+  funcionário vinculado, vendedor padrão) com e-mail técnico `@mobile.invalid` e `mobile_accounts.mobile_only = 1`; o login
+  Web usa `AccountStatusService::canSignInToWeb`, que recusa essas contas (as rotas mobile seguem com `canAuthenticate`).
+  A conta aparece em Usuários; nenhuma pessoa é duplicada. Sai com convite.
+- **Recuperação de acesso:** só o administrador gera convite (`users.update`), nunca para dono, para si mesmo ou conta que
+  também é de outra empresa. Usar o convite troca a senha e derruba as outras sessões mobile da pessoa naquela empresa.
+- **Sessão:** JWT 10 min + refresh rotativo com detecção de reuso (já existente). Por modo (`Auth:Personal:*`,
+  `Auth:Shared:*`): pessoal 30 dias absolutos, 7 dias sem refresh = cai; compartilhado 12 h, 30 min sem refresh = cai. O
+  refresh nunca passa da expiração absoluta. Aparelho compartilhado não troca de empresa. Revogar aparelho, sessão ou acesso
+  no painel vale **na hora**: a validação de cada request (`IsSessionActiveAsync`) também recusa sessão cujo
+  `mobile_devices` foi revogado no ComercialWeb.
+- **App:** pessoal = desbloqueio local por biometria (item `cw.bio.<conta>` gravado com `requireAuthentication`: se as digitais/rosto do celular mudarem o sistema invalida o item e o app passa a pedir a senha) ou bloqueio do celular (só reabre tokens ainda válidos; expirado pede
+  senha), bloqueio após `idleLockSeconds` (300). Compartilhado = sem biometria; inatividade (120 s) ou *Trocar operador*
+  encerram a sessão no servidor e apagam os tokens; o cabeçalho mostra o operador. Conta do aparelho tem id fixo
+  `b<empresa>-u<usuário>`: filas offline (vendas, baixas, cadastros) só sobem na sessão de quem as gravou, também depois de
+  revincular. Revogado: tela *Acesso revogado*, tokens e cópias locais apagados, filas preservadas. Vincular/desvincular
+  recusa enquanto houver operação pendente (nada é descartado em silêncio).
+- **Offline:** o app só grava operação nova dentro de `offlineHours` (pessoal 72 h, compartilhado 12 h) desde a última
+  resposta do servidor. Cada envio da fila leva `Idempotency-Key` e `X-Client-Created-At`; a API registra
+  `sync.accepted`/`sync.rejected` com usuário, empresa e horário de criação. O servidor revalida sessão e permissão em cada
+  envio; recusa fica em Erro no app (corrigir ou descartar).
+- **Auditoria:** `mobile_audit_events` (ComercialWeb; a API só tem INSERT): vínculo/desvínculo, login ok/recusado,
+  bloqueio/desbloqueio, logout, PIN, convite, revogação, sessões encerradas, renovação, reuso de refresh, expiração,
+  troca de operador/empresa, sincronização. Nunca senha, PIN, token ou código. Últimos 50 no painel. Expurgo diário 03:30 (`mobile-audit-prune`): renovações após 30 dias, o resto após 365 (`MOBILE_AUDIT_REFRESH_DAYS`, `MOBILE_AUDIT_DAYS`).
+- **Migração:** 1) publicar ComercialWeb (migration `2026_10_15_000001`) e depois a API (migration `0007` + GRANT);
+  2) QR antigo segue (`MOBILE_LEGACY_PAIRING` / `Auth:LegacyPairing`, padrão ligado) e o painel mostra quantas sessões ainda
+  o usam; 3) vincular cada aparelho (o app remove as contas do QR antigo ao vincular, depois de sincronizar);
+  4) *Encerrar sessões do QR antigo*; 5) desligar as duas flags. Tokens antigos nunca viram credencial de aparelho e a
+  migração não concede permissão nova (cada login usa o perfil da própria pessoa).

@@ -5,7 +5,7 @@ import { useSyncExternalStore } from 'react';
 import { createQuickCustomer } from '@/features/customers/customers-api';
 import type { QueueEntry, QuickCustomerInput } from '@/features/customers/quick-customer-model';
 import { failPendingCustomer, resolvePendingCustomer } from '@/features/sales/sale-queue';
-import { ApiError } from '@/infrastructure/api/client';
+import { ApiError, rememberCreatedAt } from '@/infrastructure/api/client';
 import { getActiveBusinessId } from '@/infrastructure/business-scope';
 import { getActiveAccountId } from '@/infrastructure/security/session-store';
 
@@ -79,7 +79,12 @@ export async function enqueueQuickCustomer(input: QuickCustomerInput): Promise<Q
   return entry;
 }
 
-export const clearQueue = () => entries.length > 0 && set([]);
+export async function pendingCustomerAccounts(): Promise<string[]> {
+  await loadQueue();
+  return entries.filter((e) => e.status !== 'synced').map((e) => e.accountId ?? '');
+}
+
+export const clearUnowned = () => entries.some((e) => e.accountId === undefined) && set(entries.filter((e) => e.accountId !== undefined));
 // Id do servidor de um cadastro já sincronizado (undefined = ainda na fila ou recusado).
 export const serverIdOf = (id: string) => entries.find((e) => e.id === id)?.serverId;
 
@@ -102,6 +107,7 @@ export function syncQuickCustomers(): Promise<void> {
     await loadQueue();
     for (const item of entries.filter((e) => e.status === 'pending' && inActiveBusiness(e))) {
       update(item.id, { status: 'syncing' });
+      rememberCreatedAt(item.id, item.createdAt);
       try {
         const created = await createQuickCustomer(item.input, item.id);
         update(item.id, { status: 'synced', serverId: created.id, incomplete: created.incomplete, error: undefined });

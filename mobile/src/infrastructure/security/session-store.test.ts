@@ -1,4 +1,5 @@
 import {
+  accountIdFor, forgetTokens, offlineAllowed,
   clearSession, createAccount, describeAccount, getAccessToken, getActiveAccountId, loadAccounts, lockSession, openAccount, removeAccount, replaceSession,
   setAccountBiometric,
 } from '@/infrastructure/security/session-store';
@@ -88,4 +89,36 @@ test('removeAccount da conta aberta bloqueia', async () => {
   const a = await createAccount(session('a'));
   await removeAccount(a);
   expect(getActiveAccountId()).toBeNull();
+});
+
+test('login no aparelho vinculado reaproveita a conta do mesmo funcionário (fila e biometria continuam dele)', async () => {
+  const id = accountIdFor(10, 7);
+  const policy = { mode: 'personal' as const, idleLockSeconds: 300, offlineHours: 72, biometric: true };
+  expect(await createAccount(session('a'), { id, userName: 'Ana', businessName: 'Loja', terminalId: 't1', userId: 7, policy })).toBe(id);
+  await setAccountBiometric(id, true);
+  lockSession();
+
+  expect(await createAccount(session('b'), { id, userName: 'Ana', businessName: 'Loja', terminalId: 't1', userId: 7, policy })).toBe(id);
+  const accounts = await loadAccounts();
+  expect(accounts).toHaveLength(1);
+  expect(accounts[0]).toMatchObject({ id, biometric: true, policy });
+  expect(await getAccessToken()).toBe('b');
+});
+
+test('janela offline: vale só até offlineHours desde a última resposta do servidor', async () => {
+  const policy = { mode: 'shared' as const, idleLockSeconds: 120, offlineHours: 12, biometric: false };
+  const now = Date.parse('2026-10-15T12:00:00Z');
+  const at = (h: number) => new Date(now - h * 3_600_000).toISOString();
+  expect(offlineAllowed({ id: 'x', userName: '', businessName: '', biometric: false, policy, lastOnlineAt: at(11) }, now)).toBe(true);
+  expect(offlineAllowed({ id: 'x', userName: '', businessName: '', biometric: false, policy, lastOnlineAt: at(13) }, now)).toBe(false);
+  // Conta do QR antigo (sem política): comportamento anterior.
+  expect(offlineAllowed({ id: 'x', userName: '', businessName: '', biometric: false }, now)).toBe(true);
+});
+
+test('troca de operador apaga os tokens mas mantém a conta reconhecível para a fila dela', async () => {
+  const id = await createAccount(session('a'), { id: 'b10-u7', userName: 'Ana' });
+  await forgetTokens(id);
+  expect(await getAccessToken()).toBeNull();
+  expect(mockStore.has(`cw.session.${id}`)).toBe(false);
+  expect((await loadAccounts()).map((a) => a.id)).toEqual([id]);
 });
