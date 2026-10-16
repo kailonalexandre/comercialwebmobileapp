@@ -186,7 +186,10 @@ public static class IdentityModule
             {
                 return Results.Ok(new
                 {
-                    s.AccessToken, s.RefreshToken, expiresAt = s.ExpiresAt, minAppVersion = s.MinAppVersion,
+                    s.AccessToken,
+                    s.RefreshToken,
+                    expiresAt = s.ExpiresAt,
+                    minAppVersion = s.MinAppVersion,
                     user = new { id = l.UserId, name = l.UserName },
                     terminal = Present(l.Terminal),
                     policy = new { mode = p.Mode, idleLockSeconds = p.IdleLockSeconds, offlineHours = p.OfflineHours, biometric = p.Mode == SessionPolicy.Personal },

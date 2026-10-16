@@ -49,8 +49,16 @@ public sealed class MySqlIdentityStore(MySqlDataSource db) : IIdentityStore
             """,
             new
             {
-                Id = session.Id.ToString(), session.UserId, session.BusinessId, session.DeviceName, session.CwDeviceId, session.TerminalId, session.Mode,
-                session.CwTokens, CreatedAt = session.CreatedAt.UtcDateTime, ExpiresAt = session.ExpiresAt.UtcDateTime,
+                Id = session.Id.ToString(),
+                session.UserId,
+                session.BusinessId,
+                session.DeviceName,
+                session.CwDeviceId,
+                session.TerminalId,
+                session.Mode,
+                session.CwTokens,
+                CreatedAt = session.CreatedAt.UtcDateTime,
+                ExpiresAt = session.ExpiresAt.UtcDateTime,
             },
             tx, cancellationToken: ct));
         await InsertTokenAsync(conn, tx, token, ct);
