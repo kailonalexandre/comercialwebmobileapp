@@ -10,13 +10,18 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace ComercialWeb.Mobile.Dashboard;
 
-/// <summary>Cada bloco só existe se o usuário tiver a mesma permissão exigida pelo card na web (null = oculto).</summary>
+/// <summary>
+/// Cada bloco só existe se o usuário tiver a mesma permissão exigida pelo card na web (null = oculto).
+/// `View`: "store" para quem vê o financeiro da loja (contas a receber), "seller" para os demais; a meta segue a visão.
+/// </summary>
 public sealed record DashboardResponse(
     CountAndTotal? SalesToday,
     CountAndTotal? Receivables,
     long? LowStockCount,
     CountAndTotal? OpenConditionals,
-    IReadOnlyList<RecentSale>? RecentSales);
+    IReadOnlyList<RecentSale>? RecentSales,
+    string View,
+    SalesGoal? SalesGoal);
 
 public static class DashboardModule
 {
@@ -43,12 +48,20 @@ public static class DashboardModule
             // "Hoje" da empresa (APP_TIMEZONE da web), não do servidor da API.
             var today = DateOnly.FromDateTime(LocalTime.Now(config, clock));
 
+            // Loja: meta da empresa (card "Meta do mês" da web). Vendedor: a meta dele. As duas são faturamento, então pedem
+            // sales.view, como a aba Gráficos da web; sem a permissão a API não envia (esconder no app não basta).
+            var goal = !sales ? null
+                : receivables ? await queries.StoreGoalAsync(ids.BusinessId, today, ct)
+                : await queries.SellerGoalAsync(ids.BusinessId, ids.UserId, today, ct);
+
             return Results.Ok(new DashboardResponse(
                 sales ? await queries.SalesOfDayAsync(ids.BusinessId, today, ct) : null,
                 receivables ? await queries.OpenReceivablesAsync(ids.BusinessId, ct) : null,
                 inventory ? await queries.LowStockCountAsync(ids.BusinessId, ct) : null,
                 sales ? await queries.OpenConditionalsAsync(ids.BusinessId, ct) : null,
-                sales ? await queries.RecentSalesAsync(ids.BusinessId, ct) : null));
+                sales ? await queries.RecentSalesAsync(ids.BusinessId, ct) : null,
+                receivables ? "store" : "seller",
+                goal));
         }).RequireAuthorization();
 
         return app;

@@ -27,6 +27,8 @@ export default function AppTabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
+        // Teclado aberto (quantidade, desconto) esconde a barra: ela não sobe junto e não cobre os campos.
+        tabBarHideOnKeyboard: true,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
         tabBarAllowFontScaling: false,
@@ -51,7 +53,7 @@ export default function AppTabsLayout() {
           ),
         }}
       />
-      <Tabs.Screen name="pedidos" options={tab('Pedidos', 'cube-outline', 'cube')} />
+      <Tabs.Screen name="cadastros" options={tab('Cadastros', 'pricetags-outline', 'pricetags')} />
       <Tabs.Screen name="menu" options={tab('Menu', 'grid-outline', 'grid')} />
     </Tabs>
   );

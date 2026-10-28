@@ -1,8 +1,8 @@
 import { randomUUID } from 'expo-crypto';
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { useSession } from '@/features/auth/session-context';
-import { emptyDraft, type Draft } from '@/features/presale/draft-model';
+import { addItem, emptyDraft, type Draft, type DraftItem } from '@/features/presale/draft-model';
 import type { PreSaleCreated } from '@/features/presale/presale-api';
 import { submitSale } from '@/features/sales/sale-queue';
 import type { SaleKind } from '@/features/sales/sale-queue-model';
@@ -23,6 +23,10 @@ export type DraftValue = {
   reset: () => void;
   // Reabre um pedido recusado para o operador corrigir (nada foi criado no servidor).
   load: (draft: Draft) => void;
+  // Lança um produto (quantidade 1, ou soma na linha dele) e marca a linha para o campo de quantidade ganhar o foco.
+  add: (item: Omit<DraftItem, 'quantity'>) => void;
+  // Última linha lançada; `seq` muda a cada lançamento, mesmo do mesmo produto.
+  lastAdded: { productId: number; seq: number } | null;
 };
 
 /**
@@ -41,13 +45,27 @@ export function createDraftStore(kind: SaleKind) {
     // A tela trava a edição fora da fase 'editing': a mesma chave precisa do mesmo pedido.
     const setDraft = useCallback((change: (d: Draft) => Draft) => setDraftState((d) => change(d)), []);
 
+    const [lastAdded, setLastAdded] = useState<{ productId: number; seq: number } | null>(null);
+    const add = useCallback((item: Omit<DraftItem, 'quantity'>) => {
+      setDraftState((d) => ({ ...d, items: addItem(d.items, item) }));
+      setLastAdded((prev) => ({ productId: item.productId, seq: (prev?.seq ?? 0) + 1 }));
+    }, []);
+
+    // Dois toques em "Confirmar" antes de a tela travar não viram duas vendas (o servidor também deduplica pela chave).
+    const inFlight = useRef(false);
     const send = useCallback(async () => {
+      if (inFlight.current) return;
+      inFlight.current = true;
       setPhase({ name: 'sending' });
-      const result = await submitSale(kind, draft, key, businessId);
-      if (result.kind === 'ok') setPhase({ name: 'done', sale: result.sale });
-      else if (result.kind === 'rejected') setPhase({ name: 'editing', error: result.message, code: result.code, totalCents: result.totalCents });
-      else if (result.kind === 'forbidden') setPhase({ name: 'editing', error: 'Você não tem permissão para esta operação.' });
-      else setPhase({ name: 'queued' });
+      try {
+        const result = await submitSale(kind, draft, key, businessId);
+        if (result.kind === 'ok') setPhase({ name: 'done', sale: result.sale });
+        else if (result.kind === 'rejected') setPhase({ name: 'editing', error: result.message, code: result.code, totalCents: result.totalCents });
+        else if (result.kind === 'forbidden') setPhase({ name: 'editing', error: 'Você não tem permissão para esta operação.' });
+        else setPhase({ name: 'queued' });
+      } finally {
+        inFlight.current = false;
+      }
     }, [draft, key, businessId]);
 
     const reset = useCallback(() => {
@@ -62,7 +80,7 @@ export function createDraftStore(kind: SaleKind) {
       setKey(randomUUID());
     }, []);
 
-    const value = useMemo(() => ({ draft, phase, setDraft, send, reset, load }), [draft, phase, setDraft, send, reset, load]);
+    const value = useMemo(() => ({ draft, phase, setDraft, send, reset, load, add, lastAdded }), [draft, phase, setDraft, send, reset, load, add, lastAdded]);
     return <DraftContext.Provider value={value}>{children}</DraftContext.Provider>;
   }
 

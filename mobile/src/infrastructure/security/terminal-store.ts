@@ -14,9 +14,11 @@ export function isTerminal(value: unknown): value is Terminal {
   return typeof v?.id === 'string' && typeof v.secret === 'string' && (v.mode === 'personal' || v.mode === 'shared');
 }
 
+// Falha de leitura propaga (a abertura do app tenta de novo); só conteúdo ilegível vira "sem vínculo".
 export async function loadTerminal(): Promise<Terminal | null> {
+  const raw = await secureStorage.get(TERMINAL);
   try {
-    const parsed: unknown = JSON.parse((await secureStorage.get(TERMINAL)) ?? 'null');
+    const parsed: unknown = JSON.parse(raw ?? 'null');
     return isTerminal(parsed) ? parsed : null;
   } catch {
     return null;

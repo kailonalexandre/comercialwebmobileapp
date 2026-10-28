@@ -1,4 +1,4 @@
-import { addItem, discountText, parseDiscount, addPayment, canSend, changeCents, parseMoney, paidCents, remainingCents, toSaleRequest, emptyDraft, estimateCents, parseQuantity, removeItem, setQuantity, toRequest } from '@/features/presale/draft-model';
+import { addItem, setPrice, priceOf, newestFirst, stepQuantity, toggleDiscount, discountText, parseDiscount, addPayment, canSend, changeCents, parseMoney, paidCents, remainingCents, toSaleRequest, emptyDraft, estimateCents, parseQuantity, removeItem, setQuantity, toRequest } from '@/features/presale/draft-model';
 
 const camiseta = { productId: 1, name: 'Camiseta', unitPriceCents: 4_990 };
 
@@ -101,4 +101,45 @@ describe('cliente com cadastro pendente', () => {
     expect(toRequest(draft).customerId).toBeNull();
     expect(toRequest({ ...draft, customer: { id: 7, name: 'Novo' } }).customerId).toBe(7);
   });
+});
+
+test('produto entra com quantidade 1 e o último lançado aparece primeiro; o pedido mantém a ordem de lançamento', () => {
+  const calca = { productId: 2, name: 'Calça', unitPriceCents: 9_990 };
+  let items = addItem(addItem([], camiseta), calca);
+  expect(items.map((i) => i.quantity)).toEqual([1, 1]);
+  expect(newestFirst(items).map((i) => i.name)).toEqual(['Calça', 'Camiseta']);
+  expect(toRequest({ ...emptyDraft, items }).items.map((i) => i.productId)).toEqual([1, 2]);
+  // Lançar de novo um que já estava: soma e vira o mais recente.
+  items = addItem(items, camiseta);
+  expect(newestFirst(items).map((i) => [i.name, i.quantity])).toEqual([['Camiseta', 2], ['Calça', 1]]);
+});
+
+test('− e + andam de 1 em 1, sem zerar nem passar do limite', () => {
+  expect(stepQuantity(1, 1)).toBe(2);
+  expect(stepQuantity(9, -1)).toBe(8);
+  expect(stepQuantity(1, -1)).toBe(1);
+  expect(stepQuantity(0.5, -1)).toBe(0.5);
+  expect(stepQuantity(2.5, -1)).toBe(1.5);
+  expect(stepQuantity(99_999, 1)).toBe(99_999);
+});
+
+test('alternar R$/% converte sobre o bruto da linha, como o PDV da web', () => {
+  // Bruto 49,90 x 2 = 99,80.
+  expect(toggleDiscount({ kind: 'percent', percent: 10 }, 9_980)).toEqual({ kind: 'value', cents: 998 });
+  expect(toggleDiscount({ kind: 'value', cents: 998 }, 9_980)).toEqual({ kind: 'percent', percent: 10 });
+  expect(toggleDiscount({ kind: 'percent', percent: 12.5 }, 1_001)).toEqual({ kind: 'value', cents: 125 }); // trunca
+  // 100% ou sem base: fora do que o servidor aceita, fica sem desconto.
+  expect(toggleDiscount({ kind: 'value', cents: 9_980 }, 9_980)).toBeUndefined();
+  expect(toggleDiscount({ kind: 'value', cents: 500 }, 0)).toBeUndefined();
+});
+
+test('preço alterado vale na estimativa e vai ao servidor; igual ao da tabela não é alteração', () => {
+  let items = addItem([], camiseta);
+  items = setPrice(items, 1, 3_990);
+  expect(priceOf(items[0]!)).toBe(3_990);
+  expect(estimateCents(items)).toBe(3_990);
+  expect(toRequest({ ...emptyDraft, items }).items[0]).toEqual({ productId: 1, quantity: 1, unitPriceCents: 3_990 });
+  items = setPrice(items, 1, 4_990);
+  expect(items[0]!.customPriceCents).toBeUndefined();
+  expect(toRequest({ ...emptyDraft, items }).items[0]).toEqual({ productId: 1, quantity: 1 });
 });

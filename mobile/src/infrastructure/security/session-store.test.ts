@@ -1,7 +1,7 @@
 import {
   accountIdFor, forgetTokens, offlineAllowed,
-  clearSession, createAccount, describeAccount, getAccessToken, getActiveAccountId, loadAccounts, lockSession, openAccount, removeAccount, replaceSession,
-  setAccountBiometric,
+  clearSession, createAccount, describeAccount, getAccessToken, getActiveAccountId, getRefreshToken, loadAccounts, lockSession, markOnline, openAccount, removeAccount,
+  replaceSession, saveRefreshed, setAccountBiometric,
 } from '@/infrastructure/security/session-store';
 
 // jest.mock é içado acima dos imports; mockStore só é lido dentro das funções, após a inicialização.
@@ -121,4 +121,45 @@ test('troca de operador apaga os tokens mas mantém a conta reconhecível para a
   expect(await getAccessToken()).toBeNull();
   expect(mockStore.has(`cw.session.${id}`)).toBe(false);
   expect((await loadAccounts()).map((a) => a.id)).toEqual([id]);
+});
+
+// Bug: fechar/bloquear o app no meio de um refresh perdia o par novo; o servidor já tinha gastado o token antigo e o
+// próximo refresh era lido como reuso, derrubando a sessão ("desconectado ao reabrir").
+test('refresh que termina depois do bloqueio ainda grava na conta que o pediu', async () => {
+  const a = await createAccount(session('a'));
+  const used = getRefreshToken()!;
+  lockSession(); // inatividade / troca de usuário enquanto o refresh estava no ar
+  await saveRefreshed(a, used, session('a2'));
+  expect(await openAccount(a)).toMatchObject({ accessToken: 'a2', refreshToken: 'r-a2' });
+});
+
+test('refresh não ressuscita tokens apagados de propósito nem conta removida', async () => {
+  const shared = await createAccount(session('s'), { id: 'b1-u1' });
+  await forgetTokens(shared); // troca de operador
+  await saveRefreshed(shared, 'r-s', session('s2'));
+  expect(mockStore.has(`cw.session.${shared}`)).toBe(false);
+
+  const gone = await createAccount(session('g'));
+  await removeAccount(gone);
+  await saveRefreshed(gone, 'r-g', session('g2'));
+  expect(mockStore.has(`cw.session.${gone}`)).toBe(false);
+});
+
+test('Keystore recusou gravar o refresh: fica em memória e é regravado na próxima resposta do servidor', async () => {
+  const secure = jest.requireMock('expo-secure-store') as { setItemAsync: jest.Mock };
+  const a = await createAccount(session('a'));
+  secure.setItemAsync.mockRejectedValueOnce(new Error('keystore'));
+  await saveRefreshed(a, 'r-a', session('a2'));
+  expect(await getAccessToken()).toBe('a2');
+  expect(JSON.parse(mockStore.get(`cw.session.${a}`)!)).toMatchObject({ refreshToken: 'r-a' });
+  await markOnline();
+  expect(JSON.parse(mockStore.get(`cw.session.${a}`)!)).toMatchObject({ refreshToken: 'r-a2' });
+});
+
+test('falha ao ler o Keychain/Keystore não vira "nenhuma conta" (nem apaga o índice)', async () => {
+  const secure = jest.requireMock('expo-secure-store') as { getItemAsync: jest.Mock };
+  await createAccount(session('a'));
+  secure.getItemAsync.mockRejectedValueOnce(new Error('locked'));
+  await expect(loadAccounts()).rejects.toThrow('locked');
+  expect(await loadAccounts()).toHaveLength(1);
 });

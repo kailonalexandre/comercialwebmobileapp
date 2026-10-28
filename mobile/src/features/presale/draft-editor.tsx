@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 
 import { fetchPricesIn } from '@/features/catalog/products-api';
@@ -8,7 +8,9 @@ import { PriceTablePicker } from '@/features/pricing/price-table-picker';
 import { usePriceTables } from '@/features/pricing/price-tables';
 import type { DraftValue } from '@/features/presale/draft-context';
 import { DiscountField } from '@/features/presale/discount-field';
-import { estimateCents, MAX_OBSERVATION, parseQuantity, removeItem, setQuantity, type DraftItem } from '@/features/presale/draft-model';
+import { estimateCents, MAX_OBSERVATION, newestFirst, priceOf, removeItem, setPrice, setQuantity } from '@/features/presale/draft-model';
+import { ItemPrice } from '@/features/presale/item-price';
+import { QuantityStepper } from '@/features/presale/quantity-stepper';
 import { Button } from '@/shared/components/button';
 import { Icon } from '@/shared/components/icon';
 import { Text } from '@/shared/components/text';
@@ -19,42 +21,16 @@ import { formatCents } from '@/shared/utils/format';
 
 export type DraftMode = 'presale' | 'pdv' | 'conditional';
 
-function QuantityField({ item, disabled, store, integer }: { item: DraftItem; disabled: boolean; store: DraftValue; integer: boolean }) {
-  const styles = useStyles();
-  const [text, setText] = useState(String(item.quantity).replace('.', ','));
-
-  // Cada valor válido vale na hora (o botão de envio pode ser tocado sem o campo perder o foco);
-  // ao sair do campo, texto inválido volta ao último valor bom.
-  function change(next: string) {
-    setText(next);
-    const q = parseQuantity(next);
-    if (q !== null && (!integer || Number.isInteger(q))) store.setDraft((d) => ({ ...d, items: setQuantity(d.items, item.productId, q) }));
-  }
-
-  function restore() {
-    const q = parseQuantity(text);
-    if (q === null || (integer && !Number.isInteger(q))) setText(String(item.quantity).replace('.', ','));
-  }
-
-  return (
-    <TextField
-      value={text}
-      onChangeText={change}
-      onBlur={restore}
-      keyboardType={integer ? 'number-pad' : 'decimal-pad'}
-      editable={!disabled}
-      label="Quantidade"
-      style={styles.qty}
-    />
-  );
-}
-
-// Cliente, itens e observação: igual na pré-venda e no PDV. `mode` diz a qual rascunho os seletores devem responder.
-export function DraftEditor({ store, mode, locked, integerQuantity = false, canDiscount = true }: { store: DraftValue; mode: DraftMode; locked: boolean; integerQuantity?: boolean; canDiscount?: boolean }) {
+// Cliente, itens e observação: igual na pré-venda, no PDV e no condicional. `mode` diz a qual rascunho os seletores
+// respondem. `addProducts`: botão próprio da tela (PDV), logo abaixo do cliente; sem ele, o padrão fica depois dos itens.
+// `canChangePrice`: só o PDV, para quem tem pdv.change-price (a API e o ComercialWeb conferem de novo).
+export function DraftEditor({ store, mode, locked, integerQuantity = false, canDiscount = true, addProducts, canChangePrice = false }: {
+  store: DraftValue; mode: DraftMode; locked: boolean; integerQuantity?: boolean; canDiscount?: boolean; addProducts?: ReactNode; canChangePrice?: boolean;
+}) {
   const styles = useStyles();
   const { colors } = useTheme();
   const { draft, setDraft } = store;
-  const { selected, select, label } = usePriceTables();
+  const { tables, selected, select, label } = usePriceTables();
   const [switching, setSwitching] = useState(false);
   // Condicional exige cliente identificado: não existe "Consumidor final" nele.
   const emptyCustomer = mode === 'conditional' ? 'Selecione o cliente' : 'Consumidor final';
@@ -117,24 +93,36 @@ export function DraftEditor({ store, mode, locked, integerQuantity = false, canD
         {!locked && <Icon name="chevron-forward" size={20} color={colors.textMuted} />}
       </Pressable>
 
-      <View style={styles.card}>
-        <PriceTablePicker value={draft.priceTable} onChange={changeTable} disabled={locked || switching} />
-        {mode === 'presale' && (
-          <Text variant="caption" color="textMuted">
-            Tabela: {label(draft.priceTable)} · Itens: {draft.items.length} · Total estimado: {formatCents(estimateCents(draft.items, draft.saleDiscount))}
-          </Text>
-        )}
-      </View>
+      {addProducts}
+
+      {/* Empresa com uma tabela só: o seletor some, e o cartão vazio também. */}
+      {(tables.length > 1 || mode === 'presale') && (
+        <View style={styles.card}>
+          <PriceTablePicker value={draft.priceTable} onChange={changeTable} disabled={locked || switching} />
+          {mode === 'presale' && (
+            <Text variant="caption" color="textMuted">
+              Tabela: {label(draft.priceTable)} · Itens: {draft.items.length} · Total estimado: {formatCents(estimateCents(draft.items, draft.saleDiscount))}
+            </Text>
+          )}
+        </View>
+      )}
 
       <Text variant="heading">Itens</Text>
       {draft.items.length === 0 && <Text color="textMuted">Nenhum item. Adicione ao menos um produto.</Text>}
-      {draft.items.map((item) => (
+      {newestFirst(draft.items).map((item) => (
         <View key={item.productId} style={styles.card}>
           <View style={styles.between}>
             <View style={styles.flex}>
-              <Text variant="label">{item.name}</Text>
+              <Text variant="label" numberOfLines={2}>
+                {item.name}
+              </Text>
+              <ItemPrice
+                item={item}
+                editable={canChangePrice && !locked}
+                onChange={(cents) => setDraft((d) => ({ ...d, items: setPrice(d.items, item.productId, cents) }))}
+              />
               <Text variant="caption" color="textMuted">
-                {formatCents(item.unitPriceCents)} cada
+                Subtotal {formatCents(estimateCents([item]))}
               </Text>
             </View>
             {!locked && (
@@ -148,26 +136,38 @@ export function DraftEditor({ store, mode, locked, integerQuantity = false, canD
               </Pressable>
             )}
           </View>
-          <QuantityField item={item} disabled={locked} store={store} integer={integerQuantity} />
-          {canDiscount && (
-            <DiscountField
-              label="Desconto no produto"
-              value={item.discount}
-              disabled={locked}
-              onChange={(discount) => setDraft((d) => ({ ...d, items: d.items.map((i) => (i.productId === item.productId ? { ...i, discount } : i)) }))}
-            />
-          )}
+          {/* Quantidade e desconto lado a lado: a linha inteira cabe na tela sem rolar. */}
+          <View style={styles.controls}>
+            <View style={styles.control}>
+              <Text variant="caption" color="textMuted">
+                Quantidade
+              </Text>
+              <QuantityStepper
+                name={item.name}
+                value={item.quantity}
+                integer={integerQuantity}
+                disabled={locked}
+                focusSignal={store.lastAdded?.productId === item.productId ? store.lastAdded.seq : undefined}
+                onChange={(q) => setDraft((d) => ({ ...d, items: setQuantity(d.items, item.productId, q) }))}
+              />
+            </View>
+            {canDiscount && (
+              <View style={styles.flex}>
+                <DiscountField
+                  label="Desconto no item"
+                  value={item.discount}
+                  disabled={locked}
+                  grossCents={Math.round(priceOf(item) * item.quantity)}
+                  onChange={(discount) => setDraft((d) => ({ ...d, items: d.items.map((i) => (i.productId === item.productId ? { ...i, discount } : i)) }))}
+                />
+              </View>
+            )}
+          </View>
         </View>
       ))}
       {integerQuantity && <Text variant="caption" color="textMuted">No PDV a quantidade é em unidades inteiras.</Text>}
-      {!locked && (
+      {!locked && !addProducts && (
         <Button label="Adicionar produto" variant="outline" icon="add" onPress={() => router.push({ pathname: '/selecionar-produto', params: { mode } })} />
-      )}
-
-      {canDiscount && draft.items.length > 0 && (
-        <View style={styles.card}>
-          <DiscountField label="Desconto na venda" value={draft.saleDiscount} disabled={locked} onChange={(saleDiscount) => setDraft((d) => ({ ...d, saleDiscount }))} />
-        </View>
       )}
 
       <TextField
@@ -178,14 +178,28 @@ export function DraftEditor({ store, mode, locked, integerQuantity = false, canD
         editable={!locked}
         multiline
       />
+
+      {canDiscount && draft.items.length > 0 && (
+        <View style={styles.card}>
+          {/* Separado dos itens: este vale sobre o total; o de cada item, só sobre a linha dele. */}
+          <DiscountField
+            label="Desconto no total da venda"
+            value={draft.saleDiscount}
+            disabled={locked}
+            grossCents={estimateCents(draft.items)}
+            onChange={(saleDiscount) => setDraft((d) => ({ ...d, saleDiscount }))}
+          />
+        </View>
+      )}
     </>
   );
 }
 
 const useStyles = makeStyles((colors) => ({
-  card: { gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.background, ...shadow.card },
+  card: { gap: spacing.sm, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.background, ...shadow.card },
   between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
   flex: { flex: 1 },
-  remove: { width: touchTarget, height: touchTarget, alignItems: 'center', justifyContent: 'center' },
-  qty: { textAlign: 'right' },
+  remove: { width: touchTarget, height: touchTarget, alignItems: 'center', justifyContent: 'center', marginRight: -spacing.sm },
+  controls: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
+  control: { gap: spacing.xs },
 }));

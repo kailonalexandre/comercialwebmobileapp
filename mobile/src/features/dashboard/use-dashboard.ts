@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { fetchDashboard } from '@/features/dashboard/dashboard-api';
 import type { Dashboard } from '@/features/dashboard/dashboard-model';
 
-type State = { data: Dashboard | null; failed: boolean };
+type State = { data: Dashboard | null; failed: boolean; error?: unknown };
 
 // Mantém o último dado visível ao atualizar ou falhar; erro só bloqueia a tela quando nunca houve dado.
 export function useDashboard() {
@@ -14,7 +14,7 @@ export function useDashboard() {
     let active = true;
     fetchDashboard()
       .then((data) => active && setState({ data, failed: false }))
-      .catch(() => active && setState((s) => ({ ...s, failed: true })));
+      .catch((error: unknown) => active && setState((s) => ({ ...s, failed: true, error })));
     return () => {
       active = false;
     };

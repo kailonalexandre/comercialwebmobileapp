@@ -36,6 +36,19 @@ async function pendingAccounts(): Promise<Set<string>> {
   return new Set([...sales, ...bags, ...customers]);
 }
 
+// Logo após abrir (aparelho recém-desbloqueado, Keystore ocupado) a leitura do Keychain/Keystore pode falhar de forma
+// transitória. Tenta de novo antes de concluir que não há conta: senão o app mostraria a tela de vínculo com a sessão guardada.
+export async function readStored(attempts = 3, wait = (ms: number) => new Promise((r) => setTimeout(r, ms))) {
+  for (let n = 1; ; n++) {
+    try {
+      return await Promise.all([loadAccounts(), loadActiveBusinessId(), loadTerminal()]);
+    } catch (e) {
+      if (n >= attempts) throw e;
+      await wait(400 * n);
+    }
+  }
+}
+
 export class PendingOperationsError extends Error {
   constructor() {
     super('Há operações ainda não sincronizadas neste aparelho.');
@@ -138,7 +151,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // A empresa ativa vem guardada: o app abre offline já na empresa certa (cópias e filas são por empresa).
-    Promise.all([loadAccounts(), loadActiveBusinessId(), loadTerminal()])
+    readStored()
       .then(async ([list, , bound]) => {
         setAccounts(list);
         if (bound) {

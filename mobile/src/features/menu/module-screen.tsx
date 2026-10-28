@@ -11,20 +11,23 @@ import { Text } from '@/shared/components/text';
 import { layout, radius, spacing, touchTarget } from '@/shared/theme/tokens';
 import { makeStyles, useTheme } from '@/shared/theme/theme-context';
 
-// Telas de um módulo do Menu (ex.: Comercial): atalhos para as telas reais do app.
-export function ModuleScreen() {
+// Telas de um módulo do Menu (ex.: Comercial): atalhos para as telas reais do app. `moduleKey` fixo = aba própria
+// (sem voltar), como Cadastros na barra inferior.
+export function ModuleScreen({ moduleKey }: { moduleKey?: string }) {
   const styles = useStyles();
   const { colors } = useTheme();
   const { key } = useLocalSearchParams<{ key: string }>();
   const { profile } = useSession();
-  const module = moduleLinks[key];
+  const module = moduleLinks[moduleKey ?? key];
   const links = module?.links.filter((l) => !l.permissions || l.permissions.some((p) => profile?.permissions.includes(p)));
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
       <View style={styles.top}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Voltar" onPress={() => router.back()} style={styles.back}>
-          <Icon name="chevron-back" size={26} color={colors.text} />
-        </Pressable>
+        {!moduleKey && (
+          <Pressable accessibilityRole="button" accessibilityLabel="Voltar" onPress={() => router.back()} style={styles.back}>
+            <Icon name="chevron-back" size={26} color={colors.text} />
+          </Pressable>
+        )}
         <Text variant="title">{module?.title ?? 'Módulo'}</Text>
       </View>
       {module ? (

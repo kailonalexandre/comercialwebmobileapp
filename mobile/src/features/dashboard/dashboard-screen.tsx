@@ -3,7 +3,7 @@ import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useSession } from '@/features/auth/session-context';
-import { formatLocal } from '@/features/dashboard/dashboard-model';
+import { formatLocal, goalSummary } from '@/features/dashboard/dashboard-model';
 import { useDashboard } from '@/features/dashboard/use-dashboard';
 import { statusLabel, statusTone } from '@/features/sales/sales-model';
 import { useUnreadCount } from '@/features/shell/use-unread-count';
@@ -14,6 +14,7 @@ import { StatusPill } from '@/shared/components/status-pill';
 import { Text } from '@/shared/components/text';
 import { fonts, layout, radius, shadow, spacing, type Tone } from '@/shared/theme/tokens';
 import { makeStyles, useTheme } from '@/shared/theme/theme-context';
+import { userMessage } from '@/shared/utils/error-message';
 import { formatCents } from '@/shared/utils/format';
 
 const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
@@ -70,19 +71,42 @@ function AttentionCard({ icon, tone, title, detail, onPress }: { icon: IconName;
   );
 }
 
+function HeroStat({ label, value, caption, progress }: { label: string; value: string; caption: string; progress?: number | null }) {
+  const styles = useStyles();
+  return (
+    <View style={styles.heroStat} accessible accessibilityLabel={`${label}: ${value}. ${caption}`}>
+      <Text variant="caption" color="textInverseMuted" numberOfLines={1}>
+        {label}
+      </Text>
+      <Text variant="label" color="textInverse" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+        {value}
+      </Text>
+      {progress != null && (
+        <View style={styles.progressTrack}>
+          <View style={[styles.progressFill, { width: `${Math.round(progress * 100)}%` }]} />
+        </View>
+      )}
+      <Text variant="caption" color="textInverseMuted" numberOfLines={2}>
+        {caption}
+      </Text>
+    </View>
+  );
+}
+
 export function DashboardScreen() {
   const styles = useStyles();
   const { colors } = useTheme();
-  const { data, failed, reload } = useDashboard();
+  const { data, failed, error, reload } = useDashboard();
   const { profile } = useSession();
   const unread = useUnreadCount();
 
-  if (!data) return failed ? <StateView kind="error" onRetry={reload} /> : <StateView kind="loading" />;
+  if (!data) return failed ? <StateView kind="error" message={userMessage(error) ?? 'Não foi possível carregar o início.'} onRetry={reload} /> : <StateView kind="loading" />;
   const now = new Date();
   const recentSales = data.recentSales ?? [];
   const firstName = profile?.userName.split(' ')[0] ?? '';
   const sales = data.salesToday;
   const average = sales && sales.count > 0 ? Math.round(sales.totalCents / sales.count) : 0;
+  const goal = goalSummary(data.salesGoal);
 
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
@@ -126,31 +150,17 @@ export function DashboardScreen() {
             <Text variant="caption" color="textInverseMuted">
               {sales.count} {sales.count === 1 ? 'venda finalizada' : 'vendas finalizadas'}
             </Text>
+            {/* Loja: A receber + Ticket médio + Meta. Vendedor: Ticket médio + Meta (sem financeiro). A API só manda o que pode. */}
             <View style={styles.heroRow}>
-              {data.receivables && (
-                <View style={styles.heroStat}>
-                  <Text variant="caption" color="textInverseMuted">
-                    A receber
-                  </Text>
-                  <Text variant="label" color="textInverse">
-                    {formatCents(data.receivables.totalCents)}
-                  </Text>
-                  <Text variant="caption" color="textInverseMuted">
-                    {data.receivables.count} {data.receivables.count === 1 ? 'título' : 'títulos'}
-                  </Text>
-                </View>
+              {data.view === 'store' && data.receivables && (
+                <HeroStat
+                  label="A receber"
+                  value={formatCents(data.receivables.totalCents)}
+                  caption={`${data.receivables.count} ${data.receivables.count === 1 ? 'título' : 'títulos'}`}
+                />
               )}
-              <View style={styles.heroStat}>
-                <Text variant="caption" color="textInverseMuted">
-                  Ticket médio
-                </Text>
-                <Text variant="label" color="textInverse">
-                  {formatCents(average)}
-                </Text>
-                <Text variant="caption" color="textInverseMuted">
-                  hoje
-                </Text>
-              </View>
+              <HeroStat label="Ticket médio" value={formatCents(average)} caption="hoje" />
+              <HeroStat label={data.salesGoal?.scope === 'seller' ? 'Minha meta' : 'Meta do mês'} value={goal.value} caption={goal.caption} progress={goal.progress} />
             </View>
           </View>
         )}
@@ -251,8 +261,10 @@ const useStyles = makeStyles((colors) => ({
   heroCircle: { position: 'absolute', top: -60, right: -50, width: 190, height: 190, borderRadius: radius.pill, backgroundColor: colors.overlay },
   dateChip: { paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: radius.pill, backgroundColor: colors.overlay },
   dateText: { fontFamily: fonts.bold },
-  heroRow: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg },
+  heroRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
   heroStat: { flex: 1, gap: 2, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.overlay },
+  progressTrack: { height: 4, borderRadius: radius.pill, backgroundColor: colors.overlayBorder, overflow: 'hidden', marginVertical: 2 },
+  progressFill: { height: 4, borderRadius: radius.pill, backgroundColor: colors.textInverse },
   quickRow: { flexDirection: 'row', justifyContent: 'space-between' },
   quick: { flex: 1, alignItems: 'center', gap: spacing.sm },
   quickIcon: { width: 58, height: 58, borderRadius: radius.lg, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', ...shadow.card },

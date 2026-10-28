@@ -23,6 +23,15 @@ export async function biometricName(): Promise<string> {
   }
 }
 
+// Celular sem bloqueio de tela (nem PIN/padrão): não há como confirmar o dono localmente, então só a senha reabre a conta.
+export async function deviceSecured(): Promise<boolean> {
+  try {
+    return (await LocalAuthentication.getEnrolledLevelAsync()) !== LocalAuthentication.SecurityLevel.NONE;
+  } catch {
+    return true;
+  }
+}
+
 // O fallback para o PIN/padrão do próprio celular fica ligado (padrão do sistema): quem tem o dedo machucado ainda entra.
 export async function confirmBiometric(reason: string): Promise<boolean> {
   try {

@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { fetchPaymentMethods, type PaymentMethod } from '@/features/pdv/pdv-api';
@@ -8,13 +8,12 @@ import { useSession } from '@/features/auth/session-context';
 import { usePdvDraft } from '@/features/pdv/pdv-draft';
 import { usePdvQuote } from '@/features/pdv/use-pdv-quote';
 import { DraftEditor } from '@/features/presale/draft-editor';
+import { PaymentSheet } from '@/features/pdv/payment-sheet';
 import { ReceiptActions } from '@/features/sales/receipt-actions';
-import { addPayment, changeCents, paidCents, parseMoney, remainingCents, removePayment } from '@/features/presale/draft-model';
 import { Button } from '@/shared/components/button';
 import { Icon } from '@/shared/components/icon';
 import { Text } from '@/shared/components/text';
-import { TextField } from '@/shared/components/text-field';
-import { layout, radius, shadow, spacing } from '@/shared/theme/tokens';
+import { layout, radius, shadow, spacing, touchTarget } from '@/shared/theme/tokens';
 import { makeStyles, useTheme } from '@/shared/theme/theme-context';
 import { formatCents } from '@/shared/utils/format';
 
@@ -25,40 +24,35 @@ export function PdvScreen() {
   const { profile } = useSession();
   // Só esconde o campo; o ComercialWeb confere pdv.discount em cada venda.
   const canDiscount = profile?.permissions.includes('pdv.discount') ?? false;
-  const { draft, phase, setDraft, send, reset } = store;
+  const canChangePrice = profile?.permissions.includes('pdv.change-price') ?? false;
+  const { draft, phase, reset } = store;
   const locked = phase.name !== 'editing';
   const quote = usePdvQuote(draft, phase.name === 'editing');
   const total = quote.quote?.totalCents ?? null;
 
   const [methods, setMethods] = useState<PaymentMethod[]>([]);
-  const [method, setMethod] = useState<string | null>(null);
-  const [amount, setAmount] = useState('');
+  // Modal de recebimento. Fecha sozinho quando a venda termina (a tela de "venda finalizada" assume).
+  const [charging, setCharging] = useState(false);
 
   useEffect(() => {
     let active = true;
     fetchPaymentMethods()
-      .then((list) => {
-        if (!active) return;
-        setMethods(list);
-        setMethod((current) => current ?? list[0]?.code ?? null);
-      })
-      .catch(() => undefined); // sem formas, o operador vê a mensagem abaixo e pode tentar de novo ao reabrir
+      .then((list) => active && setMethods(list))
+      .catch(() => undefined); // sem formas, o modal avisa e o operador tenta de novo ao reabrir
     return () => {
       active = false;
     };
   }, []);
 
-  const remaining = total === null ? null : remainingCents(total, draft.payments);
-  const change = total === null ? 0 : changeCents(total, draft.payments);
-  const parsed = parseMoney(amount);
-  const canFinalize = total !== null && draft.items.length > 0 && draft.payments.length > 0 && remaining === 0;
+  // Venda concluída (ou guardada na fila): a próxima começa com o modal fechado.
+  const next = () => {
+    setCharging(false);
+    reset();
+  };
 
-  function addAmount(cents: number | null) {
-    const chosen = methods.find((m) => m.code === method);
-    if (!chosen || cents === null) return;
-    setDraft((d) => ({ ...d, payments: addPayment(d.payments, { method: chosen.code, label: chosen.name, amountCents: cents }) }));
-    setAmount('');
-  }
+  const count = draft.items.length;
+  const canCharge = total !== null && count > 0 && !locked;
+  const addProducts = () => router.push({ pathname: '/selecionar-produto', params: { mode: 'pdv' } });
 
   if (phase.name === 'done') {
     return (
@@ -77,12 +71,12 @@ export function PdvScreen() {
             </Text>
           )}
           <ReceiptActions saleId={phase.sale.saleId} />
-          <Button label="Nova venda" onPress={reset} />
+          <Button label="Nova venda" onPress={next} />
           <Button
             label="Ver vendas"
             variant="outline"
             onPress={() => {
-              reset();
+              next();
               router.navigate('/vendas');
             }}
           />
@@ -101,12 +95,12 @@ export function PdvScreen() {
           <Text variant="title">Venda guardada</Text>
           <Text color="textMuted">Sem confirmação do servidor. A venda está guardada neste aparelho e será enviada sozinha quando a conexão voltar, sem duplicar.</Text>
           <Text variant="caption" color="textMuted">Acompanhe em Vendas, em “Aguardando sincronização”.</Text>
-          <Button label="Nova venda" onPress={reset} />
+          <Button label="Nova venda" onPress={next} />
           <Button
             label="Ver vendas"
             variant="outline"
             onPress={() => {
-              reset();
+              next();
               router.navigate('/vendas');
             }}
           />
@@ -115,133 +109,90 @@ export function PdvScreen() {
     );
   }
 
+  // Logo abaixo do cliente: o primeiro passo da venda, sempre no mesmo lugar; a bolinha mostra quantos itens já entraram.
+  const productsButton = (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Adicionar produtos. ${count} ${count === 1 ? 'item' : 'itens'} na venda`}
+      accessibilityState={{ disabled: locked }}
+      disabled={locked}
+      onPress={addProducts}
+      style={({ pressed }) => [styles.add, pressed && styles.pressed, locked && styles.inactive]}
+    >
+      <Icon name="add" size={22} color={colors.primary} />
+      <Text variant="label" color="primary">
+        Produtos
+      </Text>
+      {count > 0 && (
+        <View style={styles.badge} importantForAccessibility="no-hide-descendants">
+          <Text variant="monoSmall" color="onPrimary">
+            {count > 99 ? '99+' : count}
+          </Text>
+        </View>
+      )}
+    </Pressable>
+  );
+
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Text variant="title">PDV</Text>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <Text variant="title">PDV</Text>
 
-        <DraftEditor store={store} mode="pdv" locked={locked} integerQuantity canDiscount={canDiscount} />
+          <DraftEditor store={store} mode="pdv" locked={locked} integerQuantity canDiscount={canDiscount} canChangePrice={canChangePrice} addProducts={productsButton} />
 
-        <View style={styles.card}>
-          {(quote.quote?.discountCents ?? 0) > 0 && (
-            <View style={styles.between}>
-              <Text color="textMuted">Descontos</Text>
-              <Text color="textMuted">- {formatCents(quote.quote?.discountCents ?? 0)}</Text>
-            </View>
-          )}
-          <View style={styles.between}>
-            <Text variant="label">Total</Text>
-            <Text variant="heading">{quote.status === 'loading' && total === null ? 'Calculando…' : total === null ? '—' : formatCents(total)}</Text>
-          </View>
-          {quote.error && (
-            <Text variant="caption" color="danger" accessibilityLiveRegion="polite">
-              {quote.error}
-              {quote.registerClosed ? ' Depois de abrir o caixa, volte a esta tela.' : ''}
-            </Text>
-          )}
-          <Text variant="caption" color={quote.offline ? 'danger' : 'textMuted'}>
-            {quote.offline
-              ? 'Sem conexão: total estimado. A venda fica guardada no aparelho e o ComercialWeb confere preços e estoque ao sincronizar.'
-              : 'Preços e estoque conferidos no ComercialWeb.'}
-          </Text>
-        </View>
-
-        <Text variant="heading">Recebimento</Text>
-        <View style={styles.card}>
-          {methods.length === 0 && <Text color="textMuted">Formas de pagamento indisponíveis no momento.</Text>}
-          <View style={styles.chips}>
-            {methods.map((m) => (
-              <Pressable
-                key={m.code}
-                accessibilityRole="button"
-                accessibilityState={{ selected: method === m.code, disabled: locked }}
-                disabled={locked}
-                onPress={() => setMethod(m.code)}
-                style={[styles.chip, method === m.code && styles.chipActive]}
-              >
-                <Text variant="label" color={method === m.code ? 'primary' : 'textMuted'}>
-                  {m.name}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-          <TextField
-            label="Valor recebido"
-            placeholder="0,00"
-            value={amount}
-            onChangeText={setAmount}
-            keyboardType="decimal-pad"
-            editable={!locked}
-            onSubmitEditing={() => addAmount(parsed)}
-          />
-          <View style={styles.row}>
-            <View style={styles.flex}>
-              <Button label="Adicionar" variant="outline" onPress={() => addAmount(parsed)} disabled={locked || parsed === null || !method} />
-            </View>
-            <View style={styles.flex}>
-              <Button
-                label={remaining ? `Restante ${formatCents(remaining)}` : 'Restante'}
-                variant="outline"
-                onPress={() => addAmount(remaining)}
-                disabled={locked || !remaining || !method}
-              />
-            </View>
-          </View>
-          {draft.payments.map((p) => (
-            <View key={p.method} style={styles.between}>
-              <Text>{p.label}</Text>
-              <View style={styles.row}>
-                <Text variant="label">{formatCents(p.amountCents)}</Text>
-                {!locked && (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Remover ${p.label}`}
-                    onPress={() => setDraft((d) => ({ ...d, payments: removePayment(d.payments, p.method) }))}
-                  >
-                    <Icon name="close-circle-outline" size={24} color={colors.danger} />
-                  </Pressable>
-                )}
+          <View style={styles.card}>
+            {(quote.quote?.discountCents ?? 0) > 0 && (
+              <View style={styles.between}>
+                <Text color="textMuted">Descontos</Text>
+                <Text color="textMuted">- {formatCents(quote.quote?.discountCents ?? 0)}</Text>
               </View>
-            </View>
-          ))}
-          {draft.payments.length > 0 && total !== null && (
+            )}
             <View style={styles.between}>
-              <Text color="textMuted">Recebido {formatCents(paidCents(draft.payments))}</Text>
-              {remaining ? (
-                <Text variant="label" color="danger">
-                  Falta {formatCents(remaining)}
-                </Text>
-              ) : (
-                <Text variant="label" color="success">
-                  {change > 0 ? `Troco ${formatCents(change)}` : 'Pago'}
-                </Text>
-              )}
+              <Text variant="label">Total</Text>
+              <Text variant="heading">{quote.status === 'loading' && total === null ? 'Calculando…' : total === null ? '—' : formatCents(total)}</Text>
             </View>
-          )}
-        </View>
+            {quote.error && (
+              <Text variant="caption" color="danger" accessibilityLiveRegion="polite">
+                {quote.error}
+                {quote.registerClosed ? ' Depois de abrir o caixa, volte a esta tela.' : ''}
+              </Text>
+            )}
+            <Text variant="caption" color={quote.offline ? 'danger' : 'textMuted'}>
+              {quote.offline
+                ? 'Sem conexão: total estimado. A venda fica guardada no aparelho e o ComercialWeb confere preços e estoque ao sincronizar.'
+                : 'Preços e estoque conferidos no ComercialWeb.'}
+            </Text>
+          </View>
+        </ScrollView>
 
-        {phase.name === 'editing' && phase.error && (
-          <Text color="danger" accessibilityLiveRegion="polite">
-            {phase.error}
-          </Text>
-        )}
-
-      </ScrollView>
-
-      {(
+        {/* Rodapé ao alcance do polegar: total, adicionar produtos (com a contagem) e cobrar. */}
         <View style={styles.footer}>
-          <View style={styles.flex}>
+          <View style={styles.between}>
             <Text variant="caption" color="textMuted">
-              Total · {draft.items.length} {draft.items.length === 1 ? 'item' : 'itens'}
+              Total · {count} {count === 1 ? 'item' : 'itens'}
             </Text>
             <Text variant="total" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
               {total === null ? '—' : formatCents(total)}
             </Text>
           </View>
-          <View style={styles.flex}>
-            <Button label="Cobrar" onPress={send} loading={phase.name === 'sending'} disabled={!canFinalize} />
+          <View style={styles.row}>
+            <View style={styles.flex}>
+              <Button label="Cobrar" icon="cash-outline" onPress={() => setCharging(true)} loading={phase.name === 'sending'} disabled={!canCharge} />
+            </View>
           </View>
         </View>
+      </KeyboardAvoidingView>
+
+      {total !== null && (
+        <PaymentSheet
+          visible={charging && (phase.name === 'editing' || phase.name === 'sending')}
+          onClose={() => setCharging(false)}
+          store={store}
+          totalCents={total}
+          offline={quote.offline ?? false}
+          methods={methods}
+        />
       )}
     </SafeAreaView>
   );
@@ -249,15 +200,40 @@ export function PdvScreen() {
 
 const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.page },
-  content: { ...layout.content, padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl * 3 },
-  card: { gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.background, ...shadow.card },
+  content: { ...layout.content, padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xl },
+  card: { gap: spacing.sm, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.background, ...shadow.card },
   between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   flex: { flex: 1 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  chip: { paddingHorizontal: spacing.md, minHeight: 40, justifyContent: 'center', borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border },
-  chipActive: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
-  footer: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, padding: spacing.lg, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border },
+  // Folga embaixo: o botão central (PDV) da barra de abas sobe por cima do rodapé.
+  footer: { gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.xl, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border },
+  add: {
+    minHeight: touchTarget + spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  pressed: { opacity: 0.7 },
+  inactive: { opacity: 0.4 },
+  badge: {
+    position: 'absolute',
+    top: -spacing.sm,
+    right: -spacing.sm,
+    minWidth: 22,
+    height: 22,
+    paddingHorizontal: spacing.xs,
+    borderRadius: radius.pill,
+    backgroundColor: colors.badge,
+    borderWidth: 2,
+    borderColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   doneBlock: { flex: 1, justifyContent: 'center', gap: spacing.lg, padding: spacing.xl },
   doneIcon: { width: 72, height: 72, borderRadius: radius.pill, backgroundColor: colors.successSoft, alignItems: 'center', justifyContent: 'center' },
 }));

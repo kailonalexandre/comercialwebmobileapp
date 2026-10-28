@@ -13,9 +13,9 @@ public sealed class PermissionsFixture : ApiFixture
           (1, 'Ana', 'ana', 'ana@a.com', @hash, 0), (2, 'Bruno', 'bruno', 'bruno@a.com', @hash, 0),
           (3, 'Carla', 'carla', 'carla@a.com', @hash, 0), (4, 'Root', 'root', 'root@a.com', @hash, 1);
         INSERT INTO business_user (business_id, user_id, status) VALUES (10, 1, 'active'), (10, 2, 'active'), (20, 2, 'active'), (10, 3, 'active'), (10, 4, 'active');
-        INSERT INTO permissions (id, name, guard_name) VALUES (1, 'products.view', 'web'), (2, 'sales.view', 'web'), (3, 'sales.create', 'web');
+        INSERT INTO permissions (id, name, guard_name) VALUES (1, 'products.view', 'web'), (2, 'sales.view', 'web'), (3, 'sales.create', 'web'), (4, 'products.create', 'web'), (5, 'people.create', 'web');
         INSERT INTO roles (id, business_id, name, guard_name) VALUES (1, 10, 'Vendedor', 'web');
-        INSERT INTO role_has_permissions (permission_id, role_id) VALUES (1, 1), (2, 1);
+        INSERT INTO role_has_permissions (permission_id, role_id) VALUES (1, 1), (2, 1), (4, 1), (5, 1);
         INSERT INTO model_has_roles (role_id, model_type, model_id, business_id) VALUES (1, 'App\\Models\\User', 1, 10);
         INSERT INTO model_has_permissions (permission_id, model_type, model_id, business_id) VALUES (3, 'App\\Models\\User', 2, 20);
         """, new { hash = PasswordHash });
@@ -41,7 +41,8 @@ public sealed class PermissionsEndpointTests(PermissionsFixture api) : IClassFix
     public async Task Devolve_so_as_permissoes_do_usuario_na_empresa_da_sessao()
     {
         TestDatabase.RequireMySql();
-        Assert.Equal(["products.view", "sales.view"], await For("ana"));
+        // Cadastro de produto e de cliente também vêm: sem eles o app nunca mostrava os botões "Novo".
+        Assert.Equal(["products.view", "products.create", "people.create", "sales.view"], await For("ana"));
         Assert.Empty(await For("bruno")); // sales.create existe só na empresa B
         Assert.Empty(await For("carla"));
     }
@@ -51,7 +52,7 @@ public sealed class PermissionsEndpointTests(PermissionsFixture api) : IClassFix
     {
         TestDatabase.RequireMySql();
         Assert.Equal(
-            ["products.view", "people.view", "sales.view", "sales.create", "sales.access", "pdv.access", "pdv.discount", "financial.receivables.view", "inventory.view", "financial.payables.view", "purchases.access", "relatorios.access", "loja-virtual.access", "marketplaces.view"],
+            ["products.view", "products.create", "people.view", "people.create", "sales.view", "sales.create", "sales.access", "pdv.access", "pdv.discount", "pdv.change-price", "financial.receivables.view", "inventory.view", "financial.payables.view", "purchases.access", "relatorios.access"],
             await For("root"));
     }
 }
