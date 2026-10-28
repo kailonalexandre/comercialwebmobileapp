@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 
 namespace ComercialWeb.Mobile.Sales.Pdv;
 
-public sealed record PdvItem(long ProductId, int Quantity, decimal? DiscountPercent = null, long? DiscountCents = null);
+public sealed record PdvItem(long ProductId, int Quantity, decimal? DiscountPercent = null, long? DiscountCents = null, long? UnitPriceCents = null);
 
 public sealed record PdvPayment(string Method, long AmountCents);
 
@@ -123,7 +123,7 @@ public sealed partial class PdvClient(HttpClient http, IConfiguration config, Ti
         customer_id = o.CustomerId,
         seller_person_id = o.SellerPersonId,
         observation = o.Observation,
-        items = o.Items.Select(i => new { product_id = i.ProductId, quantity = i.Quantity, discount_percent = i.DiscountPercent, discount_cents = i.DiscountCents }),
+        items = o.Items.Select(i => new { product_id = i.ProductId, quantity = i.Quantity, discount_percent = i.DiscountPercent, discount_cents = i.DiscountCents, unit_price_cents = i.UnitPriceCents }),
         sale_discount_percent = o.SaleDiscountPercent,
         sale_discount_cents = o.SaleDiscountCents,
         price_mode = o.PriceTable,

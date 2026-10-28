@@ -3,6 +3,7 @@ import { Alert, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-n
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { LoginInput, Operator } from '@/features/auth/auth-api';
+import { deviceSecured } from '@/features/auth/biometric';
 import { parsePairingLink } from '@/features/auth/pairing';
 import { PendingOperationsError, useSession } from '@/features/auth/session-context';
 import { ApiError } from '@/infrastructure/api/client';
@@ -58,7 +59,10 @@ export function TerminalLoginScreen() {
   const tryUnlock = useCallback(async () => {
     if (!owner) return;
     setError(null);
-    if (!(await unlock(owner.id))) setError('Não desbloqueou. Entre com sua senha.');
+    if (await unlock(owner.id)) return;
+    setError(!owner.biometric && !(await deviceSecured())
+      ? 'Este celular não tem bloqueio de tela, então o app pede a senha ao abrir. Ative o bloqueio de tela para desbloquear sem senha.'
+      : 'Não desbloqueou. Entre com sua senha.');
   }, [owner, unlock]);
 
   // Pessoal com biometria: já pede a digital ao abrir, sem um toque a mais.

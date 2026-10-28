@@ -22,9 +22,10 @@ export const moduleLinks: Record<string, { title: string; links: ModuleLink[] }>
   cadastros: {
     title: 'Cadastros',
     links: [
-      { title: 'Clientes', description: 'Buscar e consultar clientes', icon: 'people-outline', href: '/clientes' },
-      { title: 'Novo cliente', description: 'Cadastro rápido, funciona sem conexão', icon: 'person-add-outline', href: '/cliente-novo' },
-      { title: 'Produtos', description: 'Catálogo, preços e saldo', icon: 'pricetag-outline', href: '/produtos' },
+      { title: 'Produtos', description: 'Consultar por nome, código ou código de barras', icon: 'pricetag-outline', href: '/produtos', permissions: ['products.view'] },
+      { title: 'Novo produto', description: 'Cadastro rápido de produto', icon: 'add-circle-outline', href: '/novo-produto', permissions: ['products.create'] },
+      { title: 'Clientes', description: 'Buscar e consultar clientes', icon: 'people-outline', href: '/clientes', permissions: ['people.view'] },
+      { title: 'Novo cliente', description: 'Cadastro rápido, funciona sem conexão', icon: 'person-add-outline', href: '/cliente-novo', permissions: ['people.create'] },
     ],
   },
   estoque: {

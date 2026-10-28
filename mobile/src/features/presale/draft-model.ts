@@ -1,7 +1,15 @@
 // Desconto é só a intenção do vendedor: percentual (0 a 99,99) OU valor em centavos. O ComercialWeb aplica e limita.
 export type Discount = { kind: 'percent'; percent: number } | { kind: 'value'; cents: number };
 
-export type DraftItem = { productId: number; name: string; unitPriceCents: number; quantity: number; discount?: Discount };
+// unitPriceCents: preço da tabela (do ComercialWeb). customPriceCents: preço digitado no PDV por quem tem pdv.change-price.
+export type DraftItem = { productId: number; name: string; unitPriceCents: number; quantity: number; discount?: Discount; customPriceCents?: number };
+
+// Preço que vale na linha: o digitado (se houver) ou o da tabela.
+export const priceOf = (i: DraftItem): number => i.customPriceCents ?? i.unitPriceCents;
+
+// Preço digitado igual ao da tabela não é alteração (não vai ao servidor nem pede permissão).
+export const setPrice = (items: DraftItem[], productId: number, cents: number | undefined): DraftItem[] =>
+  items.map((i) => (i.productId === productId ? { ...i, customPriceCents: cents === undefined || cents === i.unitPriceCents ? undefined : cents } : i));
 
 // Valor recebido por forma de pagamento (só o PDV usa; a pré-venda não recebe).
 export type PaymentLine = { method: string; label: string; amountCents: number };
@@ -31,14 +39,25 @@ export function parseQuantity(text: string): number | null {
   return Math.round(n * 1000) / 1000 === n ? n : null;
 }
 
-// Somar a mesma mercadoria duas vezes vira uma linha só.
+// Produto novo entra com 1. Somar a mesma mercadoria duas vezes vira uma linha só, que passa a ser a última lançada.
+// A lista guarda a ordem de lançamento (é a que vai ao servidor); a tela mostra do mais recente para o mais antigo.
 export function addItem(items: DraftItem[], item: Omit<DraftItem, 'quantity'>, quantity = 1): DraftItem[] {
   const existing = items.find((i) => i.productId === item.productId);
   if (existing) {
     const total = Math.min(Math.round((existing.quantity + quantity) * 1000) / 1000, MAX_QUANTITY);
-    return items.map((i) => (i === existing ? { ...i, quantity: total } : i));
+    return [...items.filter((i) => i !== existing), { ...existing, quantity: total }];
   }
   return items.length >= MAX_ITEMS ? items : [...items, { ...item, quantity }];
+}
+
+// Último lançado primeiro, sem mexer na lista do pedido.
+export const newestFirst = (items: DraftItem[]): DraftItem[] => [...items].reverse();
+
+// Botões − e +: passo de 1. Nunca chega a zero (remover é pela lixeira) nem passa do limite; decimal continua decimal.
+export function stepQuantity(quantity: number, delta: 1 | -1): number {
+  const next = Math.round((quantity + delta) * 1000) / 1000;
+  if (next <= 0) return quantity;
+  return Math.min(next, MAX_QUANTITY);
 }
 
 export const setQuantity = (items: DraftItem[], productId: number, quantity: number): DraftItem[] =>
@@ -64,6 +83,20 @@ export function discountText(d: Discount | undefined): string {
   return d.kind === 'percent' ? String(d.percent).replace('.', ',') : (d.cents / 100).toFixed(2).replace('.', ',');
 }
 
+/**
+ * Botão R$/% (igual ao PDV da web, `toggleDiscountMode`): troca a unidade sem perder o que foi digitado, convertendo sobre o
+ * bruto da linha. Valor -> percentual arredonda; percentual -> valor trunca. Resultado fora do limite do servidor
+ * (0,01 a 99,99%) ou zero fica sem desconto, em vez de mandar um pedido que seria recusado.
+ */
+export function toggleDiscount(d: Discount, grossCents: number): Discount | undefined {
+  if (d.kind === 'value') {
+    const basisPoints = grossCents > 0 ? Math.min(10_000, Math.round((d.cents * 10_000) / grossCents)) : 0;
+    return basisPoints > 0 && basisPoints <= 9_999 ? { kind: 'percent', percent: basisPoints / 100 } : undefined;
+  }
+  const cents = Math.trunc((grossCents * Math.round(d.percent * 100)) / 10_000);
+  return cents > 0 ? { kind: 'value', cents } : undefined;
+}
+
 // Campos do contrato da API: um só por par (percentual OU valor), no item ou na venda.
 export function discountFields(d: Discount | undefined, scope: 'item' | 'sale' = 'item'): Record<string, number> {
   if (!d) return {};
@@ -77,19 +110,23 @@ const discountOf = (base: number, d: Discount | undefined): number =>
 // Só estimativa para o usuário: o servidor recalcula preço, desconto e total.
 export const estimateCents = (items: DraftItem[], saleDiscount?: Discount): number => {
   const subtotal = items.reduce((sum, i) => {
-    const base = Math.round(i.unitPriceCents * i.quantity);
+    const base = Math.round(priceOf(i) * i.quantity);
     return sum + base - discountOf(base, i.discount);
   }, 0);
   return subtotal - discountOf(subtotal, saleDiscount);
 };
 
-// O que vai no corpo do pedido. Preço e total nunca são enviados: só a tabela, e o servidor calcula.
+// O que vai no corpo do pedido. Total nunca é enviado: só a tabela, e o servidor calcula. Preço só quando o operador o
+// alterou no PDV (o servidor confere pdv.change-price e recalcula tudo).
 export function toRequest(draft: Draft) {
   return {
     priceTable: draft.priceTable,
     customerId: draft.customer && !draft.customer.pendingId ? draft.customer.id : null,
     observation: draft.observation.trim() || null,
-    items: draft.items.map((i) => ({ productId: i.productId, quantity: i.quantity, ...discountFields(i.discount) })),
+    items: draft.items.map((i) => ({
+      productId: i.productId, quantity: i.quantity, ...discountFields(i.discount),
+      ...(i.customPriceCents !== undefined ? { unitPriceCents: i.customPriceCents } : {}),
+    })),
     ...discountFields(draft.saleDiscount, 'sale'),
   };
 }

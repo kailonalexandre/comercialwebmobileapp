@@ -25,6 +25,8 @@ CREATE TABLE business_user (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id BIGINT UNSIGNED NOT NULL,
     user_id BIGINT UNSIGNED NOT NULL,
+    employee_person_id BIGINT UNSIGNED NULL,
+    default_seller_person_id BIGINT UNSIGNED NULL,
     status VARCHAR(255) NOT NULL DEFAULT 'active'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -118,6 +120,8 @@ CREATE TABLE people (
     notes TEXT NULL,
     is_client TINYINT(1) NOT NULL DEFAULT 0,
     is_supplier TINYINT(1) NOT NULL DEFAULT 0,
+    is_employee TINYINT(1) NOT NULL DEFAULT 0,
+    sales_goal DECIMAL(12,2) NULL,
     is_active TINYINT(1) NOT NULL DEFAULT 1,
     trade_scope VARCHAR(20) NULL,
     registration_incomplete TINYINT(1) NOT NULL DEFAULT 0,
@@ -283,4 +287,18 @@ CREATE TABLE mobile_audit_events (
     ip VARCHAR(45) NULL,
     meta JSON NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Comercial/Goals (2026_10_22_000100): metas mensais por empresa (scope company, seller_key 0) ou por vendedor.
+CREATE TABLE sales_goals (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    business_id BIGINT UNSIGNED NOT NULL,
+    scope VARCHAR(10) NOT NULL,
+    seller_person_id BIGINT UNSIGNED NULL,
+    seller_key BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    year SMALLINT UNSIGNED NOT NULL,
+    month TINYINT UNSIGNED NOT NULL,
+    amount_cents BIGINT NOT NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    UNIQUE KEY sales_goals_period_unique (business_id, scope, seller_key, year, month)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

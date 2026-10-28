@@ -1,6 +1,6 @@
 import { createApiClient, type RefreshOutcome } from '@/infrastructure/api/client';
 import { apiBaseUrl, appEnv } from '@/infrastructure/config';
-import { getAccessToken, getRefreshToken, isSession, markOnline, replaceSession } from '@/infrastructure/security/session-store';
+import { getAccessToken, getActiveAccountId, getRefreshToken, isSession, markOnline, saveRefreshed } from '@/infrastructure/security/session-store';
 
 let unauthorizedHandler = () => {};
 
@@ -17,8 +17,10 @@ export function setUnauthorizedHandler(handler: () => void) {
 }
 
 async function refreshSession(): Promise<RefreshOutcome> {
+  // Conta e token de quem pediu: se ela for bloqueada antes da resposta, o par novo ainda é gravado nela.
   const refreshToken = getRefreshToken();
-  if (!api || !refreshToken) return 'rejected';
+  const accountId = getActiveAccountId();
+  if (!api || !refreshToken || !accountId) return 'rejected';
   try {
     const session = await api.request<unknown>('/v1/auth/refresh', {
       method: 'POST',
@@ -26,7 +28,7 @@ async function refreshSession(): Promise<RefreshOutcome> {
       anonymous: true,
     });
     if (!isSession(session)) return 'rejected';
-    await replaceSession(session);
+    await saveRefreshed(accountId, refreshToken, session);
     // Sem o campo (ComercialWeb fora do ar) mantém o estado anterior: instabilidade não desbloqueia app desatualizado.
     if (session.minAppVersion) minVersionHandler(session.minAppVersion);
     return 'ok';
@@ -46,6 +48,6 @@ export const api = apiBaseUrl
       refreshSession,
       // Só no flavor local; a linha nunca contém token.
       log: appEnv.verboseLogs ? (line) => console.debug(`[api] ${line}`) : undefined,
-      onReachable: () => void markOnline(),
+      onReachable: () => void markOnline().catch(() => undefined),
     })
   : null;

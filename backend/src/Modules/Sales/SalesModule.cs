@@ -4,7 +4,6 @@ using ComercialWeb.Mobile.Identity;
 using ComercialWeb.Mobile.Identity.Authorization;
 using ComercialWeb.Mobile.Identity.Tenancy;
 using ComercialWeb.Mobile.Sales.Conditionals;
-using ComercialWeb.Mobile.Sales.Orders;
 using ComercialWeb.Mobile.Sales.Pdv;
 using ComercialWeb.Mobile.Sales.Receipts;
 using ComercialWeb.Mobile.Sales.PreSales;
@@ -75,7 +74,6 @@ public static class SalesModule
         app.MapPreSaleEndpoints();
         app.MapConditionalEndpoints();
         app.MapPdvEndpoints();
-        app.MapOrdersEndpoints();
         app.MapReceiptEndpoints();
         return app;
     }

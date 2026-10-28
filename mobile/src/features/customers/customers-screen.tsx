@@ -12,23 +12,27 @@ import { radius, spacing } from '@/shared/theme/tokens';
 import { ListRow } from '@/shared/components/list-row';
 import { StatusPill } from '@/shared/components/status-pill';
 
-export function CustomersScreen() {
+// "+ Novo" das listas de clientes (Clientes e escolha do cliente na venda). Só com people.create; a API confere de novo.
+export function NewCustomerButton() {
   const { profile } = useSession();
   const { colors } = useTheme();
   const styles = useStyles();
+  if (!profile?.permissions.includes('people.create')) return null;
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel="Novo cliente" onPress={() => router.push('/cliente-novo')} style={styles.newButton}>
+      <Icon name="add" size={18} color={colors.primary} />
+      <Text variant="label" color="primary">
+        Novo
+      </Text>
+    </Pressable>
+  );
+}
+
+export function CustomersScreen() {
   return (
     <ListScreen
       header={<PendingCustomers />}
-      action={
-        profile?.permissions.includes('people.create') ? (
-          <Pressable accessibilityRole="button" accessibilityLabel="Novo cliente" onPress={() => router.push('/cliente-novo')} style={styles.newButton}>
-            <Icon name="add" size={18} color={colors.primary} />
-            <Text variant="label" color="primary">
-              Novo
-            </Text>
-          </Pressable>
-        ) : undefined
-      }
+      action={<NewCustomerButton />}
       title="Clientes"
       searchPlaceholder="Nome, documento ou telefone"
       emptyMessage="Nenhum cliente encontrado."

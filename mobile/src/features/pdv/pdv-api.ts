@@ -1,4 +1,4 @@
-import { toRequest, toSaleRequest, type Draft } from '@/features/presale/draft-model';
+import { estimateCents, toRequest, toSaleRequest, type Draft } from '@/features/presale/draft-model';
 import type { SendResult } from '@/features/presale/presale-api';
 import { api } from '@/infrastructure/api';
 import { scopedFile } from '@/infrastructure/business-scope';
@@ -63,7 +63,7 @@ export async function fetchQuote(request: ReturnType<typeof toRequest>): Promise
 export async function sendPdvSale(draft: Draft, key: string): Promise<SendResult> {
   try {
     if (!api) {
-      const total = draft.items.reduce((s, i) => s + Math.round(i.unitPriceCents * i.quantity), 0);
+      const total = estimateCents(draft.items, draft.saleDiscount);
       const paid = draft.payments.reduce((s, p) => s + p.amountCents, 0);
       return { kind: 'ok', sale: { saleId: 1, number: 'V000999', status: 'finalizada', totalCents: total, changeCents: Math.max(0, paid - total), alreadyExisted: false } };
     }

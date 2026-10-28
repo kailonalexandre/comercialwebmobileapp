@@ -14,7 +14,7 @@ import { layout, radius, shadow, spacing, type Tone } from '@/shared/theme/token
 import { makeStyles } from '@/shared/theme/theme-context';
 import { normalizeSearch } from '@/shared/utils/format';
 
-type Module = { title: string; description: string; icon: IconName; tone: Tone; permissions?: string[]; href: '/configuracoes' | '/pedidos' | '/financeiro' | '/compras' | '/relatorios' | '/modulo/comercial' | '/modulo/cadastros' | '/modulo/estoque' };
+type Module = { title: string; description: string; icon: IconName; tone: Tone; permissions?: string[]; href: '/configuracoes' | '/financeiro' | '/compras' | '/relatorios' | '/modulo/comercial' | '/modulo/cadastros' | '/modulo/estoque' };
 
 // Módulos do ComercialWeb com tela no app. `permissions`: basta uma (mesma regra da web); só esconde o atalho, o servidor confere de novo.
 const modules: Module[] = [
@@ -24,7 +24,6 @@ const modules: Module[] = [
   { title: 'Estoque', description: 'Consulta de saldo por produto', icon: 'cube-outline', tone: 'info', href: '/modulo/estoque' },
   { title: 'Compras e Entradas', description: 'Consulta de pedidos de compra', icon: 'bus-outline', tone: 'primary', permissions: ['purchases.access'], href: '/compras' },
   { title: 'Relatórios', description: 'Vendas por período e forma de pagamento', icon: 'bar-chart-outline', tone: 'primary', permissions: ['relatorios.access'], href: '/relatorios' },
-  { title: 'Loja Virtual', description: 'Produtos, pedidos e configurações', icon: 'storefront-outline', tone: 'accent', href: '/pedidos' },
   { title: 'Configurações', description: 'Empresa, usuários e preferências', icon: 'settings-outline', tone: 'info', href: '/configuracoes' },
 ];
 

@@ -43,9 +43,12 @@ export function isSession(value: unknown): value is Session {
   );
 }
 
+// Falha de leitura do Keychain/Keystore propaga: tratá-la como "nenhuma conta" faria a próxima gravação do índice
+// (markOnline, biometria...) apagar todas as contas do aparelho. Só conteúdo ilegível vira lista vazia.
 async function readIndex(): Promise<Account[]> {
+  const raw = await secureStorage.get(INDEX);
   try {
-    const parsed: unknown = JSON.parse((await secureStorage.get(INDEX)) ?? '[]');
+    const parsed: unknown = JSON.parse(raw ?? '[]');
     return Array.isArray(parsed) ? (parsed as Account[]).filter((a) => typeof a?.id === 'string') : [];
   } catch {
     return [];
@@ -107,6 +110,12 @@ const ONLINE_PERSIST_MS = 5 * 60_000;
 
 /** O servidor respondeu: renova a janela offline. Grava no Keychain no máximo a cada 5 min. */
 export async function markOnline(now = Date.now()): Promise<void> {
+  if (unsaved) {
+    const pending = unsaved;
+    await secureStorage.set(sessionKey(pending.id), JSON.stringify(pending.session)).then(() => {
+      if (unsaved === pending) unsaved = null;
+    }, () => undefined);
+  }
   if (!activeMeta) return;
   const last = activeMeta.lastOnlineAt ? Date.parse(activeMeta.lastOnlineAt) : 0;
   activeMeta = { ...activeMeta, lastOnlineAt: new Date(now).toISOString() };
@@ -175,6 +184,33 @@ export async function replaceSession(session: Session): Promise<void> {
   if (!activeId) return;
   await secureStorage.set(sessionKey(activeId), JSON.stringify(session));
   current = session;
+}
+
+// Tokens de um refresh que o Keychain/Keystore recusou gravar (iOS com o aparelho bloqueado, erro do Keystore): ficam
+// em memória e são regravados na próxima resposta do servidor (`markOnline`).
+let unsaved: { id: string; session: Session } | null = null;
+
+/**
+ * Resultado de um refresh. O servidor já gastou `usedRefreshToken`: perder o par novo faria o próximo refresh ser lido como
+ * reuso (roubo) e derrubaria a sessão. Por isso grava na conta que pediu o refresh, mesmo que ela tenha sido bloqueada no
+ * meio (inatividade, troca de usuário), e só se o aparelho ainda guarda o token gasto: conta removida ou tokens apagados
+ * de propósito (troca de operador) não ressuscitam.
+ */
+export async function saveRefreshed(id: string, usedRefreshToken: string, session: Session): Promise<void> {
+  if (activeId === id) current = session;
+  let stored: unknown = null;
+  try {
+    stored = JSON.parse((await secureStorage.get(sessionKey(id))) ?? 'null');
+  } catch {
+    // ilegível: trata como ausente
+  }
+  if (!isSession(stored) || stored.refreshToken !== usedRefreshToken) return;
+  try {
+    await secureStorage.set(sessionKey(id), JSON.stringify(session));
+    unsaved = null;
+  } catch {
+    unsaved = { id, session };
+  }
 }
 
 // Troca de empresa: só o access token muda (a API emite um novo para a empresa escolhida); o refresh da sessão continua valendo.
