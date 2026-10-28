@@ -15,6 +15,9 @@ jest.mock('expo-secure-store', () => ({
 }));
 jest.mock('expo-crypto', () => ({ randomUUID: () => 'chave-1' }));
 jest.mock('@/shared/components/icon', () => ({ Icon: () => null }));
+
+// O primeiro render da suíte carrega tema, fontes e componentes (2–10 s no CI): 5 s padrão do Jest não bastam.
+jest.setTimeout(30_000);
 jest.mock('@/features/auth/session-context', () => ({ useSession: () => ({ profile: { businessId: 1 } }) }));
 const mockSubmit = jest.fn();
 jest.mock('@/features/sales/sale-queue', () => ({ submitSale: (...args: unknown[]) => mockSubmit(...args) }));

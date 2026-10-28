@@ -16,6 +16,9 @@ jest.mock('expo-secure-store', () => ({
 
 jest.mock('@/shared/components/icon', () => ({ Icon: () => null }));
 
+// O primeiro render da suíte carrega tema, fontes e componentes (2–10 s no CI): 5 s padrão do Jest não bastam.
+jest.setTimeout(30_000);
+
 const wrap = (node: ReactNode) => <ThemeProvider>{node}</ThemeProvider>;
 
 function Stepper({ start = 1, focusSignal }: { start?: number; focusSignal?: number }) {
