@@ -17,6 +17,15 @@ public sealed class MySqlIdentityStore(MySqlDataSource db) : IIdentityStore
         WHERE bu.user_id = @userId AND bu.status = 'active'
         """;
 
+    // Conta só app nasce com e-mail fictício `app-<uuid>@mobile.invalid` (MobileAccountService): aí vale o usuário.
+    public async Task<string?> GetLoginHintAsync(long userId, CancellationToken ct)
+    {
+        await using var conn = await db.OpenConnectionAsync(ct);
+        return await conn.QuerySingleOrDefaultAsync<string?>(new CommandDefinition(
+            "SELECT CASE WHEN email LIKE '%@mobile.invalid' THEN username ELSE email END FROM users WHERE id = @userId",
+            new { userId }, cancellationToken: ct));
+    }
+
     public async Task<UserCredentials?> FindActiveUserAsync(string login, bool byEmail, CancellationToken ct)
     {
         var column = byEmail ? "email" : "username";

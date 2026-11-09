@@ -1,5 +1,7 @@
 import { createEnvironment, resolveBaseUrl, serverRefusal } from '@/infrastructure/config';
 
+import eas from '../../eas.json';
+
 const local = createEnvironment('local', false, undefined);
 const vps = createEnvironment('vps', false, 'app.exemplo.com.br, *.cliente.com.br');
 const refusal = (env: typeof local, url: string) => serverRefusal(env, new URL(url));
@@ -33,6 +35,15 @@ test('vps recusa HTTP e host fora da lista; aceita exato e curinga', () => {
   expect(refusal(vps, 'https://cliente.com.br')).not.toBeNull();
   expect(refusal(vps, 'https://evilcliente.com.br')).not.toBeNull();
   expect(refusal(createEnvironment('vps', false, undefined), 'https://app.exemplo.com.br')).not.toBeNull();
+});
+
+test('cada perfil do eas.json aceita o QR do próprio ComercialWeb e recusa o do outro ambiente', () => {
+  const profile = (name: 'production' | 'staging') => createEnvironment('vps', false, eas.build[name].env.EXPO_PUBLIC_ALLOWED_SERVER_HOSTS);
+  // Produção: o QR traz o APP_URL canônico (infinitsolucoesweb.com.br; comercial. redireciona para ele).
+  expect(refusal(profile('production'), 'https://infinitsolucoesweb.com.br')).toBeNull();
+  expect(refusal(profile('production'), 'https://dev.infinitsolucoesweb.com.br')).not.toBeNull();
+  expect(refusal(profile('staging'), 'https://dev.infinitsolucoesweb.com.br')).toBeNull();
+  expect(refusal(profile('staging'), 'https://infinitsolucoesweb.com.br')).not.toBeNull();
 });
 
 test('URL base exige HTTPS quando HTTP não é permitido', () => {

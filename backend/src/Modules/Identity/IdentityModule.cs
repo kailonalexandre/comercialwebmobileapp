@@ -178,19 +178,21 @@ public static class IdentityModule
 
         // Login individual num aparelho vinculado: senha, PIN (só compartilhado) ou convite. Nenhum dado do app escolhe
         // usuário ou empresa: o ComercialWeb confere o segredo do aparelho, a credencial, o bloqueio e a permissão.
-        auth.MapPost("/terminal-login", async (TerminalLoginRequest body, HttpContext http, AuthService service, CancellationToken ct) =>
+        auth.MapPost("/terminal-login", async (TerminalLoginRequest body, HttpContext http, AuthService service, IIdentityStore store, CancellationToken ct) =>
         {
             if (Terminal(body.TerminalId, body.TerminalSecret) is not { } terminal || ToLoginInput(body) is not { } input) return Results.Problem(statusCode: 422);
             var result = await service.TerminalLoginAsync(terminal, input, ClientIp(http), DeviceInfo.From(body.Platform, body.AppVersion), ct);
             if (result is { Session: { } s, Login: { } l, Policy: { } p })
             {
+                // Quem entrou por convite não digitou login: o app guarda este para pré-preencher a próxima entrada por senha.
+                var loginHint = await store.GetLoginHintAsync(l.UserId, ct);
                 return Results.Ok(new
                 {
                     s.AccessToken,
                     s.RefreshToken,
                     expiresAt = s.ExpiresAt,
                     minAppVersion = s.MinAppVersion,
-                    user = new { id = l.UserId, name = l.UserName },
+                    user = new { id = l.UserId, name = l.UserName, login = loginHint },
                     terminal = Present(l.Terminal),
                     policy = new { mode = p.Mode, idleLockSeconds = p.IdleLockSeconds, offlineHours = p.OfflineHours, biometric = p.Mode == SessionPolicy.Personal },
                 });

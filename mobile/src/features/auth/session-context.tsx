@@ -20,7 +20,7 @@ import {
   accountIdFor, clearSession, createAccount, describeAccount, forgetTokens, getActiveAccount, getActiveAccountId, loadAccounts, lockSession, openAccount,
   removeAccount as removeStoredAccount, replaceAccessToken, setAccountBiometric, type Account, type SessionPolicy,
 } from '@/infrastructure/security/session-store';
-import { clearTerminal, loadTerminal, saveTerminal, type Terminal } from '@/infrastructure/security/terminal-store';
+import { clearTerminal, loadTerminal, saveLastLogin, saveTerminal, type Terminal } from '@/infrastructure/security/terminal-store';
 
 // locked: há contas/aparelho vinculado, nenhuma sessão aberta (escolha de conta ou de operador).
 // revoked: o aparelho foi desvinculado no ComercialWeb (tokens já apagados; filas offline preservadas).
@@ -349,6 +349,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       throw e;
     }
     const { session, user, terminal: info, policy } = result;
+    // Senha: o que a pessoa digitou (usuário ou e-mail). Convite: o que o servidor sugere. PIN não muda a sugestão.
+    const remembered = input.method === 'password' ? input.login : input.method === 'invite' ? user.login : null;
+    if (remembered) await saveLastLogin(remembered).catch(() => undefined); // conveniência: falha não impede a entrada
     await createAccount(session, {
       id: accountIdFor(info.businessId, user.id), userName: user.name, businessName: info.businessName ?? t.businessName,
       terminalId: t.id, userId: user.id, policy,

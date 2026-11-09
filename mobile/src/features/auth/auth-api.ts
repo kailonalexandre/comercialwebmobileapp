@@ -16,7 +16,8 @@ export type LoginInput =
   | { method: 'password'; login: string; password: string }
   | { method: 'pin'; userId: number; pin: string }
   | { method: 'invite'; inviteCode: string; newPassword: string };
-export type TerminalLogin = { session: Session; user: { id: number; name: string }; terminal: TerminalInfo; policy: SessionPolicy };
+// `login`: e-mail (ou usuário, em conta só app) que o servidor sugere para a próxima entrada por senha.
+export type TerminalLogin = { session: Session; user: { id: number; name: string; login?: string | null }; terminal: TerminalInfo; policy: SessionPolicy };
 
 const demoTerminal: TerminalInfo = { id: '00000000-0000-4000-8000-000000000000', name: 'Aparelho de demonstração', mode: 'shared', businessId: 0, businessName: 'Empresa Demonstração' };
 
