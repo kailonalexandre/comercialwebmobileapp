@@ -59,10 +59,10 @@ public sealed class PushDispatcherTests(PushFixture api) : IClassFixture<PushFix
             """, new { s = Session.ToString(), t = Token, expires = expiresAt, revoked = revokedAt });
     }
 
-    private Task Notify(int id, long user, long? business, string? read = null, string? archived = null, int entityId = 9, string createdAt = "NOW()") => api.Db.ExecuteAsync($"""
+    private Task Notify(int id, long user, long? business, string? read = null, string? archived = null, int entityId = 9, string createdAt = "NOW()", string domain = "vendas") => api.Db.ExecuteAsync($"""
         INSERT INTO notifications (id, uuid, user_id, type_key, domain, severity, title, body, business_id, entity_type, entity_id, read_at, archived_at, created_at)
-        VALUES (@id, UUID(), @user, 'x', 'vendas', 'info', @title, 'corpo', @business, 'sale', @entityId, @read, @archived, {createdAt})
-        """, new { id, user, business, read, archived, entityId, title = $"Aviso {id}" });
+        VALUES (@id, UUID(), @user, 'x', @domain, 'info', @title, 'corpo', @business, 'sale', @entityId, @read, @archived, {createdAt})
+        """, new { id, user, business, read, archived, entityId, domain, title = $"Aviso {id}" });
 
     private async Task<long> Watermark() => await api.Db.DataSource!.CreateConnection().ExecuteScalarAsync<long>(
         "SELECT COALESCE(MAX(last_notification_id), -1) FROM mobile_push_tokens");
@@ -78,6 +78,17 @@ public sealed class PushDispatcherTests(PushFixture api) : IClassFixture<PushFix
         Assert.Empty(_sender.Sent);
         Assert.Equal(1, await Watermark()); // ao reativar, o passado não chega em rajada
         await api.Db.ExecuteAsync("DELETE FROM mobile_push_mutes");
+    }
+
+    [Fact]
+    public async Task Loja_virtual_nunca_vira_push_mas_avanca_a_marca_dagua()
+    {
+        TestDatabase.RequireMySql();
+        await Reset();
+        await Notify(1, 1, 10, domain: "loja_virtual");
+        await Dispatcher().RunOnceAsync(Ct);
+        Assert.Empty(_sender.Sent); // o app não acompanha a loja online; o sino continua listando
+        Assert.Equal(1, await Watermark());
     }
 
     [Fact]

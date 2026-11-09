@@ -1,13 +1,15 @@
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Alert, Pressable, View } from 'react-native';
 
 import { findDuplicates, lookupCompany, lookupPostalCode, type DuplicateMatch } from '@/features/customers/customers-api';
 import {
   digits, emptyInput, isIncomplete, maskDocument, maskPhone, maskZip, validateQuick, type PersonKind, type QuickCustomerInput, type QuickErrors,
 } from '@/features/customers/quick-customer-model';
 import { enqueueQuickCustomer, syncQuickCustomers } from '@/features/customers/quick-customer-queue';
+import { OFFLINE_EXPIRED } from '@/features/sales/sale-queue';
 import { DetailFrame } from '@/features/shell/detail-frame';
+import { offlineAllowed } from '@/infrastructure/security/session-store';
 import { Button } from '@/shared/components/button';
 import { Icon } from '@/shared/components/icon';
 import { Segmented } from '@/shared/components/segmented';
@@ -91,6 +93,7 @@ export function NewCustomerScreen() {
   };
 
   async function enqueueAndLeave() {
+    if (!offlineAllowed()) return Alert.alert('Sem conexão', OFFLINE_EXPIRED);
     await enqueueQuickCustomer(input);
     void syncQuickCustomers(); // segue em segundo plano; a lista de Clientes mostra o andamento
     router.back();

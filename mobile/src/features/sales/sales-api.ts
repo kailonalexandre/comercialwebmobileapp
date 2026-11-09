@@ -15,7 +15,7 @@ const devSale: SaleListItem = {
 };
 
 // `status` da API de vendas (o servidor recusa valores fora da lista com 422).
-export type SaleStatusFilter = 'all' | 'finalizada' | 'pre_venda' | 'devolucao';
+export type SaleStatusFilter = 'all' | 'finalizada' | 'pre_venda' | 'devolucao' | 'condicional_aberto';
 
 export async function fetchSales(page: number, search: string, status: SaleStatusFilter = 'all'): Promise<Paged<SaleListItem>> {
   if (!api) return devPage([devSale]);

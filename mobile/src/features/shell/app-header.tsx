@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Alert, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { useSession } from '@/features/auth/session-context';
 import { useUnreadCount } from '@/features/shell/use-unread-count';
@@ -13,7 +13,10 @@ import { makeStyles, useTheme } from '@/shared/theme/theme-context';
 export function AppHeader() {
   const styles = useStyles();
   const { colors } = useTheme();
-  const userName = useSession().profile?.userName ?? '';
+  const { profile, policy } = useSession();
+  const userName = profile?.userName ?? '';
+  // Aparelho compartilhado: o nome de quem está operando fica sempre à vista (nenhuma venda sai no nome errado).
+  const operator = policy?.mode === 'shared' && userName ? userName.split(' ')[0]! : null;
   const unreadNotifications = useUnreadCount();
   const badge = unreadNotifications > 9 ? '9+' : String(unreadNotifications);
 
@@ -21,8 +24,8 @@ export function AppHeader() {
     <View style={styles.row}>
       <View style={styles.brand}>
         <BrandMark size={34} />
-        <Text variant="heading" color="primary">
-          Infinit Comercial
+        <Text variant="heading" color="primary" numberOfLines={1}>
+          {operator ? `Operador: ${operator}` : 'Infinit Comercial'}
         </Text>
       </View>
       <Pressable
@@ -41,7 +44,7 @@ export function AppHeader() {
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={userName ? `Perfil de ${userName}` : 'Perfil'}
-        onPress={() => Alert.alert('Perfil', 'Em breve.')}
+        onPress={() => router.push('/configuracoes')}
         style={styles.avatar}
       >
         <Text variant="heading" color="onPrimary">

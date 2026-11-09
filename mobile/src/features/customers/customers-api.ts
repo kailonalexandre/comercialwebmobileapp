@@ -1,5 +1,7 @@
+import { searchOffline } from '@/features/customers/customer-cache';
 import { toRequest, type QuickCustomerInput } from '@/features/customers/quick-customer-model';
 import { api } from '@/infrastructure/api';
+import { ApiError } from '@/infrastructure/api/client';
 import type { Paged } from '@/shared/hooks/use-paged-list';
 
 export type Customer = {
@@ -18,13 +20,26 @@ export type Customer = {
   tradeScope?: string | null;
 };
 
+// Sem conexão a lista vem da cópia local (customer-cache); outros erros seguem para a tela.
 export async function fetchCustomers(page: number, search: string): Promise<Paged<Customer>> {
+  try {
+    return await fetchCustomersRemote(page, search, 20);
+  } catch (e) {
+    if (e instanceof ApiError && (e.kind === 'network' || e.kind === 'timeout')) {
+      const local = await searchOffline(search, page, 20);
+      if (local) return local;
+    }
+    throw e;
+  }
+}
+
+export async function fetchCustomersRemote(page: number, search: string, pageSize: number): Promise<Paged<Customer>> {
   if (!api) {
     if (!__DEV__) throw new Error('API não configurada.');
     const c: Customer = { id: 1, code: 1, name: 'Mercado Bom Preço', tradeName: null, document: null, phone: '(11) 99999-0000', city: 'São Paulo', state: 'SP', isActive: true, restrictionAlert: false, restrictionBlock: false };
     return { items: [c], page: 1, pageSize: 20, total: 1 };
   }
-  const query = new URLSearchParams({ page: String(page), pageSize: '20' });
+  const query = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
   if (search) query.set('search', search);
   return api.request<Paged<Customer>>(`/v1/customers?${query.toString()}`);
 }

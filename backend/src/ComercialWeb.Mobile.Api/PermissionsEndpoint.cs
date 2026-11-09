@@ -4,8 +4,9 @@ using ComercialWeb.Mobile.Customers;
 using ComercialWeb.Mobile.Dashboard;
 using ComercialWeb.Mobile.Identity;
 using ComercialWeb.Mobile.Identity.Authorization;
+using ComercialWeb.Mobile.Management;
 using ComercialWeb.Mobile.Sales;
-using ComercialWeb.Mobile.Sales.Orders;
+using ComercialWeb.Mobile.Sales.Conditionals;
 using ComercialWeb.Mobile.Sales.Pdv;
 using ComercialWeb.Mobile.Sales.PreSales;
 
@@ -21,15 +22,20 @@ internal static class PermissionsEndpoint
     internal static readonly string[] AppPermissions =
     [
         CatalogModule.ViewProducts,
+        CatalogModule.CreateProducts,
         CustomersModule.ViewPeople,
+        CustomersModule.CreatePeople,
         SalesModule.ViewSales,
         PreSaleEndpoints.CreatePreSale,
+        ConditionalEndpoints.SaveConditional,
         PdvEndpoints.UsePdv,
         PdvEndpoints.DiscountPdv,
+        PdvEndpoints.ChangePrice,
         DashboardModule.ViewReceivables,
         DashboardModule.ViewInventory,
-        OrdersEndpoints.StoreOrders,
-        OrdersEndpoints.MarketplaceOrders,
+        ManagementModule.ViewPayables,
+        ManagementModule.AccessPurchases,
+        ManagementModule.AccessReports,
     ];
 
     public static IEndpointRouteBuilder MapPermissionsEndpoint(this IEndpointRouteBuilder app)

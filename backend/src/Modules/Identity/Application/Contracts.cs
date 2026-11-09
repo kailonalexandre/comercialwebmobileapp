@@ -2,10 +2,13 @@ namespace ComercialWeb.Mobile.Identity.Application;
 
 public sealed record UserCredentials(long Id, string PasswordHash);
 
-/// <summary>CwDeviceId/CwTokens só existem em sessão pareada por QR; CwTokens já chega cifrado.</summary>
+/// <summary>
+/// CwDeviceId/CwTokens só existem em sessão ligada ao ComercialWeb (QR antigo ou login no aparelho); CwTokens já chega
+/// cifrado. TerminalId/Mode só na sessão aberta por login num aparelho vinculado.
+/// </summary>
 public sealed record NewSession(
     Guid Id, long UserId, long BusinessId, string? DeviceName, DateTimeOffset CreatedAt, DateTimeOffset ExpiresAt,
-    string? CwDeviceId = null, string? CwTokens = null);
+    string? CwDeviceId = null, string? CwTokens = null, string? TerminalId = null, string? Mode = null);
 
 public sealed record NewRefreshToken(byte[] Hash, Guid SessionId, DateTimeOffset CreatedAt, DateTimeOffset ExpiresAt);
 
@@ -16,9 +19,20 @@ public sealed record RefreshTokenState(
     DateTimeOffset TokenExpiresAt,
     DateTimeOffset? UsedAt,
     DateTimeOffset SessionExpiresAt,
-    DateTimeOffset? RevokedAt);
+    DateTimeOffset? RevokedAt,
+    DateTimeOffset? LastUsedAt = null,
+    string? Mode = null,
+    string? TerminalId = null);
+
+/// <summary>Linha da trilha `mobile_audit_events` (tabela do ComercialWeb). Meta nunca leva senha, PIN, token ou código.</summary>
+public sealed record AuditEvent(string Event, long? BusinessId, long? UserId, string? TerminalId = null, string? Ip = null, IReadOnlyDictionary<string, string?>? Meta = null);
 
 public sealed record Profile(string UserName, long BusinessId, string BusinessName);
+
+public sealed record BusinessRef(long Id, string Name);
+
+/// <summary>Nova credencial depois da troca de empresa: só o access token muda (o refresh da sessão continua valendo).</summary>
+public sealed record SwitchedBusiness(string AccessToken, DateTimeOffset ExpiresAt, long BusinessId, string BusinessName);
 
 /// <param name="MinAppVersion">api.min_app_version do ComercialWeb (quando disponível): o app bloqueia versões menores.</param>
 public sealed record IssuedSession(string AccessToken, string RefreshToken, DateTimeOffset ExpiresAt, string? MinAppVersion = null);
@@ -46,8 +60,26 @@ public interface IIdentityStore
 
     Task<Profile?> GetProfileAsync(long userId, long businessId, CancellationToken ct);
 
+    /// <summary>Login para pré-preencher a tela de senha no aparelho: o e-mail, ou o usuário se a conta é só app (e-mail fictício).</summary>
+    Task<string?> GetLoginHintAsync(long userId, CancellationToken ct);
+
+    /// <summary>Empresas com vínculo ativo do usuário (mesmo critério do login), por nome.</summary>
+    Task<IReadOnlyList<BusinessRef>> ListBusinessesAsync(long userId, CancellationToken ct);
+
+    /// <summary>
+    /// Aponta a sessão para outra empresa do usuário. False se a sessão não está ativa ou o usuário não tem vínculo ativo
+    /// com a empresa. Guarda a empresa do pareamento na primeira troca (paired_business_id).
+    /// </summary>
+    Task<bool> SwitchBusinessAsync(Guid sessionId, long userId, long businessId, CancellationToken ct);
+
+    /// <summary>Empresa em que o aparelho foi pareado no ComercialWeb; <paramref name="current"/> se a sessão nunca trocou.</summary>
+    Task<long> GetPairedBusinessIdAsync(Guid sessionId, long current, CancellationToken ct);
+
     /// <summary>Par de tokens do ComercialWeb (cifrado) da sessão; null se a sessão não foi pareada por QR.</summary>
     Task<string?> GetCwTokensAsync(Guid sessionId, CancellationToken ct);
 
     Task SaveCwTokensAsync(Guid sessionId, string protectedTokens, CancellationToken ct);
+
+    /// <summary>Melhor esforço: falha ao gravar a trilha nunca derruba a operação (fica no log).</summary>
+    Task RecordAuditAsync(AuditEvent audit, CancellationToken ct);
 }

@@ -2,32 +2,39 @@ import { IBMPlexMono_400Regular, IBMPlexMono_500Medium } from '@expo-google-font
 import { InterTight_400Regular, InterTight_500Medium, InterTight_600SemiBold, InterTight_700Bold } from '@expo-google-fonts/inter-tight';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
+import { View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 
 import { SessionProvider, useSession } from '@/features/auth/session-context';
 import { UpdateRequiredScreen } from '@/features/auth/update-required-screen';
+import { ConditionalDraftProvider } from '@/features/conditional/conditional-draft';
 import { PdvDraftProvider } from '@/features/pdv/pdv-draft';
 import { PreSaleDraftProvider } from '@/features/presale/presale-draft';
 import { PriceTablesProvider } from '@/features/pricing/price-tables';
 import { QuickCustomerSync } from '@/features/customers/quick-customer-sync';
+import { ProductCacheSync } from '@/features/catalog/product-cache-sync';
+import { BagQueueSync } from '@/features/conditional/bag-queue-sync';
+import { SaleQueueSync } from '@/features/sales/sale-queue-sync';
 import { PushBridge } from '@/features/push/push-bridge';
 import { OnboardingProvider, useOnboarding } from '@/features/onboarding/onboarding-context';
 import { StateView } from '@/shared/components/state-view';
 import { ThemeProvider, useTheme } from '@/shared/theme/theme-context';
 
 function RootNavigator() {
-  const { status, updateRequired } = useSession();
+  const { status, updateRequired, touch } = useSession();
   const { seen } = useOnboarding();
   const { colors, scheme } = useTheme();
   if (status === 'loading' || seen === null) return <StateView kind="loading" />;
   if (status === 'signedIn' && updateRequired) return <UpdateRequiredScreen />;
 
   const signedOut = status === 'signedOut';
+  const locked = status === 'locked';
 
   // Guarda de navegação é UX; autorização real acontece na API.
+  // onTouchStart vê todo toque das telas filhas: é o relógio do bloqueio por inatividade.
   return (
-    <>
+    <View style={{ flex: 1 }} onTouchStart={touch}>
       <StatusBar style={(signedOut && !seen) || scheme === 'dark' ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.page } }}>
         <Stack.Protected guard={status === 'signedIn'}>
@@ -38,25 +45,43 @@ function RootNavigator() {
           <Stack.Screen name="cliente/[id]" />
           <Stack.Screen name="clientes" />
           <Stack.Screen name="cliente-novo" />
+          <Stack.Screen name="novo-produto" />
           <Stack.Screen name="notificacoes" />
           <Stack.Screen name="configuracoes" />
-          <Stack.Screen name="pedido/[id]" />
+          <Stack.Screen name="trocar-empresa" />
           <Stack.Screen name="nova-venda" />
+          <Stack.Screen name="novo-condicional" />
+          <Stack.Screen name="condicionais" />
+          <Stack.Screen name="condicional/[id]" />
           <Stack.Screen name="selecionar-produto" />
           <Stack.Screen name="selecionar-cliente" />
+        </Stack.Protected>
+        <Stack.Protected guard={locked}>
+          <Stack.Screen name="contas" />
+        </Stack.Protected>
+        <Stack.Protected guard={status === 'revoked'}>
+          <Stack.Screen name="aparelho-revogado" />
         </Stack.Protected>
         <Stack.Protected guard={signedOut && !seen}>
           <Stack.Screen name="onboarding" />
         </Stack.Protected>
         <Stack.Protected guard={signedOut}>
           <Stack.Screen name="pair" />
+          <Stack.Screen name="bind" />
         </Stack.Protected>
         <Stack.Protected guard={signedOut && seen}>
           <Stack.Screen name="login" />
         </Stack.Protected>
       </Stack>
-    </>
+    </View>
   );
+}
+
+// Trocar de empresa recria tudo abaixo (telas, listas, rascunhos, tabelas de preço): nenhum dado em memória de uma empresa
+// sobrevive na outra, e a navegação volta ao início.
+function BusinessScoped({ children }: { children: ReactNode }) {
+  const { businessEpoch } = useSession();
+  return <Fragment key={businessEpoch}>{children}</Fragment>;
 }
 
 // O rascunho de pré-venda (e sua chave de idempotência) morre ao entrar/sair: nunca passa de um usuário a outro.
@@ -64,7 +89,9 @@ function SessionScopedDraft({ children }: { children: ReactNode }) {
   const { status } = useSession();
   return (
     <PreSaleDraftProvider key={status}>
-      <PdvDraftProvider key={status}>{children}</PdvDraftProvider>
+      <PdvDraftProvider key={status}>
+        <ConditionalDraftProvider key={status}>{children}</ConditionalDraftProvider>
+      </PdvDraftProvider>
     </PreSaleDraftProvider>
   );
 }
@@ -86,13 +113,18 @@ export default function RootLayout() {
       {ready ? (
         <OnboardingProvider>
           <SessionProvider>
-            <PriceTablesProvider>
-              <SessionScopedDraft>
-                <PushBridge />
-                <QuickCustomerSync />
-                <RootNavigator />
-              </SessionScopedDraft>
-            </PriceTablesProvider>
+            <BusinessScoped>
+              <PriceTablesProvider>
+                <SessionScopedDraft>
+                  <PushBridge />
+                  <QuickCustomerSync />
+                  <SaleQueueSync />
+                  <BagQueueSync />
+                  <ProductCacheSync />
+                  <RootNavigator />
+                </SessionScopedDraft>
+              </PriceTablesProvider>
+            </BusinessScoped>
           </SessionProvider>
         </OnboardingProvider>
       ) : (

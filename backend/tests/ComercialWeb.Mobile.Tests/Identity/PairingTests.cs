@@ -16,12 +16,38 @@ public sealed class FakeComercialWebAuth : IComercialWebAuth
     public Func<string, CwResult<CwBootstrap>> Bootstrap { get; set; } = _ => new(CwStatus.Ok, new CwBootstrap(1, 10));
     public CwResult<CwTokens> Refresh { get; set; } = new(CwStatus.Ok, new CwTokens("cw-access-2", "cw-refresh-2"));
     public Func<string, long, CwResult<CwStock>> Stock { get; set; } = (_, _) => new(CwStatus.Ok, new CwStock(7, 12_500));
-    public Func<string, CwOrdersQuery, CwResult<IReadOnlyList<CwOrderSection>>> Orders { get; set; } = (_, q) => new(CwStatus.Ok,
-        [new CwOrderSection("store", null, new CwPageMeta(q.Page, q.PageSize, 1, 1),
-            [new CwOrderItem("77", "LV-77", "Maria", 15_990, "Pago", "Pix", "Correios", false, "2026-09-29T10:00:00-03:00", "2026-09-29T10:05:00-03:00")])]);
-    public Func<string, long, CwResult<CwMarketplaceOrder>> MarketplaceOrder { get; set; } = (_, id) => new(CwStatus.Ok,
-        new CwMarketplaceOrder(id, "mercadolivre", "2000001", "Pago", "paid", 9_990, "João", "2026-09-29T09:00:00-03:00", [new CwMarketplaceOrderItem("Camiseta", "CAM-01", 100, 2, 4_995)]));
     public List<string> Calls { get; } = [];
+
+    public static readonly CwTerminal SharedTerminal = new("6a1f0c2e-0000-4000-8000-0000000000aa", "Caixa 1", "shared", 10, "Empresa A", null);
+    public CwResult<CwBinding> Bind { get; set; } = new(CwStatus.Ok, new CwBinding(SharedTerminal, new string('s', 60)));
+    public CwResult<CwTerminalState> State { get; set; } = new(CwStatus.Ok, new CwTerminalState(SharedTerminal, [new CwOperator(1, "Ana", true)]));
+    public Func<TerminalLoginInput, CwResult<CwLogin>> Login { get; set; } = _ =>
+        new(CwStatus.Ok, new CwLogin(new CwTokens("cw-access-1", "cw-refresh-1"), "3f2b8c1e-0000-4000-8000-000000000002", 1, "Ana", SharedTerminal));
+    public CwResult<bool> Pin { get; set; } = new(CwStatus.Ok, true);
+
+    public Task<CwResult<CwBinding>> BindTerminalAsync(string code, string installationId, string deviceName, string? clientIp, DeviceInfo device, CancellationToken ct)
+    {
+        Calls.Add($"bind:{code}:{installationId}:{clientIp}");
+        return Task.FromResult(Bind);
+    }
+
+    public Task<CwResult<CwTerminalState>> TerminalStateAsync(TerminalCredentials terminal, string? clientIp, CancellationToken ct)
+    {
+        Calls.Add($"state:{terminal.Id}");
+        return Task.FromResult(State);
+    }
+
+    public Task<CwResult<CwLogin>> TerminalLoginAsync(TerminalCredentials terminal, TerminalLoginInput input, string? clientIp, DeviceInfo device, CancellationToken ct)
+    {
+        Calls.Add($"login:{terminal.Id}:{input.Method}");
+        return Task.FromResult(Login(input));
+    }
+
+    public Task<CwResult<bool>> SetPinAsync(string accessToken, string password, string pin, CancellationToken ct)
+    {
+        Calls.Add($"pin:{accessToken}");
+        return Task.FromResult(Pin);
+    }
 
     public Task<CwResult<CwPairing>> PairAsync(string code, string? deviceName, string? clientIp, CancellationToken ct, DeviceInfo? device = null)
     {
@@ -46,18 +72,6 @@ public sealed class FakeComercialWebAuth : IComercialWebAuth
         Calls.Add($"stock:{accessToken}:{productId}");
         await Task.Yield(); // deixa chamadas concorrentes se intercalarem
         return Stock(accessToken, productId);
-    }
-
-    public Task<CwResult<IReadOnlyList<CwOrderSection>>> OrdersAsync(string accessToken, CwOrdersQuery query, CancellationToken ct)
-    {
-        Calls.Add($"orders:{query.Source}:{query.Status}:{query.Search}:{query.Page}:{query.PageSize}");
-        return Task.FromResult(Orders(accessToken, query));
-    }
-
-    public Task<CwResult<CwMarketplaceOrder>> MarketplaceOrderAsync(string accessToken, long orderId, CancellationToken ct)
-    {
-        Calls.Add($"marketplace-order:{orderId}");
-        return Task.FromResult(MarketplaceOrder(accessToken, orderId));
     }
 
     public Task<CwStatus> LogoutAsync(string accessToken, CancellationToken ct)
@@ -154,6 +168,25 @@ public sealed class PairingTests
     }
 
     [Fact]
+    public async Task Trocar_de_empresa_nao_derruba_o_refresh_e_bloqueia_chamadas_do_aparelho_na_outra_empresa()
+    {
+        _store.ActiveMemberships.Add((1, 20));
+        var paired = (await _auth.PairAsync(Code, null, null, Ct)).Session!;
+        var id = _store.Sessions.Keys.Single();
+
+        Assert.NotNull(await _auth.SwitchBusinessAsync(id, 1, 20, Ct));
+        // O aparelho segue pareado na empresa do QR (10), mesmo com a sessão na 20: o refresh não pode revogar.
+        Assert.NotNull((await _auth.RefreshAsync(paired.RefreshToken, Ct)).Session);
+        Assert.Null(_store.Sessions[id].Reason);
+
+        // E o token do aparelho não serve para a empresa 20.
+        _cw.Calls.Clear();
+        Assert.Equal(CwStatus.NotPaired, (await _link.CallAsync(id, 20, (a, c) => _cw.ProductStockAsync(a, 1, c), Ct)).Status);
+        Assert.DoesNotContain(_cw.Calls, c => c.StartsWith("stock:", StringComparison.Ordinal));
+        Assert.Equal(CwStatus.Ok, (await _link.CallAsync(id, 10, (a, c) => _cw.ProductStockAsync(a, 1, c), Ct)).Status);
+    }
+
+    [Fact]
     public async Task Refresh_confere_o_aparelho_no_comercialweb()
     {
         var refresh = (await _auth.PairAsync(Code, null, null, Ct)).Session!.RefreshToken;
@@ -204,8 +237,8 @@ public sealed class PairingTests
         _cw.Calls.Clear();
 
         var results = await Task.WhenAll(
-            _link.CallAsync(id, (a, c) => _cw.ProductStockAsync(a, 1, c), Ct),
-            _link.CallAsync(id, (a, c) => _cw.ProductStockAsync(a, 2, c), Ct));
+            _link.CallAsync(id, 10, (a, c) => _cw.ProductStockAsync(a, 1, c), Ct),
+            _link.CallAsync(id, 10, (a, c) => _cw.ProductStockAsync(a, 2, c), Ct));
 
         Assert.All(results, r => Assert.Equal(CwStatus.Ok, r.Status));
         Assert.Single(_cw.Calls, c => c.StartsWith("refresh:", StringComparison.Ordinal));
@@ -218,7 +251,7 @@ public sealed class PairingTests
         var id = _store.Sessions.Keys.Single();
         _cw.Stock = (_, _) => new(CwStatus.TokenExpired);
 
-        var result = await _link.CallAsync(id, (a, c) => _cw.ProductStockAsync(a, 1, c), Ct);
+        var result = await _link.CallAsync(id, 10, (a, c) => _cw.ProductStockAsync(a, 1, c), Ct);
 
         Assert.Equal(CwStatus.Rejected, result.Status);
     }
@@ -394,40 +427,6 @@ public sealed class ComercialWebAuthClientTests
         var (request, _) = Assert.Single(stub.Received);
         Assert.Equal("https://cw.test/api/mobile/v1/products/5/stock", request.RequestUri!.ToString());
         Assert.Equal("Bearer tok", request.Headers.Authorization!.ToString());
-    }
-
-    [Fact]
-    public async Task Pedidos_le_secoes_por_canal_com_filtros_na_query_e_paginacao_propria()
-    {
-        var stub = new Stub(() => Json(HttpStatusCode.OK, """
-            {"data":[{"channel":"store","failure":null,"meta":{"page":2,"per_page":20,"total":41,"last_page":3},
-              "items":[{"id":"77","number":"LV-77","customer":"Maria","total_cents":15990,"status":"Pago","payment":"Pix","delivery":null,
-                        "requires_attention":true,"created_at":"2026-09-29T10:00:00-03:00","updated_at":"2026-09-29T10:05:00-03:00"}]},
-             {"channel":"mercadolivre","failure":"Fonte indisponível","meta":null,"items":[]}]}
-            """));
-
-        var result = await Client(stub).OrdersAsync("tok", new CwOrdersQuery("all", "paid", "joão silva", 2, 20), Ct);
-
-        var (store, ml) = (result.Value![0], result.Value[1]);
-        Assert.Equal(new CwPageMeta(2, 20, 41, 3), store.Meta);
-        Assert.Equal(new CwOrderItem("77", "LV-77", "Maria", 15_990, "Pago", "Pix", null, true, "2026-09-29T10:00:00-03:00", "2026-09-29T10:05:00-03:00"), Assert.Single(store.Items));
-        Assert.Equal(("Fonte indisponível", null), (ml.Failure, ml.Meta));
-        Assert.Equal("https://cw.test/api/mobile/v1/orders?source=all&page=2&per_page=20&status=paid&search=jo%C3%A3o%20silva", Assert.Single(stub.Received).Request.RequestUri!.AbsoluteUri);
-    }
-
-    [Fact]
-    public async Task Pedido_de_marketplace_le_itens_e_datas()
-    {
-        var stub = new Stub(() => Json(HttpStatusCode.OK, """
-            {"data":{"id":9,"channel":"mercadolivre","external_order_id":"2000009","status":"Pago","external_status":"paid","total_cents":9990,
-                     "buyer_name":"João","placed_at":"2026-09-29T09:00:00-03:00",
-                     "items":[{"title":"Camiseta","seller_sku":null,"product_id":null,"quantity":2,"unit_price_cents":4995}]}}
-            """));
-
-        var order = (await Client(stub).MarketplaceOrderAsync("tok", 9, Ct)).Value!;
-
-        Assert.Equal(("mercadolivre", "2000009", 9_990), (order.Channel, order.ExternalOrderId, order.TotalCents));
-        Assert.Equal(new CwMarketplaceOrderItem("Camiseta", null, null, 2, 4_995), Assert.Single(order.Items));
     }
 
     [Fact]

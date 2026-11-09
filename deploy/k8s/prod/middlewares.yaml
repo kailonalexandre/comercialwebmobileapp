@@ -1,7 +1,6 @@
 # Rate limit da borda (decisão: a API não limita por conta própria; ver docs/ARCHITECTURE.md, "Borda").
 # Traefik v3 (K3s 1.31). `average` = requisições por `period`; `burst` = rajada tolerada.
-# IMPORTANTE: só vale por IP de cliente depois de cluster/traefik-real-ip.yaml (externalTrafficPolicy: Local);
-# sem ele o Traefik enxerga o IP de um pod e todo mundo divide o mesmo balde.
+# Por IP de cliente: o Traefik de prod já vê o IP real (hostPort, desde 21/10/2026; config no repositório do ComercialWeb).
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata: { name: mobile-rl-pair, namespace: comercial-prod }

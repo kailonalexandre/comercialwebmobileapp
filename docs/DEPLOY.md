@@ -1,12 +1,12 @@
 # Deploy da API do app (.NET)
 
-Estado e decisões (2026-09-30). **Nada aqui foi aplicado em servidor**: é o roteiro, com a ordem e o rollback de cada passo.
+Estado e decisões (2026-09-30, revisto em 2026-11-09). Dev no ar (CD automático). **Produção:** um comando no nó prod-01, `bash deploy/k8s/prod/instalar-prod.sh --verificar` e depois `bash deploy/k8s/prod/instalar-prod.sh <SHA da main>` (faz as seções 1 a 4 abaixo para prod, idempotente, nunca imprime senha). As seções seguem como referência do que o script faz.
 
 | | Produção (prod-01) | Dev |
 |---|---|---|
 | Plataforma | K3s 1.31, um nó, namespace `comercial-prod`, Traefik + cert-manager (`letsencrypt-prod`) | Docker Compose (`comercial-web-dev-*`) com Apache no host (80/443) |
 | Domínio da API | `api.infinitsolucoesweb.com.br` (DNS já aponta para `179.199.129.130`) | `api.dev.infinitsolucoesweb.com.br` (DNS já aponta para `72.60.14.161`) |
-| ComercialWeb | `https://comercial.infinitsolucoesweb.com.br` | `https://dev.infinitsolucoesweb.com.br` |
+| ComercialWeb | `https://infinitsolucoesweb.com.br` (`comercial.` redireciona para cá) | `https://dev.infinitsolucoesweb.com.br` |
 | MySQL | no host, `DB_HOST=10.8.0.1`, banco `comercial_web_prod`, porta 3306 | no host, `DB_HOST=172.16.0.1:3306`, banco `comercial_web_dev` |
 | Borda / rate limit | Traefik (`Middleware` em `deploy/k8s/prod/middlewares.yaml`) | nginx (`deploy/dev/nginx-mobile-api.conf`) |
 | Arquivos | `deploy/k8s/prod/`, `deploy/k8s/cluster/` | `deploy/dev/` |
@@ -16,7 +16,7 @@ Decisões de implantação: primeiro deploy com `kubectl apply` **manual**; a au
 Regras: **a API não limita requisições** (rate limit é da borda); **uma única réplica** (push e renovação de token são por instância); **segredos só no ambiente do servidor**, nunca no git; deploy e rollback **sempre pelo SHA completo** da imagem.
 
 ## 0. Antes de tudo
-1. **GHCR (decidido):** a imagem fica em `ghcr.io/kailonalexandre/comercialweb-mobile-api:<sha>`, publicada pelo workflow `backend-image.yml` com o `GITHUB_TOKEN` do próprio repositório. O cluster usa um pull secret **próprio**, `ghcr-pull-mobile` (nunca o `ghcr-pull` do ComercialWeb): token clássico com **só** `read:packages`, de uma conta com acesso ao pacote. Depois do primeiro push, em GitHub > Packages > `comercialweb-mobile-api` > Package settings, conferir que o pacote está ligado ao repositório (herda o acesso) e, se o pull falhar com `unauthorized`, dar acesso de leitura à conta do token. Criar o secret: comando em `deploy/k8s/prod/secret.example.yaml`. Em dev (Compose): `echo <TOKEN> | docker login ghcr.io -u kailonalexandre --password-stdin` com o usuário do deploy no host (vale só para esse usuário do Docker).
+1. **GHCR (decidido):** a imagem fica em `ghcr.io/kailonalexandre/comercialweb-mobile-api:<sha>`, publicada pelo workflow `backend-image.yml` com o `GITHUB_TOKEN` do próprio repositório. O pacote é **público** (pull anônimo conferido em 2026-11-09): o cluster não precisa de pull secret. Se um dia virar privado, criar um secret próprio (token só `read:packages`) e voltar `imagePullSecrets` no Deployment e no Job. Em dev (Compose): `echo <TOKEN> | docker login ghcr.io -u kailonalexandre --password-stdin` com o usuário do deploy no host (vale só para esse usuário do Docker).
 2. **Commit de referência:** a imagem de um PR só é construída (valida o Dockerfile); só `dev`/`main` publicam.
 
 ## 1. MySQL (prod e dev)
@@ -29,6 +29,8 @@ Regras: **a API não limita requisições** (rate limit é da borda); **uma úni
    GRANT INSERT, UPDATE, DELETE ON <BANCO>.mobile_refresh_tokens TO 'mobile_api'@'<ORIGEM>';
    GRANT INSERT, UPDATE, DELETE ON <BANCO>.mobile_push_tokens TO 'mobile_api'@'<ORIGEM>';
    GRANT INSERT ON <BANCO>.mobile_sale_origins TO 'mobile_api'@'<ORIGEM>';
+   GRANT INSERT, UPDATE, DELETE ON <BANCO>.mobile_push_mutes TO 'mobile_api'@'<ORIGEM>';
+   GRANT INSERT ON <BANCO>.mobile_audit_events TO 'mobile_api'@'<ORIGEM>';
    GRANT UPDATE (read_at, archived_at, updated_at) ON <BANCO>.notifications TO 'mobile_api'@'<ORIGEM>';
    ```
    As tabelas `mobile_*` precisam existir antes dos `GRANT` por tabela: rode o passo 3 primeiro com a conta de deploy (abaixo) e só então esses `GRANT`.
@@ -39,12 +41,12 @@ Regras: **a API não limita requisições** (rate limit é da borda); **uma úni
 Comandos e chaves em `deploy/k8s/prod/secret.example.yaml` (K3s) e no cabeçalho de `deploy/dev/compose.mobile-api.yaml` (Compose). São eles: conexão do MySQL (`mobile_api`), `ComercialWeb__MobileApiSecret` (**o mesmo valor** de `MOBILE_API_SECRET` no Laravel daquele ambiente, 32+ caracteres), chave EC P-256 do JWT, e a conexão da conta de deploy para o Job.
 
 ## 3. Migrations
-- **Prod:** `kubectl apply -f deploy/k8s/prod/migrate-job.yaml` (com o SHA no lugar de `MOBILE_API_IMAGE_TAG`) e `kubectl -n comercial-prod logs job/mobile-api-migrate`. Esperado: `applied 0001…0004` (ou nada, se já aplicadas). O Job só roda antes de trocar a imagem da API.
+- **Prod:** `kubectl apply -f deploy/k8s/prod/migrate-job.yaml` (com o SHA no lugar de `MOBILE_API_IMAGE_TAG`) e `kubectl -n comercial-prod logs job/mobile-api-migrate`. Esperado: `applied 0001…0007` (ou nada, se já aplicadas). O Job só roda antes de trocar a imagem da API.
 - **Dev:** `docker run --rm --env-file mobile-api.env -e ASPNETCORE_ENVIRONMENT=Production -e DataProtection__KeysPath=/tmp/dp -e Jwt__SigningKeyPath=/run/jwt.pem -v ./jwt.pem:/run/jwt.pem:ro ghcr.io/<dono>/comercialweb-mobile-api:<sha> migrate`.
 
 ## 4. Subir a API
 - **Prod (K3s):**
-  1. Pré-requisito do rate limit por IP: `kubectl apply -f deploy/k8s/cluster/traefik-real-ip.yaml` (ver o cabeçalho do arquivo; rollback: `kubectl delete -f`). Sem isso todos os clientes dividem o mesmo IP no Traefik.
+  1. IP real do cliente: **já resolvido** desde 21/10/2026 (hostPort no Traefik, config no repositório do ComercialWeb). Não mexer no Traefik por aqui.
   2. `sed` do SHA e `kubectl apply -k deploy/k8s/prod` (Deployment, Middlewares, IngressRoute e Certificate).
   3. `kubectl -n comercial-prod rollout status deploy/mobile-api` e `kubectl -n comercial-prod get certificate mobile-api-tls` (deve ficar `READY=True`).
 - **Dev (Compose):** `copiar deploy/dev/ para /root/Projetos/mobile-api/ (roteiro completo em DEPLOY_DEV.md)`, criar `mobile-api.env` e `jwt.pem` (chmod 600), `docker compose -p mobile-api-dev -f compose.mobile-api.yaml --env-file mobile-api.env up -d`; instalar o vhost (`apache-vhost.api-dev.conf`), `a2enmod proxy proxy_http headers`, `certbot --apache -d api.dev.infinitsolucoesweb.com.br`.
@@ -68,19 +70,18 @@ Setup único (você faz, o repositório não guarda nenhum segredo):
 
 ## 5. Conferir
 1. **Saúde:** `curl -s -o /dev/null -w "%{http_code}\n" https://<dominio-da-api>/health` → `200`.
-2. **IP do cliente (prod):** faça uma chamada de fora e veja, nos logs do `comercial-web`, se o último campo (`X-Forwarded-For`) agora é o **seu IP público** e não `10.42.x.x`: `kubectl -n comercial-prod logs deploy/comercial-web -c nginx --tail=3`. Se ainda aparecer `10.42.x.x`, o passo 4.1 não pegou: **não siga**.
+2. **IP do cliente (prod):** `ssh prod-ro logs traefik --tail 3` deve mostrar IPs públicos na primeira coluna (não `10.42.x.x`).
 3. **Rate limit:** `for i in $(seq 1 15); do curl -s -o /dev/null -w "%{http_code} " -X POST https://<dominio-da-api>/api/v1/auth/pair -H 'Content-Type: application/json' -d '{}'; done` → os primeiros `422` e depois `429`.
 4. **Pareamento ponta a ponta:** gere um QR no ComercialWeb do ambiente e pareie um aparelho com o app construído para aquele ambiente (seção 6).
 5. **Logs da API:** sem `ERROR`; 503 no pareamento significa segredo ou relógio divergente entre API e ComercialWeb.
 
 ## 6. App (Play Store)
-- Produção: `EXPO_PUBLIC_APP_ENV=vps EXPO_PUBLIC_API_URL=https://api.infinitsolucoesweb.com.br/api EXPO_PUBLIC_ALLOWED_SERVER_HOSTS=comercial.infinitsolucoesweb.com.br GOOGLE_SERVICES_JSON=./secrets/google-services.json npx eas-cli build --platform android --profile production` (AAB; a assinatura fica com o EAS). O pacote `br.com.infinitsolucoesweb.comercial` passa a ser definitivo depois da primeira publicação.
+- Produção: `EXPO_PUBLIC_APP_ENV=vps EXPO_PUBLIC_API_URL=https://api.infinitsolucoesweb.com.br/api EXPO_PUBLIC_ALLOWED_SERVER_HOSTS=infinitsolucoesweb.com.br,comercial.infinitsolucoesweb.com.br GOOGLE_SERVICES_JSON=./secrets/google-services.json npx eas-cli build --platform android --profile production` (AAB; a assinatura fica com o EAS). O pacote `br.com.infinitsolucoesweb.comercial` passa a ser definitivo depois da primeira publicação.
 - Testadores/dev: perfil `preview` (também flavor vps, nunca HTTP) com `EXPO_PUBLIC_API_URL=https://api.dev.infinitsolucoesweb.com.br/api` e `EXPO_PUBLIC_ALLOWED_SERVER_HOSTS=dev.infinitsolucoesweb.com.br`.
-- Push em produção: só depois de instalar a credencial (docs/PUSH_SETUP.md) e trocar `Push__Enabled` para `true`.
+- Push em produção: ligado (`Push__Enabled=true`), mesmo projeto EAS/Firebase do dev.
 
 ## 7. Rollback
-- **Imagem:** `kubectl -n comercial-prod set image deploy/mobile-api api=ghcr.io/<dono>/comercialweb-mobile-api:<sha anterior>` (Compose: trocar `MOBILE_API_IMAGE_TAG` e `up -d`). As migrations só **adicionam** (expand), então a imagem anterior continua funcionando.
-- **Traefik:** `kubectl delete -f deploy/k8s/cluster/traefik-real-ip.yaml`.
+- **Imagem:** `kubectl -n comercial-prod rollout undo deploy/mobile-api` ou `kubectl -n comercial-prod set image deploy/mobile-api api=ghcr.io/<dono>/comercialweb-mobile-api:<sha anterior>` (Compose: trocar `MOBILE_API_IMAGE_TAG` e `up -d`). As migrations só **adicionam** (expand), então a imagem anterior continua funcionando.
 - **Sessões:** perder o volume de chaves (`mobile-api-keys`) derruba todas as sessões pareadas (novo QR). Faça backup do PVC junto com o do nó.
 
 ## 8. Pendências conhecidas

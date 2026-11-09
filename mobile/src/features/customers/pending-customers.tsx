@@ -1,6 +1,6 @@
 import { Pressable, View } from 'react-native';
 
-import { discardEntry, retryEntry, syncQuickCustomers, useQuickCustomerQueue } from '@/features/customers/quick-customer-queue';
+import { discardEntry, inActiveBusiness, retryEntry, syncQuickCustomers, useQuickCustomerQueue } from '@/features/customers/quick-customer-queue';
 import { STATUS_LABEL, type QueueEntry } from '@/features/customers/quick-customer-model';
 import { StatusPill } from '@/shared/components/status-pill';
 import { Text } from '@/shared/components/text';
@@ -12,7 +12,7 @@ const tone = (e: QueueEntry) => (e.status === 'error' ? 'danger' : e.status === 
 // Cadastros rápidos feitos neste aparelho que ainda não foram confirmados (ou acabaram de ser).
 export function PendingCustomers() {
   const styles = useStyles();
-  const items = useQuickCustomerQueue().filter((e) => e.status !== 'synced');
+  const items = useQuickCustomerQueue().filter((e) => e.status !== 'synced' && inActiveBusiness(e));
   if (items.length === 0) return null;
   return (
     <View style={styles.box}>

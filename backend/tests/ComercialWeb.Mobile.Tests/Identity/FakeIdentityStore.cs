@@ -33,6 +33,7 @@ internal sealed class FakeIdentityStore : IIdentityStore
     public Task CreateSessionAsync(NewSession session, NewRefreshToken token, CancellationToken ct)
     {
         Sessions[session.Id] = (session, null, null);
+        LastUsed[session.Id] = session.CreatedAt;
         if (session.CwTokens is not null) CwTokens[session.Id] = session.CwTokens;
         Tokens[Convert.ToHexString(token.Hash)] = (token, null);
         return Task.CompletedTask;
@@ -43,7 +44,18 @@ internal sealed class FakeIdentityStore : IIdentityStore
         if (!Tokens.TryGetValue(Convert.ToHexString(hash), out var t)) return Task.FromResult<RefreshTokenState?>(null);
         var s = Sessions[t.Token.SessionId];
         return Task.FromResult<RefreshTokenState?>(new RefreshTokenState(
-            s.Session.Id, s.Session.UserId, s.Session.BusinessId, t.Token.ExpiresAt, t.UsedAt, s.Session.ExpiresAt, s.RevokedAt));
+            s.Session.Id, s.Session.UserId, s.Session.BusinessId, t.Token.ExpiresAt, t.UsedAt, s.Session.ExpiresAt, s.RevokedAt,
+            LastUsed[s.Session.Id], s.Session.Mode, s.Session.TerminalId));
+    }
+
+    public Dictionary<Guid, DateTimeOffset> LastUsed { get; } = [];
+
+    public List<AuditEvent> Audit { get; } = [];
+
+    public Task RecordAuditAsync(AuditEvent audit, CancellationToken ct)
+    {
+        Audit.Add(audit);
+        return Task.CompletedTask;
     }
 
     public Task<bool> RotateRefreshTokenAsync(byte[] usedHash, NewRefreshToken replacement, DateTimeOffset now, CancellationToken ct)
@@ -52,6 +64,7 @@ internal sealed class FakeIdentityStore : IIdentityStore
         if (Tokens[key].UsedAt is not null) return Task.FromResult(false);
         Tokens[key] = (Tokens[key].Token, now);
         Tokens[Convert.ToHexString(replacement.Hash)] = (replacement, null);
+        LastUsed[replacement.SessionId] = now;
         return Task.FromResult(true);
     }
 
@@ -80,5 +93,25 @@ internal sealed class FakeIdentityStore : IIdentityStore
         return Task.CompletedTask;
     }
 
-    public Task<Profile?> GetProfileAsync(long userId, long businessId, CancellationToken ct) => Task.FromResult<Profile?>(null);
+    public Task<Profile?> GetProfileAsync(long userId, long businessId, CancellationToken ct) => Task.FromResult<Profile?>(new Profile("Usuário", businessId, $"Empresa {businessId}"));
+
+    public Task<string?> GetLoginHintAsync(long userId, CancellationToken ct) => Task.FromResult<string?>($"usuario{userId}@a.com");
+
+    public Task<IReadOnlyList<BusinessRef>> ListBusinessesAsync(long userId, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<BusinessRef>>([.. ActiveMemberships.Where(m => m.UserId == userId).Select(m => new BusinessRef(m.BusinessId, $"Empresa {m.BusinessId}")).OrderBy(b => b.Name)]);
+
+    public Dictionary<Guid, long> PairedBusiness { get; } = [];
+
+    public Task<bool> SwitchBusinessAsync(Guid sessionId, long userId, long businessId, CancellationToken ct)
+    {
+        if (!Sessions.TryGetValue(sessionId, out var s) || s.RevokedAt is not null || s.Session.UserId != userId || s.Session.Mode == "shared"
+            || !ActiveMemberships.Contains((userId, businessId)))
+            return Task.FromResult(false);
+        PairedBusiness.TryAdd(sessionId, s.Session.BusinessId);
+        Sessions[sessionId] = (s.Session with { BusinessId = businessId }, s.RevokedAt, s.Reason);
+        return Task.FromResult(true);
+    }
+
+    public Task<long> GetPairedBusinessIdAsync(Guid sessionId, long current, CancellationToken ct) =>
+        Task.FromResult(PairedBusiness.TryGetValue(sessionId, out var b) ? b : current);
 }

@@ -15,8 +15,6 @@ spec:
     metadata:
       labels: { app.kubernetes.io/name: mobile-api }
     spec:
-      imagePullSecrets:
-        - name: ghcr-pull-mobile   # próprio da API (GHCR do kailonalexandre); não reutiliza o ghcr-pull do ComercialWeb
       securityContext:
         runAsNonRoot: true
         runAsUser: 1654
@@ -30,14 +28,14 @@ spec:
             - { name: http, containerPort: 8080 }
           env:
             - { name: ASPNETCORE_ENVIRONMENT, value: Production }
-            - { name: ComercialWeb__BaseUrl, value: "https://comercial.infinitsolucoesweb.com.br" }
+            - { name: ComercialWeb__BaseUrl, value: "https://infinitsolucoesweb.com.br" }
             - { name: ComercialWeb__TimeZone, value: America/Sao_Paulo }
             - { name: DataProtection__KeysPath, value: /keys/dp }
             - { name: Jwt__SigningKeyPath, value: /jwt/jwt.pem }
             # Rede de pods do K3s (a mesma do TRUSTED_PROXIES do ComercialWeb): só o Traefik pode informar o IP do cliente.
             - { name: ForwardedHeaders__KnownNetworks, value: "10.42.0.0/16" }
-            # Ligar (true) só depois de instalar a credencial FCM/Expo em produção (docs/PUSH_SETUP.md).
-            - { name: Push__Enabled, value: "false" }
+            # Mesmo projeto EAS/Firebase do dev (credencial FCM fica no EAS, nada no cluster).
+            - { name: Push__Enabled, value: "true" }
           envFrom:
             # Chaves: ConnectionStrings__ComercialWeb, ComercialWeb__MobileApiSecret. Ver secret.example.yaml.
             - secretRef: { name: mobile-api-env }

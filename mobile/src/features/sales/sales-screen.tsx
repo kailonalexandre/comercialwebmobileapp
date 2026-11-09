@@ -1,9 +1,10 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { useSession } from '@/features/auth/session-context';
 import { formatLocal } from '@/features/dashboard/dashboard-model';
+import { PendingSales } from '@/features/sales/pending-sales';
 import { fetchSales, type SaleStatusFilter } from '@/features/sales/sales-api';
 import { statusLabel, statusTone, type SaleListItem } from '@/features/sales/sales-model';
 import { ListScreen } from '@/features/shell/list-screen';
@@ -21,6 +22,7 @@ const FILTERS: { key: SaleStatusFilter; label: string }[] = [
   { key: 'finalizada', label: 'Finalizadas' },
   { key: 'pre_venda', label: 'Pré-vendas' },
   { key: 'devolucao', label: 'Devoluções' },
+  { key: 'condicional_aberto', label: 'Condicionais' },
 ];
 
 function SaleRow({ sale }: { sale: SaleListItem }) {
@@ -50,7 +52,16 @@ export function SalesScreen() {
   const styles = useStyles();
   const { colors } = useTheme();
   const { profile } = useSession();
-  const [filter, setFilter] = useState<SaleStatusFilter>('all');
+  // Atalhos (ex.: card de condicionais do Início) abrem a lista já filtrada.
+  const { status } = useLocalSearchParams<{ status?: string }>();
+  const [filter, setFilter] = useState<SaleStatusFilter>(FILTERS.some((f) => f.key === status) ? (status as SaleStatusFilter) : 'all');
+  // A aba Vendas continua montada: um atalho novo (outro `status`) troca o filtro durante a renderização.
+  const [seen, setSeen] = useState(status);
+  if (seen !== status) {
+    setSeen(status);
+    const next = FILTERS.find((f) => f.key === status);
+    if (next) setFilter(next.key);
+  }
   const fetchPage = useCallback((page: number, search: string) => fetchSales(page, search, filter), [filter]);
 
   return (
@@ -64,6 +75,7 @@ export function SalesScreen() {
       keyOf={(s) => String(s.id)}
       renderRow={(s) => <SaleRow sale={s} />}
       sectionOf={(s) => formatLocal(s.createdAt).slice(0, 10)}
+      header={<PendingSales />}
       filters={<ChipRow options={FILTERS} selected={filter} onSelect={setFilter} />}
       action={
         profile?.permissions.includes('sales.create') ? (

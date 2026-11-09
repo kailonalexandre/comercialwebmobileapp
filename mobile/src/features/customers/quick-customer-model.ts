@@ -101,5 +101,9 @@ export type QueueEntry = {
   error?: string;
   serverId?: number;
   incomplete?: boolean;
+  // Empresa ativa quando o cadastro foi feito: só sobe (e só aparece) nela.
+  businessId?: number;
+  // Conta do aparelho que cadastrou: só sobe na sessão dela.
+  accountId?: string;
   createdAt: string;
 };

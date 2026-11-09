@@ -61,6 +61,7 @@ GRANT INSERT, UPDATE, DELETE ON <banco>.mobile_push_tokens TO 'mobile_api'@'%';
 GRANT INSERT ON <banco>.mobile_sale_origins TO 'mobile_api'@'%';
 GRANT INSERT ON <banco>.mobile_schema_migrations TO 'mobile_api'@'%';       -- só para o comando migrate
 GRANT UPDATE (read_at, archived_at, updated_at) ON <banco>.notifications TO 'mobile_api'@'%';
+GRANT INSERT ON <banco>.mobile_audit_events TO 'mobile_api'@'%';           -- trilha do app (tabela do ComercialWeb)
 ```
 
   (`migrate` precisa de DDL em `mobile_*`; rode-o com uma conta de deploy separada, não com a da API em execução.)
@@ -107,10 +108,7 @@ Paginação, `PagedResult` e escape de LIKE ficam em `src/Common` (compartilhado
 
 ### Pedidos (Loja Virtual e marketplaces)
 
-- `GET /api/v1/orders?source=all|store|mercadolivre&status=&search=&page=&pageSize=` (`loja-virtual.access` **ou** `marketplaces.view`) e `GET /api/v1/orders/marketplace/{id}` (`marketplaces.view`).
-- É o Monitor de Pedidos da web: a API não tem regra própria, só repassa `GET /api/mobile/v1/orders` e `/orders/marketplace/{id}` com o token do aparelho (`DeviceLink.CallAsync`). Resposta `{sections: [{channel, failure, meta, items}]}`, uma seção por canal com paginação própria; `failure` preenchido = a fonte externa estava fora (o app mostra erro com "tentar de novo", não lista vazia).
-- Cada canal exige a própria permissão também na API (`source=store` → `loja-virtual.access`, `mercadolivre` → `marketplaces.view`, `all` → as duas): não confiamos que o ComercialWeb filtre as seções por permissão. Parâmetro inválido: 422 sem consultar o ComercialWeb. ComercialWeb fora: 503. Recusa dele na lista: 403; no detalhe: 404 (a permissão já foi conferida aqui).
-- App: aba de canais conforme as permissões do usuário (`/me/permissions` agora inclui as duas). Só pedido de marketplace tem detalhe; o da Loja Virtual ainda não existe na API do ComercialWeb.
+Removido em 2026-10-28 a pedido do usuário: o app não monitora Loja Virtual nem Mercado Livre. Saíram a aba, as telas, `GET /api/v1/orders*` e o cliente .NET de `/api/mobile/v1/orders*` (as rotas continuam existindo no ComercialWeb, sem uso pelo app).
 
 ### Desconto e comprovante (venda)
 
@@ -123,13 +121,14 @@ Paginação, `PagedResult` e escape de LIKE ficam em `src/Common` (compartilhado
 - `GET /api/v1/dashboard`: mesmos cards e consultas do `DashboardRepository` da web. Cada bloco só vem se o usuário tiver a permissão do card na web (senão `null`): vendas de hoje e condicionais abertos (`sales.view`), contas a receber (`financial.receivables.view`), estoque baixo (`inventory.view`), últimas 8 vendas (`sales.view`).
 - Escopo: **empresa inteira, todas as unidades** (como o dashboard da web; `BelongsToUnit` só preenche a unidade na criação, não filtra leitura). Excluídos fora.
 - "Hoje" no fuso da empresa (`ComercialWeb:TimeZone`, padrão `America/Sao_Paulo`, o `APP_TIMEZONE` da web), sobre `COALESCE(occurred_at, created_at)`.
+- **Visão e meta (2026-10-28):** `view` = `store` para quem tem `financial.receivables.view`, `seller` para os demais (o app mostra A receber + Ticket médio + Meta na loja; Ticket médio + Meta no vendedor). `salesGoal` exige `sales.view` (como a aba Gráficos da web). Loja = card "Meta do mês" da web (`salesGoalCents`: meta da empresa → soma das metas dos vendedores → `people.sales_goal` dos funcionários; vendido = finalizada + troca − devolução do mês até hoje). Vendedor = `GoalRepository::realizedByMonth` (finalizada sem frete − devolução, por `seller_person_id`) contra a meta dele no cadastro de Metas (ou `people.sales_goal`); vendedor do usuário = `business_user.default_seller_person_id` ou `employee_person_id`. Banco sem `sales_goals`/`people.sales_goal`: `salesGoal` null, sem 500.
 - Contas a receber vêm de `financial_lines` (tabela do model `FinancialTitle`): abertas, não agrupadas, `amount - paid`.
 - Estoque baixo: saldo negativo, ou mínimo > 0 (do produto; senão soma das variações) com saldo ≤ mínimo; só produtos ativos.
 - Emissão e validação do JWT usam o mesmo `TimeProvider` injetável (expiração 10 min, tolerância 30 s, testada ponta a ponta).
 
 ### Permissões do usuário para o app
 
-- `GET /api/v1/me/permissions` devolve, entre as permissões que o app usa (`products.view`, `people.view`, `sales.view`, `sales.create`, `financial.receivables.view`, `inventory.view`), as que o usuário tem **na empresa da sessão**, com a mesma decisão das rotas (`IPermissionChecker`). A lista vem das constantes que as próprias rotas exigem.
+- `GET /api/v1/me/permissions` devolve, entre as permissões que o app usa (`products.view`, `products.create`, `people.view`, `people.create`, `sales.view`, `sales.create`, `financial.receivables.view`, `inventory.view`), as que o usuário tem **na empresa da sessão**, com a mesma decisão das rotas (`IPermissionChecker`). A lista vem das constantes que as próprias rotas exigem.
 - Serve para o app esconder o que o usuário não pode usar. **Não é autorização**: cada rota confere no servidor.
 
 ### Módulo Notifications
@@ -182,6 +181,8 @@ App ──POST /api/v1/pre-sales (Idempotency-Key)──► API .NET ──POST 
 - Troca de empresa: endpoint dedicado; empresa ativa fica na sessão server-side, nunca no token enviado pelo cliente.
 - Rate limit e bloqueio progressivo no login. Mensagem de erro única (não revela se o e-mail existe).
 
+**Refresh e bloqueio (2026-10-28):** o par novo de um refresh é gravado na conta que o pediu mesmo se ela foi bloqueada no meio (inatividade, troca de usuário); antes ele era descartado, o token antigo já gasto ficava no aparelho e o próximo refresh virava "reuso" — o servidor revogava a sessão e o app voltava ao login ao ser reaberto. Falha de leitura do Keychain/Keystore não é mais tratada como "nenhuma conta" (a abertura tenta 3 vezes e nenhuma gravação do índice parte de uma leitura que falhou).
+
 No app: tokens em `expo-secure-store` com `WHEN_UNLOCKED_THIS_DEVICE_ONLY`; `android.allowBackup=false`; 401 força logout; retry automático desabilitado por padrão; `Idempotency-Key` em operações com efeito financeiro/estoque.
 
 ## Borda: rate limit e IP do cliente
@@ -209,7 +210,7 @@ No app: tokens em `expo-secure-store` com `WHEN_UNLOCKED_THIS_DEVICE_ONLY`; `and
 - **`X-Mobile-Client-Ip` fora da assinatura HMAC:** a assinatura cobre timestamp, método, caminho e corpo. Incluir o IP exige mudar o contrato do lado Laravel; hoje o risco é teórico (TLS entre os servidores, código de uso único).
 - **Bloqueio por versão:** o `minAppVersion` só é reavaliado no pareamento e a cada refresh. Com a tela "Atualização necessária" aberta o app não faz requisições; se o administrador baixar a versão mínima, o aparelho sai do bloqueio ao desconectar e parear de novo (ou ao instalar a atualização).
 - **Renovação do token do ComercialWeb:** serializada por sessão dentro de uma instância da API (`DeviceLink`); com várias instâncias seria preciso lock no banco (`GET_LOCK`).
-- **429 do ComercialWeb nos repasses** (`/stock`, `/orders`) chega ao app como 503, e o app repete GET com backoff; um `Retry-After` repassado seria melhor.
+- **429 do ComercialWeb nos repasses** (`/stock`) chega ao app como 503, e o app repete GET com backoff; um `Retry-After` repassado seria melhor.
 
 ## Threat model inicial
 
@@ -267,12 +268,19 @@ App ─POST /api/v1/pdv/quote|sales (Idempotency-Key)─► .NET ─POST /api/mo
 
 - **Preço e total são do servidor.** O app manda produto, quantidade inteira, cliente, observação e valores recebidos por forma; nunca preço nem total. A tela mostra o total da cotação (`/pdv/quote`), não o estimado.
 - **Caixa aberto do operador é obrigatório** (o app não abre caixa). Sem caixa: 422 `cash_register_closed` e o app orienta a abrir no ComercialWeb.
-- **Idempotência:** o `Idempotency-Key` vira `client_sale_uuid`. Reenvio devolve a venda já gravada (200) sem tocar em estoque, caixa ou financeiro, mesmo se o estoque acabou depois. Resultado incerto (rede, timeout, 5xx) trava o carrinho: só reenviar com a mesma chave ou descartar.
+- **Idempotência:** o `Idempotency-Key` vira `client_sale_uuid`. Reenvio devolve a venda já gravada (200) sem tocar em estoque, caixa ou financeiro, mesmo se o estoque acabou depois. Resultado incerto (rede, timeout, 5xx) não trava mais o carrinho: toda venda/pré-venda é gravada antes na fila local (`sales-queue.json` + cópia `.bak`, armazenamento privado) com a própria chave, e sobe sozinha (ao entrar, ao voltar ao primeiro plano e a cada 30 s com pendente). Estados Aguardando/Sincronizando/Sincronizado/Erro, listados em Vendas; recusa do servidor vira Erro (tentar de novo ou descartar). A fila não é apagada ao sair da conta e só sobe na empresa que a gravou. Sem conexão o PDV usa total estimado e a última lista de formas de pagamento; o ComercialWeb recalcula ao sincronizar. Clientes: cópia local dos ativos (`customers-cache.json`, baixada online a cada 6 h, apagada ao sair da conta) alimenta a escolha de cliente sem conexão. Produtos: cópia local por tabela de preço (`products-cache-<tabela>.json`, mesma regra de 6 h e de limpeza) alimenta a busca/leitor de código de barras e a troca de tabela sem conexão. Cliente cadastrado offline pode ser escolhido na venda: ela fica na fila até o cadastro subir e então passa a apontar para o id real (cadastro recusado deixa a venda em Erro). Venda em Erro pode ser editada (volta ao carrinho) ou descartada.
+- **Tela (2026-10-28):** produto entra com quantidade 1 e o campo ganha o foco; `[−] [n] [+]` e desconto `[%|R$]` lado a lado (o botão converte o valor como o `toggleDiscountMode` da web); lista do mais recente para o mais antigo (o pedido enviado mantém a ordem de lançamento); "Produtos" (com a contagem) e "Cobrar" no rodapé; recebimento num modal — os valores ficam no rascunho, então fechar não perde nada, e o envio tem trava contra toque duplo além da `Idempotency-Key`. Alterar preço unitário: só com `pdv.change-price` (a mesma permissão do PDV web). O app mostra o lápis só para quem tem; a API recusa `unitPriceCents` sem a permissão (403, sem chamar o ComercialWeb); o ComercialWeb (`MobilePdvSaleService::itemPrice` → `PdvSaleService::updateItem`) confere de novo, recalcula desconto e total sobre o preço novo e grava `pdv.price_changed` (venda, produto, de/para) em `mobile_audit_events`. Preço igual ao da tabela não é alteração.
 - **Formas liberadas na v1:** dinheiro, Pix, débito e crédito à vista (sem parcelamento). Lista vinda do ComercialWeb (`/pdv/payment-methods`, só as ativas da empresa).
 - **Recusas com código estável** (422): `cash_register_closed`, `payment_incomplete` (com `totalCents`/`remainingCents`), `payment_method_not_allowed`, `business_rule` (estoque, cliente bloqueado, limite). Erro estrutural do Laravel não vaza mensagem.
 - Permissão: `pdv.access`, conferida no .NET e de novo no ComercialWeb.
 - Código do lado Laravel: worktree `~/comercialWeb/comercial-web-mobile-bridge`, branch `feature/mobile-pdv-sales` (commit f59abdf2, sem push nem merge; a integração no ComercialWeb é decisão do usuário).
 - Pendente: parcelamento e cartão com operadora, abertura/fechamento de caixa e nota fiscal pelo app; emissão fiscal segue as regras da web (pode enfileirar NFC-e conforme a configuração da empresa).
+
+## Cadastro rápido de produto (app → .NET → ComercialWeb)
+- App: Produtos → Novo (só com `products.create`). Nome e preço de venda obrigatórios; custo, código de barras e SKU opcionais (SKU vazio vira o código sequencial). **Online apenas**, sem fila local; a `Idempotency-Key` muda a cada alteração do formulário, então repetir o mesmo envio (timeout) devolve o produto já criado. Preço trafega em centavos.
+- .NET: `POST /api/v1/products` (`products.create`) assina e repassa a `POST /api/mobile/v1/products/quick`; 201/200/422 são repassados, o resto vira 403/503. Reaproveita o `CustomerWebClient` (cliente HTTP assinado genérico).
+- ComercialWeb (branch `feature/mobile-quick-product`, sem merge): `MobileProductService` usa o `ProductWriter` (mesmas regras de SKU/código de barras/preço da web); idempotência por `products.mobile_client_uuid` (único por empresa). **Ordem de deploy:** migration do ComercialWeb antes da API .NET.
+- Fora do escopo por ora: unidade, categoria, foto, estoque inicial, variações e dados fiscais.
 
 ## Cadastro rápido de cliente (app → .NET → ComercialWeb)
 - App: Clientes → Novo. Só nome e telefone são obrigatórios; sem CPF/CNPJ o cliente nasce "incompleto". Fila local (`quick-customers.json`, armazenamento privado) com Idempotency-Key por item; estados Aguardando/Sincronizando/Sincronizado/Erro; reenvio ao entrar e ao voltar ao primeiro plano; a fila é apagada ao sair da conta. Antes de salvar (online) consulta duplicidade (documento, telefone, e-mail) sem bloquear, exceto mesmo CPF/CNPJ.
@@ -284,3 +292,82 @@ App ─POST /api/v1/pdv/quote|sales (Idempotency-Key)─► .NET ─POST /api/mo
 - Rotas de máquina novas: `price-tables`, `products/prices`; `price_mode` em `pre-sales` e `pdv/quote|sales` (grava `sales.price_mode`). .NET: `GET /price-tables`, `GET /products?priceTable=`, `GET /products/{id}` (traz `prices`), `POST /products/prices`, `priceTable` em pré-venda e PDV.
 - App: tabela escolhida persiste (SecureStore) e é a padrão de cada operação nova; cada rascunho tem a sua (`Draft.priceTable`), sempre visível. Trocar com itens no carrinho pergunta e recalcula pelo servidor; produto sem preço na nova tabela impede a troca. Cliente com escopo de comércio "atacado" sugere Atacado (a web não faz isso).
 - Divergência conhecida no ComercialWeb: o PDV web (`PdvSaleService::addItem`) usa `wholesale_price ?: sale_price` (sem o desconto global); pré-venda e `products/prices` usam o desconto global.
+
+## Gestão (somente leitura)
+
+Financeiro (contas a receber/pagar e resumo), Compras e Relatórios de vendas são consultas do .NET direto no banco do ComercialWeb (módulo `Management`), com as mesmas permissões e regras de situação/saldo da web e escopo da unidade atual (como a Consulta de Vendas). Nada é escrito: lançamentos, baixas e conferência de XML seguem no ComercialWeb. Offline não se aplica (sem escrita para enfileirar); sem conexão a tela mostra o erro com "Tentar novamente".
+
+## Troca de empresa
+
+O usuário com mais de uma empresa troca a ativa sem sair da conta (Início → nome da empresa, ou Configurações → Trocar empresa).
+
+- **API:** `POST /auth/switch-business` muda `mobile_sessions.business_id` (confere o vínculo ativo) e emite novo access token; o antigo morre na hora. A empresa do pareamento fica em `paired_business_id` (migration 0006): a revalidação do aparelho no ComercialWeb compara com ela, então trocar não derruba a sessão. O saldo depende do token do aparelho (da empresa do QR) e respondem 409 em outra empresa, em vez de misturar dados.
+- **App:** a empresa ativa é guardada (`infrastructure/business-scope.ts`) e a troca recria toda a árvore de telas (`businessEpoch`): rascunhos, listas e tabelas de preço em memória não sobrevivem. Tudo que fica no aparelho é por empresa: cópias de clientes, produtos e formas de pagamento (`*-b<id>.json`, apagadas ao sair da conta) e as filas de vendas e cadastros (`businessId` em cada item; só sobem e só aparecem na empresa que os gravou — voltar à empresa de origem envia o que ficou). Download em andamento durante a troca é descartado.
+- **Limite:** saldo por produto só na empresa do QR; para ver em outra, parear de novo com o QR dela.
+
+## Condicional
+
+Comercial → Novo condicional: monta a sacola (cliente obrigatório, sem desconto nem recebimento) e **só salva**; finalizar continua no ComercialWeb. Usa a mesma fila das vendas (`kind: 'conditional'` em `sale-queue`): grava no aparelho antes de enviar, reenvia sozinho e nunca duplica. `POST /api/v1/conditionals` (.NET) repassa à rota de máquina `POST /api/mobile/v1/conditionals` do ComercialWeb, que usa o `ConditionalDraftService` (cliente, vendedor e estoque como na tela). Salvar condicional baixa estoque, então a idempotência é pelo `client_uuid` (índice único por empresa) gravado na mesma transação da baixa: reenvio devolve o mesmo condicional sem mexer no estoque de novo. Cliente cadastrado offline pode ser usado: o condicional espera o cadastro subir, como as vendas.
+
+**Sacola na rua (baixa e fechamento).** Minhas sacolas (`/condicionais`, `/condicional/[id]`) lista os condicionais abertos do vendedor; por peça ele marca *vendida* ou *devolvida*. Decisões: baixa é por peça no próprio cliente do condicional (sem cliente por baixa); fechar e receber também no app, só formas imediatas (as mesmas do PDV do app). A baixa vai por uma fila própria (`bag-queue`, dois arquivos como a de vendas) com um uuid por baixa: offline o vendedor segue vendendo e a tela aplica a fila por cima do servidor (`withQueued`). No ComercialWeb a devolução reaproveita `ConditionalReconciliationService::save` (estoque + total) e o fechamento `ConditionalFinalizationService::finalize` (título, caixa e venda projetada); `sold_quantity` é a única coluna nova de estado, mais `conditional_movements` para idempotência. Fechar exige tudo baixado e a fila vazia (o total que o recebimento fecha é o do servidor) e precisa de conexão. Fora desta versão: tela da web mostrando "vendido x com o vendedor" (a web já mostra o devolvido pela conferência) e formas a prazo (crediário/boleto/cheque).
+
+
+
+## Várias contas no aparelho e biometria
+
+Vendedores, caixas etc. usam o mesmo app: cada um pareia o próprio QR e vira uma **conta guardada no aparelho** (`session-store.ts`: índice `cw.accounts` + tokens em `cw.session.<id>`, tudo no Keychain/Keystore; a sessão única de versões anteriores migra sozinha para a primeira conta). Ao abrir o app: sem conta, QR; uma conta sem biometria, abre direto (como antes); caso contrário a tela **Quem está usando?** (`/contas`, status `locked`). Depois do pareamento o app pergunta se a conta deve entrar com **digital/Face ID** (`expo-local-authentication`, só se o aparelho tem sensor e biometria cadastrada); com ela ativa, abrir a conta exige a biometria, com o PIN/padrão do celular como alternativa (padrão do sistema). Configurações: ativar/desativar biometria, **Trocar de usuário** (volta à escolha sem apagar nada), Desconectar (remove só a conta aberta). Trocar de usuário cancela o registro de push da conta que saiu. Filas offline (vendas, clientes, baixas de sacola) guardam o `accountId` de quem gravou e só sobem na sessão dele, mesmo na mesma empresa. Limites conhecidos: remover uma conta da tela de escolha apaga só o aparelho (a sessão no servidor expira sozinha); o app não bloqueia sozinho por inatividade; exige novo build nativo (módulo `expo-local-authentication`).
+
+## Aparelho vinculado e login individual (2026-10-15)
+
+Substitui aos poucos o QR antigo (que emprestava a sessão do usuário Web que gerou o código). Quatro coisas separadas:
+**empresa** (isolamento), **aparelho** (`mobile_terminals`, no ComercialWeb), **funcionário** (`users` + `business_user`) e
+**sessão** (`mobile_devices` no ComercialWeb + `mobile_sessions` aqui). Autoridade de identidade, credencial, bloqueio,
+permissão e aparelho: ComercialWeb. A API .NET continua a única porta do app.
+
+- **Vínculo (QR):** Configurações → Aplicativo Mobile → *Vincular aparelho* (modo pessoal/compartilhado, unidade, dono
+  opcional no pessoal; exige `mobile.devices.manage`). QR `comercialweb://bind?code=…&server=…`, uso único, 5 min
+  (`MOBILE_BINDING_TTL_SECONDS`). App → `POST /api/v1/terminal/bind {code, installationId, deviceName}` → .NET (HMAC) →
+  `POST /api/mobile/v1/terminals/bind`. Volta só o **segredo do aparelho** (60 caracteres, Keychain/Keystore no app, digest
+  SHA-256 no servidor), nunca sessão: sem login individual nenhum dado sai. Consumo do código é UPDATE condicional (dois
+  aparelhos com o mesmo QR: um vence). `installationId` (UUID gerado na instalação) tem um vínculo ativo: vincular de novo
+  derruba o anterior e as sessões dele. Quem gerou o QR precisa ainda ter a permissão no momento da leitura.
+- **Login no aparelho:** `POST /api/v1/auth/terminal-login {terminalId, terminalSecret, method, …}`:
+  `password` (e-mail ou usuário + senha; usuário é único por empresa, então a busca fica presa à empresa do aparelho),
+  `pin` (6 dígitos, **só aparelho compartilhado**, operador escolhido na lista de `POST /api/v1/terminal/state`) ou
+  `invite` (convite de uso único + nova senha ≥ 8). O ComercialWeb confere segredo do aparelho, credencial, usuário ativo,
+  vínculo ativo, `mobile.access` no perfil, acesso mobile não revogado e, no pessoal, o dono (primeiro login vira dono;
+  outro funcionário: 403 `terminal_assigned`). Respostas: 401 `invalid_credentials` (única para senha errada, usuário
+  inexistente, sem permissão ou desligado), 403 `terminal_revoked`/`terminal_assigned`, 429 `account_locked` + Retry-After.
+- **Bloqueio por erros:** 5 erros seguidos (senha ou PIN) por pessoa+empresa → 15 min bloqueado (`MOBILE_MAX_FAILED_ATTEMPTS`,
+  `MOBILE_LOCKOUT_MINUTES`); erro de PIN que bloqueia **apaga o PIN** (volta a senha). O PIN nunca vale sozinho: exige o
+  segredo do aparelho vinculado, rate limit por aparelho/IP e o bloqueio. Definir PIN (`PUT /api/v1/me/pin`) exige a senha
+  atual; sequências e repetições recusadas (`weak_pin`).
+- **Funcionário sem acesso Web:** *Novo funcionário só do app* cria um `users` comum pelo `SystemUserService` (perfil,
+  funcionário vinculado, vendedor padrão) com e-mail técnico `@mobile.invalid` e `mobile_accounts.mobile_only = 1`; o login
+  Web usa `AccountStatusService::canSignInToWeb`, que recusa essas contas (as rotas mobile seguem com `canAuthenticate`).
+  A conta aparece em Usuários; nenhuma pessoa é duplicada. Sai com convite.
+- **Recuperação de acesso:** só o administrador gera convite (`users.update`), nunca para dono, para si mesmo ou conta que
+  também é de outra empresa. Usar o convite troca a senha e derruba as outras sessões mobile da pessoa naquela empresa.
+- **Sessão:** JWT 10 min + refresh rotativo com detecção de reuso (já existente). Por modo (`Auth:Personal:*`,
+  `Auth:Shared:*`): pessoal 30 dias absolutos, 7 dias sem refresh = cai; compartilhado 12 h, 30 min sem refresh = cai. O
+  refresh nunca passa da expiração absoluta. Aparelho compartilhado não troca de empresa. Revogar aparelho, sessão ou acesso
+  no painel vale **na hora**: a validação de cada request (`IsSessionActiveAsync`) também recusa sessão cujo
+  `mobile_devices` foi revogado no ComercialWeb.
+- **App:** pessoal = desbloqueio local por biometria (item `cw.bio.<conta>` gravado com `requireAuthentication`: se as digitais/rosto do celular mudarem o sistema invalida o item e o app passa a pedir a senha) ou bloqueio do celular (só reabre tokens ainda válidos; expirado pede
+  senha), bloqueio após `idleLockSeconds` (300). Compartilhado = sem biometria; inatividade (120 s) ou *Trocar operador*
+  encerram a sessão no servidor e apagam os tokens; o cabeçalho mostra o operador. Conta do aparelho tem id fixo
+  `b<empresa>-u<usuário>`: filas offline (vendas, baixas, cadastros) só sobem na sessão de quem as gravou, também depois de
+  revincular. Revogado: tela *Acesso revogado*, tokens e cópias locais apagados, filas preservadas. Vincular/desvincular
+  recusa enquanto houver operação pendente (nada é descartado em silêncio).
+- **Offline:** o app só grava operação nova dentro de `offlineHours` (pessoal 72 h, compartilhado 12 h) desde a última
+  resposta do servidor. Cada envio da fila leva `Idempotency-Key` e `X-Client-Created-At`; a API registra
+  `sync.accepted`/`sync.rejected` com usuário, empresa e horário de criação. O servidor revalida sessão e permissão em cada
+  envio; recusa fica em Erro no app (corrigir ou descartar).
+- **Auditoria:** `mobile_audit_events` (ComercialWeb; a API só tem INSERT): vínculo/desvínculo, login ok/recusado,
+  bloqueio/desbloqueio, logout, PIN, convite, revogação, sessões encerradas, renovação, reuso de refresh, expiração,
+  troca de operador/empresa, sincronização. Nunca senha, PIN, token ou código. Últimos 50 no painel. Expurgo diário 03:30 (`mobile-audit-prune`): renovações após 30 dias, o resto após 365 (`MOBILE_AUDIT_REFRESH_DAYS`, `MOBILE_AUDIT_DAYS`).
+- **Migração:** 1) publicar ComercialWeb (migration `2026_10_15_000001`) e depois a API (migration `0007` + GRANT);
+  2) QR antigo segue (`MOBILE_LEGACY_PAIRING` / `Auth:LegacyPairing`, padrão ligado) e o painel mostra quantas sessões ainda
+  o usam; 3) vincular cada aparelho (o app remove as contas do QR antigo ao vincular, depois de sincronizar);
+  4) *Encerrar sessões do QR antigo*; 5) desligar as duas flags. Tokens antigos nunca viram credencial de aparelho e a
+  migração não concede permissão nova (cada login usa o perfil da própria pessoa).

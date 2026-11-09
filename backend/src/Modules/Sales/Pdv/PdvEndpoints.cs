@@ -8,7 +8,8 @@ using Microsoft.AspNetCore.Routing;
 
 namespace ComercialWeb.Mobile.Sales.Pdv;
 
-public sealed record PdvItemRequest(long ProductId, int Quantity, decimal? DiscountPercent = null, long? DiscountCents = null);
+// UnitPriceCents: preço digitado pelo operador (só com pdv.change-price). Ausente = preço da tabela, calculado no ComercialWeb.
+public sealed record PdvItemRequest(long ProductId, int Quantity, decimal? DiscountPercent = null, long? DiscountCents = null, long? UnitPriceCents = null);
 
 public sealed record PdvPaymentRequest(string? Method, long AmountCents);
 
@@ -29,6 +30,9 @@ public static class PdvEndpoints
     // Só para o app esconder o campo de desconto; o ComercialWeb confere de novo em cada venda.
     public const string DiscountPdv = "pdv.discount";
 
+    // Alterar o valor unitário (mesma permissão do PDV da web). Conferida aqui e de novo no ComercialWeb.
+    public const string ChangePrice = "pdv.change-price";
+
     public static IEndpointRouteBuilder MapPdvEndpoints(this IEndpointRouteBuilder app)
     {
         var pdv = app.MapGroup("/api/v1/pdv");
@@ -40,15 +44,17 @@ public static class PdvEndpoints
             return result.Value is { } methods ? Results.Ok(new { methods }) : Problem(result);
         }).RequirePermission(UsePdv);
 
-        pdv.MapPost("/quote", async (PdvQuoteRequest body, ClaimsPrincipal user, PdvClient client, CancellationToken ct) =>
+        pdv.MapPost("/quote", async (PdvQuoteRequest body, ClaimsPrincipal user, PdvClient client, IPermissionChecker permissions, CancellationToken ct) =>
         {
             if (!IsValid(body)) return Results.Problem(statusCode: StatusCodes.Status422UnprocessableEntity);
             var ids = SessionIds.From(user)!;
+            if (!await MayPrice(body, ids, permissions, ct)) return Results.Problem(statusCode: StatusCodes.Status403Forbidden);
             var result = await client.QuoteAsync(Order(ids, null, body, null), ct);
             return result.Value is { } quote ? Results.Ok(quote) : Problem(result);
         }).RequirePermission(UsePdv);
 
-        pdv.MapPost("/sales", async (PdvSaleRequest body, HttpContext http, ClaimsPrincipal user, PdvClient client, SaleOrigins origins, CancellationToken ct) =>
+        pdv.MapPost("/sales", async (PdvSaleRequest body, HttpContext http, ClaimsPrincipal user, PdvClient client, SaleOrigins origins, IPermissionChecker permissions,
+            CancellationToken ct) =>
         {
             // A chave nasce no app ao montar a venda e se repete em todo reenvio: vira client_sale_uuid no ComercialWeb.
             if (!Guid.TryParse(http.Request.Headers["Idempotency-Key"].ToString(), out var key) || key == Guid.Empty
@@ -56,6 +62,7 @@ public static class PdvEndpoints
                 return Results.Problem(statusCode: StatusCodes.Status422UnprocessableEntity);
 
             var ids = SessionIds.From(user)!;
+            if (!await MayPrice(body, ids, permissions, ct)) return Results.Problem(statusCode: StatusCodes.Status403Forbidden);
             var payments = body.Payments!.Select(p => new PdvPayment(p.Method!.Trim(), p.AmountCents)).ToList();
             var result = await client.SendSaleAsync(Order(ids, key, body, payments), ct);
             if (result.Value is { } created) await origins.RecordAsync(ids.BusinessId, created.SaleId, ct);
@@ -72,13 +79,18 @@ public static class PdvEndpoints
 
     private static PdvOrder Order(SessionIds ids, Guid? key, PdvQuoteRequest body, IReadOnlyList<PdvPayment>? payments) =>
         new(ids.UserId, ids.BusinessId, key, body.CustomerId, body.SellerPersonId, body.Observation?.Trim(),
-            [.. body.Items!.Select(i => new PdvItem(i.ProductId, i.Quantity, i.DiscountPercent, i.DiscountCents))], payments,
+            [.. body.Items!.Select(i => new PdvItem(i.ProductId, i.Quantity, i.DiscountPercent, i.DiscountCents, i.UnitPriceCents))], payments,
             body.SaleDiscountPercent, body.SaleDiscountCents, body.PriceTable);
+
+    // Preço digitado só passa com a permissão; sem nenhum, nada a conferir.
+    private static async Task<bool> MayPrice(PdvQuoteRequest body, SessionIds ids, IPermissionChecker permissions, CancellationToken ct) =>
+        body.Items!.All(i => i.UnitPriceCents is null) || await permissions.HasAsync(ids.UserId, ids.BusinessId, ChangePrice, ct);
 
     // Mesmos limites do FormRequest do ComercialWeb, para recusar aqui sem ida e volta.
     internal static bool IsValid(PdvQuoteRequest body) =>
         body.Items is { Count: >= 1 and <= 200 }
-        && body.Items.All(i => i.ProductId > 0 && i.Quantity is >= 1 and <= 99_999 && Discounts.IsValid(i.DiscountPercent, i.DiscountCents))
+        && body.Items.All(i => i.ProductId > 0 && i.Quantity is >= 1 and <= 99_999 && Discounts.IsValid(i.DiscountPercent, i.DiscountCents)
+            && i.UnitPriceCents is null or (>= 1 and <= 100_000_000))
         && Discounts.IsValid(body.SaleDiscountPercent, body.SaleDiscountCents)
         && (body.Observation?.Length ?? 0) <= 1000
         && PriceTables.IsValidKey(body.PriceTable);

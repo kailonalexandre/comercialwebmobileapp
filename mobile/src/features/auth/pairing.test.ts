@@ -9,7 +9,7 @@ const link = (server: string, c = code) => `comercialweb://pair?code=${c}&server
 test('QR válido devolve código e servidor normalizado (sem barra final)', () => {
   expect(parsePairingLink(link('https://app.exemplo.com.br/'), vps)).toEqual({
     ok: true,
-    link: { code, server: 'https://app.exemplo.com.br' },
+    link: { kind: 'pair', code, server: 'https://app.exemplo.com.br' },
   });
   expect(parsePairingLink(`  ${link('https://app.exemplo.com.br')}  `, vps)).toMatchObject({ ok: true });
 });
@@ -36,7 +36,14 @@ test('vps recusa http e host fora da lista com mensagem clara', () => {
 test('local aceita http de LAN com porta e recusa http público', () => {
   expect(parsePairingLink(link('http://192.168.0.10:8080'), local)).toEqual({
     ok: true,
-    link: { code, server: 'http://192.168.0.10:8080' },
+    link: { kind: 'pair', code, server: 'http://192.168.0.10:8080' },
   });
   expect(parsePairingLink(link('http://exemplo.com'), local)).toMatchObject({ ok: false });
+});
+
+test('reconhece o QR de vínculo do aparelho e o convite do funcionário', () => {
+  const server = encodeURIComponent('https://app.exemplo.com.br');
+  expect(parsePairingLink(`comercialweb://bind?code=${code}&server=${server}`, vps)).toMatchObject({ ok: true, link: { kind: 'bind', code } });
+  expect(parsePairingLink(`comercialweb://invite?code=${code}&server=${server}`, vps)).toMatchObject({ ok: true, link: { kind: 'invite', code } });
+  expect(parsePairingLink(`comercialweb://session?code=${code}&server=${server}`, vps)).toMatchObject({ ok: false });
 });

@@ -2,10 +2,8 @@ name: Backend image
 
 # Constrói a imagem da API em todo PR que mexe no backend (valida o Dockerfile, sem publicar) e publica no GHCR em dev/main.
 # Tags: SHA completo (o que o deploy usa) e o apelido móvel da branch. Deploy e rollback usam sempre o SHA.
+# Só depois do merge (push em dev/main): PR não roda CI, para poupar minutos do GitHub Actions.
 on:
-  pull_request:
-    branches: [main, dev]
-    paths: ["backend/**", ".github/workflows/backend-image.yml"]
   push:
     branches: [main, dev]
     paths: ["backend/**", ".github/workflows/backend-image.yml"]

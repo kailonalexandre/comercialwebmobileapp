@@ -46,6 +46,30 @@ export function NewSaleScreen() {
     );
   }
 
+  if (phase.name === 'queued') {
+    return (
+      <SafeAreaView edges={['top']} style={styles.root}>
+        <View style={styles.doneBlock}>
+          <View style={styles.doneIcon}>
+            <Icon name="cloud-offline-outline" size={40} color={colors.primary} />
+          </View>
+          <Text variant="title">Pré-venda guardada</Text>
+          <Text color="textMuted">Sem confirmação do servidor. A pré-venda está guardada neste aparelho e será enviada sozinha quando a conexão voltar, sem duplicar.</Text>
+          <Text variant="caption" color="textMuted">Acompanhe em Vendas, em “Aguardando sincronização”.</Text>
+          <Button label="Nova pré-venda" onPress={reset} />
+          <Button
+            label="Ver vendas"
+            variant="outline"
+            onPress={() => {
+              reset();
+              router.dismissTo('/vendas');
+            }}
+          />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
       <View style={styles.top}>
@@ -64,21 +88,9 @@ export function NewSaleScreen() {
           </Text>
         )}
 
-        {phase.name === 'uncertain' ? (
-          <View style={styles.card}>
-            <Text color="danger">
-              Não foi possível confirmar se a pré-venda foi criada. Reenvie: se ela já existir, não será duplicada.
-            </Text>
-            <Button label="Reenviar" onPress={send} />
-            <Button label="Descartar e começar de novo" variant="outline" onPress={reset} />
-            <Text variant="caption" color="textMuted">
-              Se descartar, confira em Vendas se a pré-venda anterior chegou a ser criada.
-            </Text>
-          </View>
-        ) : null}
       </ScrollView>
 
-      {phase.name !== 'uncertain' && (
+      {(
         <View style={[styles.footer, { paddingBottom: spacing.lg + insets.bottom }]}>
           <View style={styles.flex}>
             <Text variant="caption" color="textMuted">

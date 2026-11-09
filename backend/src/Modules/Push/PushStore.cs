@@ -54,7 +54,10 @@ public sealed class PushStore(MySqlDataSource db)
             """, new { utcNow }, cancellationToken: ct))).AsList();
     }
 
-    /// <summary>Mesmo escopo do sino: do usuário, da empresa da sessão ou sem empresa; não lidas e não arquivadas.</summary>
+    /// <summary>
+    /// Mesmo escopo do sino: do usuário, da empresa da sessão ou sem empresa; não lidas e não arquivadas. Loja virtual nunca
+    /// vira push (o app não acompanha a loja online): fica como silenciada para todos.
+    /// </summary>
     public async Task<IReadOnlyList<PendingNotification>> PendingAsync(ActiveToken t, int limit, DateTime? createdBefore, CancellationToken ct)
     {
         await using var conn = await db.OpenConnectionAsync(ct);
@@ -63,7 +66,8 @@ public sealed class PushStore(MySqlDataSource db)
             SELECT CAST(n.id AS SIGNED) AS Id, n.title AS Title, n.body AS Body, n.entity_type AS EntityType, CAST(n.entity_id AS SIGNED) AS EntityId,
                    (SELECT COUNT(*) FROM mobile_sale_origins o
                      WHERE n.entity_type = 'sale' AND o.sale_id = n.entity_id AND o.business_id = @BusinessId) AS AppOrigins,
-                   EXISTS (SELECT 1 FROM mobile_push_mutes m WHERE m.user_id = @UserId AND m.domain = n.domain) AS MutedDomain
+                   (n.domain = 'loja_virtual'
+                     OR EXISTS (SELECT 1 FROM mobile_push_mutes m WHERE m.user_id = @UserId AND m.domain = n.domain)) AS MutedDomain
             FROM notifications n
             WHERE n.user_id = @UserId AND (n.business_id = @BusinessId OR n.business_id IS NULL)
               AND n.id > @LastNotificationId AND n.read_at IS NULL AND n.archived_at IS NULL

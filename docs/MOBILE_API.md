@@ -136,6 +136,37 @@ Legenda: AUTH = `Bearer` (access token) salvo indicação. Todas as rotas autent
 - **PERMISSIONS:** `people.view`. **REQUEST:** `page`, `per_page`, `search`.
 - **RESPONSE:** lista paginada de `{ id, code, name, trade_name, document, phone, is_active }` (só clientes ativos).
 
+### GET /financial/summary, /financial/receivables, /financial/payables
+- **PERMISSIONS:** `financial.receivables.view` / `financial.payables.view` (o resumo traz só o lado permitido; o outro vem `null`).
+- **REQUEST (listas):** `status` (`open` = a vencer, `overdue` = vencidas, `paid` = baixadas; como os cartões da web), `search` (descrição, documento, cliente/fornecedor), `page`, `pageSize`.
+- **RESPONSE:** lista paginada de `{ id, description, document, personName, dueDate, amountCents, paidCents, openCents, status, overdue, installmentNumber, installmentCount }`; resumo: `{ receivablesOpen, receivablesOverdue, payablesOpen, payablesOverdue }` cada um `{ count, totalCents }`. Unidade atual do usuário (como a web), sem títulos excluídos nem agrupados em outro. Saldo = valor + juros + multa + acréscimo − desconto − recebido; pendente = `open` ou `partial`; "vencido" usa o hoje da empresa. `receivablesOpen`/`payablesOpen` = a vencer (hoje inclusive), separados dos vencidos, como o resumo da web.
+
+### GET /purchases
+- **PERMISSIONS:** `purchases.access`. **REQUEST:** `status` (`pendente|orcamento|recebido|cancelado`), `search` (número, chave da NF-e ou fornecedor), `page`, `pageSize`.
+- **RESPONSE:** lista paginada de `{ id, number, kind, status, supplierName, orderedAt, totalCents, isUrgent }` (mais recentes primeiro; unidade atual).
+
+### GET /reports/sales
+- **PERMISSIONS:** `relatorios.access`. **REQUEST:** `from`, `to` (`yyyy-MM-dd`, inclusive; padrão: últimos 30 dias até hoje da empresa; máximo 366 dias, senão 422).
+- **RESPONSE:** `{ from, to, count, totalCents, averageTicketCents, byDay: [{ day, count, totalCents }], byMethod: [{ method, count, totalCents }] }` (só vendas finalizadas da unidade atual, pela data local da venda).
+
+### GET /me/businesses, POST /auth/switch-business
+- **GET /me/businesses:** `{ businesses: [{ id, name }], currentBusinessId }` — empresas com vínculo ativo do usuário (mesmo critério do login).
+- **POST /auth/switch-business** `{ businessId }`: troca a empresa da sessão sem novo login. Só empresa com vínculo ativo (senão 403; id inválido 422). Resposta `{ accessToken, expiresAt, businessId, businessName }`: o token antigo (outra empresa) deixa de valer na hora; o refresh token da sessão continua o mesmo e já renova na empresa nova.
+- Rotas que usam o token do aparelho pareado no ComercialWeb (saldo `GET /products/{id}/stock` e pedidos `GET /orders*`) só valem na empresa do QR: depois da troca respondem **409** `company_not_paired` em vez de servir dados de outra empresa. O restante (vendas, clientes, produtos, financeiro etc.) acompanha a empresa ativa.
+
+### POST /conditionals
+- **PERMISSIONS:** `sales.access` (a mesma do Novo Condicional da web). Header `Idempotency-Key` (UUID gerado no app quando a sacola é montada) vira `client_uuid` no ComercialWeb.
+- **REQUEST:** `{ customerId (obrigatório), sellerPersonId?, observation?, priceTable?, items: [{ productId, quantity }] }`. Preço e total nunca são enviados.
+- **RESPONSE:** 201 salvo / 200 já existia (reenvio): `{ conditionalId, number, status, totalCents, priceMode, alreadyExisted }`. 403 sem permissão; 422 regra do condicional (cliente bloqueado ou consumidor final sem alçada, sem vendedor, estoque insuficiente) com `message` para o operador; 503 ComercialWeb fora do ar.
+- **Só salva** (o `save()` da web, que baixa o estoque); finalizar e receber continuam no ComercialWeb. Rota de máquina no ComercialWeb: `POST /api/mobile/v1/conditionals` (assinada), idempotente pelo índice único `(business_id, client_uuid)` gravado na mesma transação da baixa de estoque.
+
+### Sacola do vendedor (baixa e fechamento do condicional)
+O vendedor sai com o condicional aberto e dá baixa por peça pelo app; o ComercialWeb recebe na hora (o admin acompanha), a fila offline do app sobe sozinha quando voltar a conexão. Todas as rotas: `sales.access`, e o vendedor só enxerga condicionais que criou ou em que é o vendedor (senão 403).
+- `GET /conditionals/open` → `{ data: Bag[] }`. `GET /conditionals/{id}` → `Bag`. `Bag = { id, number, status, customerId, customerName, totalCents, createdAt, items: [{ id, productId, description, sku, unitPriceCents, quantity, sold, returned, pending }] }`. `pending` = o que ainda está com o vendedor.
+- `POST /conditionals/{id}/movements` `{ itemId, kind: "sold"|"returned", quantity }` + `Idempotency-Key` (uuid da baixa, gerado no app e repetido em todo reenvio) → `{ conditional: Bag, alreadyExisted }`. `returned` devolve ao estoque e recalcula o total (mesmo caminho da conferência da web); `sold` só marca a peça como vendida. 422 se a quantidade passa do que está com o vendedor.
+- `POST /conditionals/{id}/finalize` `{ payments: [{ method, amountCents }] }` → `{ conditional: Bag, alreadyExisted }`. Só fecha com tudo baixado (422 senão); a soma dos pagamentos tem que fechar com `totalCents`; lista vazia só se o total for zero (cliente devolveu tudo). Formas imediatas: `cash`, `pix_transfer`, `debit_card`, `credit_card`. Reenvio de um condicional já finalizado responde 200 `alreadyExisted`.
+- ComercialWeb: `POST /api/mobile/v1/conditionals/open|{id}|{id}/movements|{id}/finalize` (assinadas). Migration nova: `conditional_items.sold_quantity` e `conditional_movements` (índice único `(business_id, client_uuid)` = idempotência da baixa).
+
 ### GET /notifications
 - **PERMISSIONS:** `mobile.access`. **REQUEST:** `page`, `per_page`, `read` (`read|unread`).
 - **RESPONSE:** `{ data: [ { id, type, severity, title, body, read, created_at } ], meta, unread }`. É o mesmo armazenamento do sino do web (usuário + empresa do aparelho).
@@ -164,6 +195,24 @@ Regras:
 5. Cursor inválido (422): descarte-o e recomece do zero.
 
 ---
+
+### Aparelho vinculado (.NET → ComercialWeb, assinadas)
+
+Todas assinadas (HMAC, como `/pair`) com `X-Mobile-Client-Ip`. Recusa de negócio é 4xx com `error.code`, **nunca 401**
+(401 numa rota assinada = assinatura recusada).
+
+- `POST /terminals/bind {code, installation_id, device_name, platform, app_version}` → 201
+  `{terminal: {id, name, mode, business: {id, name}, assigned_user_id}, terminal_secret}`; 422 `invalid_binding_code`.
+- `POST /terminals/state {terminal_id, terminal_secret}` → `{terminal, operators: [{id, name, has_pin}]}`; 422 `terminal_revoked`.
+- `POST /terminals/login {terminal_id, terminal_secret, method: password|pin|invite, login, password, user_id, pin,
+  invite_code, new_password, platform, app_version}` → 201 (mesmo corpo do `/pair` + `user {id, name}` + `terminal`);
+  422 `invalid_credentials` | `terminal_revoked`, 403 `terminal_assigned`, 429 `account_locked` + Retry-After.
+- `PUT /me/pin {password, pin}` (Bearer do aparelho) → 204; 422 `invalid_credentials` | `weak_pin`.
+
+Na API do app: `POST /api/v1/terminal/bind`, `POST /api/v1/terminal/state`, `POST /api/v1/auth/terminal-login`
+(`{accessToken, refreshToken, expiresAt, minAppVersion, user, terminal, policy: {mode, idleLockSeconds, offlineHours,
+biometric}}`), `PUT /api/v1/me/pin`, `POST /api/v1/auth/logout {reason?: operator_switch|idle}`. Detalhes em
+ARCHITECTURE.md, "Aparelho vinculado e login individual".
 
 ## 6. Tempo real e push
 

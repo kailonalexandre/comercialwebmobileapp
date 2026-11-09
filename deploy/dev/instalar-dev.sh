@@ -149,6 +149,11 @@ if [ "$(sudo mysql -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE t
   sudo mysql -e "GRANT INSERT, UPDATE, DELETE ON $BANCO.mobile_push_mutes TO 'mobile_api'@'172.29.250.%';"
   ok "privilégio de mobile_push_mutes (preferências de aviso)"
 fi
+# Trilha do app (tabela criada pela migration do ComercialWeb 2026_10_15_000001): a API só insere, nunca altera nem apaga.
+if [ "$(sudo mysql -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$BANCO' AND table_name='mobile_audit_events'")" = 1 ]; then
+  sudo mysql -e "GRANT INSERT ON $BANCO.mobile_audit_events TO 'mobile_api'@'172.29.250.%';"
+  ok "privilégio de mobile_audit_events (auditoria)"
+fi
 
 # subir
 compose up -d

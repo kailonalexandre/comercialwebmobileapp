@@ -26,9 +26,11 @@ public sealed class DeviceLink(IIdentityStore store, IComercialWebAuth cw, IData
         if (!linked) return new(true); // sessão sem vínculo (login antigo)
         if (tokens is null) return new(false); // dado ilegível (chave de proteção trocada): sem como validar, revoga
         var result = await Call(sessionId, tokens, (a, c) => cw.BootstrapAsync(a, c), ct);
+        // O aparelho é da empresa do QR; trocar de empresa na sessão não muda onde ele foi pareado.
+        var pairedBusinessId = await store.GetPairedBusinessIdAsync(sessionId, businessId, ct);
         return result.Status switch
         {
-            CwStatus.Ok => new(result.Value!.UserId == userId && result.Value.BusinessId == businessId, result.Value.MinAppVersion),
+            CwStatus.Ok => new(result.Value!.UserId == userId && result.Value.BusinessId == pairedBusinessId, result.Value.MinAppVersion),
             CwStatus.Unavailable => new(true),
             _ => new(false),
         };
@@ -38,8 +40,10 @@ public sealed class DeviceLink(IIdentityStore store, IComercialWebAuth cw, IData
     /// Chamada ao ComercialWeb como o aparelho da sessão, renovando o token dele se expirou. Sessão sem vínculo
     /// (login antigo) ou dado ilegível: Unavailable, nunca um token inventado.
     /// </summary>
-    public async Task<CwResult<T>> CallAsync<T>(Guid sessionId, Func<string, CancellationToken, Task<CwResult<T>>> op, CancellationToken ct)
+    public async Task<CwResult<T>> CallAsync<T>(Guid sessionId, long businessId, Func<string, CancellationToken, Task<CwResult<T>>> op, CancellationToken ct)
     {
+        // O token do aparelho é da empresa do QR: depois de trocar de empresa ele serviria dados da outra. Recusa em vez de misturar.
+        if (await store.GetPairedBusinessIdAsync(sessionId, businessId, ct) != businessId) return new CwResult<T>(CwStatus.NotPaired);
         var (_, tokens) = await Load(sessionId, ct);
         return tokens is null ? new CwResult<T>(CwStatus.Unavailable) : await Call(sessionId, tokens, op, ct);
     }

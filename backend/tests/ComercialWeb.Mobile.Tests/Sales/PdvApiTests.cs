@@ -15,10 +15,11 @@ public sealed class PdvFixture : ApiFixture
 
     protected override Task SeedAsync() => Db.ExecuteAsync("""
         INSERT INTO businesses (id, name, status) VALUES (10, 'Empresa A', 'active');
-        INSERT INTO users (id, name, username, email, password) VALUES (1, 'Ana', 'ana', 'ana@a.com', @hash), (2, 'Bruno', 'bruno', 'bruno@a.com', @hash);
-        INSERT INTO business_user (business_id, user_id, status) VALUES (10, 1, 'active'), (10, 2, 'active');
-        INSERT INTO permissions (id, name, guard_name) VALUES (1, 'pdv.access', 'web');
-        INSERT INTO model_has_permissions (permission_id, model_type, model_id, business_id) VALUES (1, 'App\\Models\\User', 1, 10);
+        INSERT INTO users (id, name, username, email, password) VALUES (1, 'Ana', 'ana', 'ana@a.com', @hash), (2, 'Bruno', 'bruno', 'bruno@a.com', @hash), (3, 'Caio', 'caio', 'caio@a.com', @hash);
+        INSERT INTO business_user (business_id, user_id, status) VALUES (10, 1, 'active'), (10, 2, 'active'), (10, 3, 'active');
+        INSERT INTO permissions (id, name, guard_name) VALUES (1, 'pdv.access', 'web'), (2, 'pdv.change-price', 'web');
+        INSERT INTO model_has_permissions (permission_id, model_type, model_id, business_id) VALUES
+          (1, 'App\\Models\\User', 1, 10), (1, 'App\\Models\\User', 3, 10), (2, 'App\\Models\\User', 3, 10);
         """, new { hash = PasswordHash });
 
     protected override void ConfigureHost(IWebHostBuilder builder)
@@ -74,8 +75,8 @@ public sealed class PdvApiTests(PdvFixture api) : IClassFixture<PdvFixture>
         TestDatabase.RequireMySql();
         Reply(HttpStatusCode.Created, SaleReply);
         var key = Guid.NewGuid().ToString();
-        // O app tenta forjar usuário, empresa e preço: campos fora do contrato, ignorados.
-        var forged = new { userId = 999, businessId = 999, totalCents = 1, customerId = 7, items = new[] { new { productId = 100, quantity = 2, unitPriceCents = 1 } }, payments = new[] { new { method = "cash", amountCents = 3500L } } };
+        // O app tenta forjar usuário, empresa e total: campos fora do contrato, ignorados.
+        var forged = new { userId = 999, businessId = 999, totalCents = 1, customerId = 7, items = new[] { new { productId = 100, quantity = 2 } }, payments = new[] { new { method = "cash", amountCents = 3500L } } };
 
         var response = await Send("ana", HttpMethod.Post, "/api/v1/pdv/sales", forged, key);
 
@@ -277,5 +278,49 @@ public sealed class PdvDiscountApiTests(PdvFixture api) : IClassFixture<PdvFixtu
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(Ct);
         Assert.Equal(("discount_limit_exceeded", "Desconto acima do limite do cliente (5%)."), (body.GetProperty("code").GetString(), body.GetProperty("message").GetString()));
+    }
+}
+
+public sealed class PdvPriceChangeApiTests(PdvFixture api) : IClassFixture<PdvFixture>
+{
+    private static CancellationToken Ct => TestContext.Current.CancellationToken;
+
+    private static readonly object Priced = new
+    {
+        items = new[] { new { productId = 100, quantity = 2, unitPriceCents = 1200L } },
+        payments = new[] { new { method = "cash", amountCents = 2400L } },
+    };
+
+    private async Task<HttpResponseMessage> Post(string login, string path, object body, string? key = null)
+    {
+        api.ComercialWeb.Received.Clear();
+        api.ComercialWeb.Reply = () => key is null
+            ? FakeComercialWeb.Json(HttpStatusCode.OK, """{"success":true,"subtotal_cents":2400,"discount_cents":0,"total_cents":2400,"items":[]}""")
+            : FakeComercialWeb.Json(HttpStatusCode.Created, """{"success":true,"sale_id":78,"number":"V000078","status":"finalizada","total_cents":2400,"change_cents":0,"client_sale_uuid":"x","already_existed":false}""");
+        var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = JsonContent.Create(body) };
+        if (key is not null) request.Headers.Add("Idempotency-Key", key);
+        return await (await api.SignedInAsync(login)).SendAsync(request, Ct);
+    }
+
+    [Fact]
+    public async Task Sem_pdv_change_price_preco_digitado_e_403_sem_chamar_o_comercialweb()
+    {
+        TestDatabase.RequireMySql();
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post("ana", "/api/v1/pdv/quote", Priced)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Post("ana", "/api/v1/pdv/sales", Priced, Guid.NewGuid().ToString())).StatusCode);
+        Assert.Empty(api.ComercialWeb.Received);
+    }
+
+    [Fact]
+    public async Task Com_pdv_change_price_o_preco_vai_ao_comercialweb_que_recalcula()
+    {
+        TestDatabase.RequireMySql();
+        Assert.Equal(HttpStatusCode.OK, (await Post("caio", "/api/v1/pdv/quote", Priced)).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await Post("caio", "/api/v1/pdv/sales", Priced, Guid.NewGuid().ToString())).StatusCode);
+        using var json = JsonDocument.Parse(Assert.Single(api.ComercialWeb.Received).Body);
+        Assert.Equal(1200, json.RootElement.GetProperty("items")[0].GetProperty("unit_price_cents").GetInt64());
+
+        var zero = new { items = new[] { new { productId = 100, quantity = 1, unitPriceCents = 0L } } };
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await Post("caio", "/api/v1/pdv/quote", zero)).StatusCode);
     }
 }

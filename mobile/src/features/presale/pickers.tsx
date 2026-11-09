@@ -1,13 +1,15 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback } from 'react';
 
+import { inActiveBusiness, useQuickCustomerQueue } from '@/features/customers/quick-customer-queue';
 import { fetchCustomers } from '@/features/customers/customers-api';
+import { NewCustomerButton } from '@/features/customers/customers-screen';
 import { fetchProducts } from '@/features/catalog/products-api';
 import { suggestedTable } from '@/features/pricing/price-table-model';
 import { usePriceTables } from '@/features/pricing/price-tables';
+import { useConditionalDraft } from '@/features/conditional/conditional-draft';
 import { usePdvDraft } from '@/features/pdv/pdv-draft';
 import { usePreSaleDraft } from '@/features/presale/presale-draft';
-import { addItem } from '@/features/presale/draft-model';
 import { ListScreen } from '@/features/shell/list-screen';
 import { Button } from '@/shared/components/button';
 import { ListRow } from '@/shared/components/list-row';
@@ -15,16 +17,17 @@ import { StatusPill } from '@/shared/components/status-pill';
 import { Text } from '@/shared/components/text';
 import { formatCents } from '@/shared/utils/format';
 
-// Os seletores servem à pré-venda e ao PDV: o parâmetro `mode` diz qual rascunho recebe a escolha.
+// Os seletores servem à pré-venda, ao PDV e ao condicional: o parâmetro `mode` diz qual rascunho recebe a escolha.
 function useTargetDraft() {
   const { mode } = useLocalSearchParams<{ mode?: string }>();
   const presale = usePreSaleDraft();
   const pdv = usePdvDraft();
-  return mode === 'pdv' ? pdv : presale;
+  const conditional = useConditionalDraft();
+  return mode === 'pdv' ? pdv : mode === 'conditional' ? conditional : presale;
 }
 
 export function PickProductScreen() {
-  const { draft, setDraft } = useTargetDraft();
+  const { draft, add } = useTargetDraft();
   const { label } = usePriceTables();
   // Preços da tabela da operação, já na busca.
   const fetchPage = useCallback((page: number, search: string) => fetchProducts(page, search, draft.priceTable), [draft.priceTable]);
@@ -45,8 +48,7 @@ export function PickProductScreen() {
           trailing={<Text variant="label" color={p.priceCents === null ? 'textMuted' : 'text'}>{p.priceCents === null ? 'Sem preço' : formatCents(p.priceCents)}</Text>}
           // Produto sem preço na tabela da operação não entra: o ComercialWeb não teria o que cobrar.
           onPress={p.priceCents === null ? undefined : () => {
-            const unitPriceCents = p.priceCents as number;
-            setDraft((d) => ({ ...d, items: addItem(d.items, { productId: p.id, name: p.name, unitPriceCents }) }));
+            add({ productId: p.id, name: p.name, unitPriceCents: p.priceCents as number });
             router.back();
           }}
         />
@@ -56,9 +58,11 @@ export function PickProductScreen() {
 }
 
 export function PickCustomerScreen() {
+  const { mode } = useLocalSearchParams<{ mode?: string }>();
   const { setDraft } = useTargetDraft();
   const { tables } = usePriceTables();
-  const choose = (customer: { id: number; name: string } | null, tradeScope?: string | null) => {
+  const waiting = useQuickCustomerQueue().filter((e) => (e.status === 'pending' || e.status === 'syncing') && inActiveBusiness(e));
+  const choose = (customer: { id: number; name: string; pendingId?: string } | null, tradeScope?: string | null) => {
     // Cliente só de atacado abre a venda em Atacado (visível e editável na tela). Com itens já lançados, nada muda sozinho.
     const suggested = suggestedTable(tradeScope, tables);
     setDraft((d) => ({ ...d, customer, priceTable: suggested && d.items.length === 0 ? suggested : d.priceTable }));
@@ -67,12 +71,22 @@ export function PickCustomerScreen() {
   return (
     <ListScreen
       title="Cliente"
+      // Cliente novo volta para esta lista como "aguardando sincronização" e já pode ser escolhido.
+      action={<NewCustomerButton />}
       searchPlaceholder="Nome, documento ou telefone"
       emptyMessage="Nenhum cliente encontrado."
       fetchPage={fetchCustomers}
       keyOf={(c) => String(c.id)}
       onBack={() => router.back()}
-      filters={<Button label="Consumidor final (sem cliente)" variant="outline" onPress={() => choose(null)} />}
+      filters={
+        <>
+          {mode !== 'conditional' && <Button label="Consumidor final (sem cliente)" variant="outline" onPress={() => choose(null)} />}
+          {waiting.map((e) => (
+            // Cadastro feito sem conexão: a venda fica guardada e sobe depois que o cliente for criado.
+            <ListRow key={e.id} title={e.input.name} lines={['Cadastro aguardando sincronização']} onPress={() => choose({ id: 0, name: e.input.name, pendingId: e.id })} trailing={<StatusPill label="Pendente" tone="primary" />} />
+          ))}
+        </>
+      }
       renderRow={(c) => (
         <ListRow
           title={c.name}

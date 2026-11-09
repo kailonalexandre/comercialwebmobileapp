@@ -25,6 +25,8 @@ export const lightColors = {
   // Superfícies translúcidas sobre o gradiente roxo.
   overlay: 'rgba(255,255,255,0.12)',
   overlayBorder: 'rgba(255,255,255,0.22)',
+  // Fundo escurecido atrás de modais.
+  scrim: 'rgba(0,0,0,0.4)',
 
   success: '#1F8A4C',
   successSoft: '#E3F5EA',
@@ -62,6 +64,7 @@ export const darkColors: Colors = {
 
   overlay: 'rgba(255,255,255,0.12)',
   overlayBorder: 'rgba(255,255,255,0.22)',
+  scrim: 'rgba(0,0,0,0.6)',
 
   success: '#4ADE80',
   successSoft: '#142B1D',
