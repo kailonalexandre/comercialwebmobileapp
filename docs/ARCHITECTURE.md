@@ -349,7 +349,7 @@ permissão e aparelho: ComercialWeb. A API .NET continua a única porta do app.
 - **Recuperação de acesso:** só o administrador gera convite (`users.update`), nunca para dono, para si mesmo ou conta que
   também é de outra empresa. Usar o convite troca a senha e derruba as outras sessões mobile da pessoa naquela empresa.
 - **Sessão:** JWT 10 min + refresh rotativo com detecção de reuso (já existente). Por modo (`Auth:Personal:*`,
-  `Auth:Shared:*`): pessoal 30 dias absolutos, 7 dias sem refresh = cai; compartilhado 12 h, 30 min sem refresh = cai. O
+  `Auth:Shared:*`): pessoal 180 dias absolutos, 30 dias sem refresh = cai (decisão 2026-11-09: só biometria no dia a dia; a sessão do ComercialWeb renova 60 dias a cada uso, então não cai antes); compartilhado 12 h, 30 min sem refresh = cai. O
   refresh nunca passa da expiração absoluta. Aparelho compartilhado não troca de empresa. Revogar aparelho, sessão ou acesso
   no painel vale **na hora**: a validação de cada request (`IsSessionActiveAsync`) também recusa sessão cujo
   `mobile_devices` foi revogado no ComercialWeb.

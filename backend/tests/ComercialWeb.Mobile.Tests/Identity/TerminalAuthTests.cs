@@ -63,18 +63,30 @@ public sealed class TerminalAuthTests
     }
 
     [Fact]
-    public async Task Sessao_pessoal_renova_dentro_da_inatividade_e_nunca_passa_de_30_dias()
+    public async Task Sessao_pessoal_renova_dentro_da_inatividade_e_nunca_passa_de_180_dias()
     {
         _cw.Login = _ => new(CwStatus.Ok, new CwLogin(new CwTokens("a", "r"), "3f2b8c1e-0000-4000-8000-000000000003", 1, "Ana",
             FakeComercialWebAuth.SharedTerminal with { Mode = "personal" }));
         var token = (await _auth.TerminalLoginAsync(Terminal, Pin, null, DeviceInfo.Unknown, Ct)).Session!.RefreshToken;
 
-        for (var day = 0; day < 29; day++)
+        // Uso a cada 29 dias (dentro dos 30 de inatividade) mantém a sessão; o teto absoluto continua 180 dias.
+        for (var day = 29; day < 180; day += 29)
         {
-            _clock.Now += TimeSpan.FromDays(1);
+            _clock.Now += TimeSpan.FromDays(29);
             token = (await _auth.RefreshAsync(token, Ct)).Session!.RefreshToken;
         }
-        _clock.Now += TimeSpan.FromDays(1) + TimeSpan.FromSeconds(1);
+        _clock.Now += TimeSpan.FromDays(180 - 174) + TimeSpan.FromSeconds(1);
+
+        Assert.Equal(AuthFailure.InvalidToken, (await _auth.RefreshAsync(token, Ct)).Failure);
+    }
+
+    [Fact]
+    public async Task Sessao_pessoal_parada_mais_de_30_dias_pede_a_senha()
+    {
+        _cw.Login = _ => new(CwStatus.Ok, new CwLogin(new CwTokens("a", "r"), "3f2b8c1e-0000-4000-8000-000000000004", 1, "Ana",
+            FakeComercialWebAuth.SharedTerminal with { Mode = "personal" }));
+        var token = (await _auth.TerminalLoginAsync(Terminal, Pin, null, DeviceInfo.Unknown, Ct)).Session!.RefreshToken;
+        _clock.Now += TimeSpan.FromDays(30) + TimeSpan.FromSeconds(1);
 
         Assert.Equal(AuthFailure.InvalidToken, (await _auth.RefreshAsync(token, Ct)).Failure);
     }
@@ -193,6 +205,10 @@ public sealed class TerminalApiTests(TerminalFixture api) : IClassFixture<Termin
         Assert.Equal(1, login.User.Id);
         Assert.Equal("ana@a.com", login.User.Login);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/v1/me", Ct)).StatusCode);
+        // A sessão do aparelho renova: terminal_id é CHAR(36) e o MySqlConnector o lê como Guid (antes: 500 em todo refresh,
+        // e o app pedia a senha a cada 10 min).
+        var refreshed = await api.Anonymous().PostAsJsonAsync("/api/v1/auth/refresh", new { refreshToken = login.RefreshToken }, Ct);
+        Assert.Equal(HttpStatusCode.OK, refreshed.StatusCode);
         // Aparelho compartilhado não troca de empresa.
         Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/v1/auth/switch-business", new { businessId = 20 }, Ct)).StatusCode);
     }

@@ -88,7 +88,7 @@ public sealed class MySqlIdentityStore(MySqlDataSource db) : IIdentityStore
             new { hash }, cancellationToken: ct));
         return row is null ? null : new RefreshTokenState(
             row.SessionId, row.UserId, row.BusinessId, Utc(row.TokenExpiresAt), UtcOrNull(row.UsedAt), Utc(row.SessionExpiresAt), UtcOrNull(row.RevokedAt),
-            Utc(row.LastUsedAt), row.Mode, row.TerminalId);
+            Utc(row.LastUsedAt), row.Mode, row.TerminalId?.ToString());
     }
 
     public async Task<bool> RotateRefreshTokenAsync(byte[] usedHash, NewRefreshToken replacement, DateTimeOffset now, CancellationToken ct)
@@ -228,6 +228,7 @@ public sealed class MySqlIdentityStore(MySqlDataSource db) : IIdentityStore
         public DateTime? RevokedAt { get; set; }
         public DateTime LastUsedAt { get; set; }
         public string? Mode { get; set; }
-        public string? TerminalId { get; set; }
+        // CHAR(36): o MySqlConnector entrega Guid (como em id/session_id); string aqui quebrava todo refresh com 500.
+        public Guid? TerminalId { get; set; }
     }
 }

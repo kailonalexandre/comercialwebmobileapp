@@ -24,8 +24,8 @@ public sealed record SessionPolicy(string Mode, TimeSpan Lifetime, TimeSpan Idle
             Value(config, "Auth:Shared:IdleLockSeconds", 120),
             Value(config, "Auth:Shared:OfflineHours", 12))
         : new(Personal,
-            TimeSpan.FromDays(Value(config, "Auth:Personal:SessionDays", 30)),
-            TimeSpan.FromDays(Value(config, "Auth:Personal:IdleDays", 7)),
+            TimeSpan.FromDays(Value(config, "Auth:Personal:SessionDays", 180)),
+            TimeSpan.FromDays(Value(config, "Auth:Personal:IdleDays", 30)),
             Value(config, "Auth:Personal:IdleLockSeconds", 300),
             Value(config, "Auth:Personal:OfflineHours", 72));
 
