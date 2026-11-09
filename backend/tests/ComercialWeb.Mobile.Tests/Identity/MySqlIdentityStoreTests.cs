@@ -44,6 +44,21 @@ public sealed class MySqlIdentityStoreTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Refresh_de_sessao_de_aparelho_le_o_terminal_e_o_modo()
+    {
+        RequireMySql();
+        var id = Guid.NewGuid();
+        var (_, hash) = TokenIssuer.NewRefreshToken();
+        const string terminal = "0a790907-9404-469d-a163-272d2f10fb62";
+        await Store.CreateSessionAsync(new NewSession(id, 1, 10, "Galaxy", Now, Now.AddDays(180), TerminalId: terminal, Mode: "personal"),
+            new NewRefreshToken(hash, id, Now, Now.AddDays(180)), Ct);
+
+        var state = await Store.FindRefreshTokenAsync(hash, Ct);
+
+        Assert.Equal((id, terminal, "personal"), (state!.SessionId, state.TerminalId, state.Mode));
+    }
+
+    [Fact]
     public async Task Encontra_usuario_ativo_por_email_ou_username_e_ignora_desativado_e_excluido()
     {
         RequireMySql();

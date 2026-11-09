@@ -193,6 +193,10 @@ public sealed class TerminalApiTests(TerminalFixture api) : IClassFixture<Termin
         Assert.Equal(1, login.User.Id);
         Assert.Equal("ana@a.com", login.User.Login);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/v1/me", Ct)).StatusCode);
+        // A sessão do aparelho renova: terminal_id é CHAR(36) e o MySqlConnector o lê como Guid (antes: 500 em todo refresh,
+        // e o app pedia a senha a cada 10 min).
+        var refreshed = await api.Anonymous().PostAsJsonAsync("/api/v1/auth/refresh", new { refreshToken = login.RefreshToken }, Ct);
+        Assert.Equal(HttpStatusCode.OK, refreshed.StatusCode);
         // Aparelho compartilhado não troca de empresa.
         Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/v1/auth/switch-business", new { businessId = 20 }, Ct)).StatusCode);
     }
