@@ -95,6 +95,8 @@ internal sealed class FakeIdentityStore : IIdentityStore
 
     public Task<Profile?> GetProfileAsync(long userId, long businessId, CancellationToken ct) => Task.FromResult<Profile?>(new Profile("Usuário", businessId, $"Empresa {businessId}"));
 
+    public Task<string?> GetLoginHintAsync(long userId, CancellationToken ct) => Task.FromResult<string?>($"usuario{userId}@a.com");
+
     public Task<IReadOnlyList<BusinessRef>> ListBusinessesAsync(long userId, CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<BusinessRef>>([.. ActiveMemberships.Where(m => m.UserId == userId).Select(m => new BusinessRef(m.BusinessId, $"Empresa {m.BusinessId}")).OrderBy(b => b.Name)]);
 

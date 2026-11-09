@@ -152,7 +152,7 @@ public sealed class TerminalApiTests(TerminalFixture api) : IClassFixture<Termin
 
     private sealed record LoginDto(string AccessToken, string RefreshToken, PolicyDto Policy, UserDto User);
     private sealed record PolicyDto(string Mode, int IdleLockSeconds, int OfflineHours, bool Biometric);
-    private sealed record UserDto(long Id, string Name);
+    private sealed record UserDto(long Id, string Name, string? Login);
     private sealed record CodeDto(string Code);
 
     [Fact]
@@ -191,6 +191,7 @@ public sealed class TerminalApiTests(TerminalFixture api) : IClassFixture<Termin
 
         Assert.Equal(("shared", 120, false), (login.Policy.Mode, login.Policy.IdleLockSeconds, login.Policy.Biometric));
         Assert.Equal(1, login.User.Id);
+        Assert.Equal("ana@a.com", login.User.Login);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/v1/me", Ct)).StatusCode);
         // Aparelho compartilhado não troca de empresa.
         Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/v1/auth/switch-business", new { businessId = 20 }, Ct)).StatusCode);

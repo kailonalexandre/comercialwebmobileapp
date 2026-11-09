@@ -60,6 +60,9 @@ public interface IIdentityStore
 
     Task<Profile?> GetProfileAsync(long userId, long businessId, CancellationToken ct);
 
+    /// <summary>Login para pré-preencher a tela de senha no aparelho: o e-mail, ou o usuário se a conta é só app (e-mail fictício).</summary>
+    Task<string?> GetLoginHintAsync(long userId, CancellationToken ct);
+
     /// <summary>Empresas com vínculo ativo do usuário (mesmo critério do login), por nome.</summary>
     Task<IReadOnlyList<BusinessRef>> ListBusinessesAsync(long userId, CancellationToken ct);
 

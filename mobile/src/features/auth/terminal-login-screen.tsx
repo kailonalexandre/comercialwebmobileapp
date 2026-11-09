@@ -7,6 +7,7 @@ import { deviceSecured } from '@/features/auth/biometric';
 import { parsePairingLink } from '@/features/auth/pairing';
 import { PendingOperationsError, useSession } from '@/features/auth/session-context';
 import { ApiError } from '@/infrastructure/api/client';
+import { loadLastLogin } from '@/infrastructure/security/terminal-store';
 import { appEnv } from '@/infrastructure/config';
 import { BrandMark } from '@/shared/components/brand-mark';
 import { Button } from '@/shared/components/button';
@@ -55,6 +56,9 @@ export function TerminalLoginScreen() {
 
   const reload = useCallback(() => void checkTerminal().then(setOperators), [checkTerminal]);
   useEffect(reload, [reload]);
+  useEffect(() => {
+    void loadLastLogin().then((saved) => saved && setUserLogin((typed) => typed || saved), () => undefined);
+  }, []);
 
   const tryUnlock = useCallback(async () => {
     if (!owner) return;
@@ -162,8 +166,8 @@ export function TerminalLoginScreen() {
 
           {mode.kind === 'password' && (
             <View style={styles.form}>
-              <TextField label="E-mail ou usuário" icon="person-outline" value={userLogin} onChangeText={setUserLogin} autoCapitalize="none" autoCorrect={false} autoFocus />
-              <TextField label="Senha" icon="lock-closed-outline" value={password} onChangeText={setPassword} secureTextEntry
+              <TextField label="E-mail ou usuário" icon="person-outline" value={userLogin} onChangeText={setUserLogin} autoCapitalize="none" autoCorrect={false} autoFocus={userLogin === ''} />
+              <TextField label="Senha" icon="lock-closed-outline" value={password} onChangeText={setPassword} secureTextEntry autoFocus={userLogin !== ''}
                 onSubmitEditing={() => void submit({ method: 'password', login: userLogin.trim(), password })} />
               <Button label="Entrar" loading={busy} disabled={userLogin.trim() === '' || password === ''} onPress={() => void submit({ method: 'password', login: userLogin.trim(), password })} />
               <Text variant="caption" color="textMuted">Esqueceu a senha? Peça um convite novo ao administrador (Configurações → Aplicativo Mobile).</Text>

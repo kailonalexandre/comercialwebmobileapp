@@ -27,7 +27,12 @@ export async function loadTerminal(): Promise<Terminal | null> {
 
 export const saveTerminal = (terminal: Terminal) => secureStorage.set(TERMINAL, JSON.stringify(terminal));
 
-export const clearTerminal = () => secureStorage.remove(TERMINAL);
+// Último e-mail/usuário que entrou por senha ou convite neste vínculo: pré-preenche a próxima entrada por senha.
+const LAST_LOGIN = 'cw.terminal.lastLogin';
+export const loadLastLogin = () => secureStorage.get(LAST_LOGIN);
+export const saveLastLogin = (login: string) => secureStorage.set(LAST_LOGIN, login);
+
+export const clearTerminal = () => Promise.all([secureStorage.remove(TERMINAL), secureStorage.remove(LAST_LOGIN)]);
 
 /**
  * Identificador desta instalação, gerado uma vez e guardado no Keychain/Keystore. O servidor mantém um vínculo ativo por
