@@ -63,18 +63,30 @@ public sealed class TerminalAuthTests
     }
 
     [Fact]
-    public async Task Sessao_pessoal_renova_dentro_da_inatividade_e_nunca_passa_de_30_dias()
+    public async Task Sessao_pessoal_renova_dentro_da_inatividade_e_nunca_passa_de_180_dias()
     {
         _cw.Login = _ => new(CwStatus.Ok, new CwLogin(new CwTokens("a", "r"), "3f2b8c1e-0000-4000-8000-000000000003", 1, "Ana",
             FakeComercialWebAuth.SharedTerminal with { Mode = "personal" }));
         var token = (await _auth.TerminalLoginAsync(Terminal, Pin, null, DeviceInfo.Unknown, Ct)).Session!.RefreshToken;
 
-        for (var day = 0; day < 29; day++)
+        // Uso a cada 29 dias (dentro dos 30 de inatividade) mantém a sessão; o teto absoluto continua 180 dias.
+        for (var day = 29; day < 180; day += 29)
         {
-            _clock.Now += TimeSpan.FromDays(1);
+            _clock.Now += TimeSpan.FromDays(29);
             token = (await _auth.RefreshAsync(token, Ct)).Session!.RefreshToken;
         }
-        _clock.Now += TimeSpan.FromDays(1) + TimeSpan.FromSeconds(1);
+        _clock.Now += TimeSpan.FromDays(180 - 174) + TimeSpan.FromSeconds(1);
+
+        Assert.Equal(AuthFailure.InvalidToken, (await _auth.RefreshAsync(token, Ct)).Failure);
+    }
+
+    [Fact]
+    public async Task Sessao_pessoal_parada_mais_de_30_dias_pede_a_senha()
+    {
+        _cw.Login = _ => new(CwStatus.Ok, new CwLogin(new CwTokens("a", "r"), "3f2b8c1e-0000-4000-8000-000000000004", 1, "Ana",
+            FakeComercialWebAuth.SharedTerminal with { Mode = "personal" }));
+        var token = (await _auth.TerminalLoginAsync(Terminal, Pin, null, DeviceInfo.Unknown, Ct)).Session!.RefreshToken;
+        _clock.Now += TimeSpan.FromDays(30) + TimeSpan.FromSeconds(1);
 
         Assert.Equal(AuthFailure.InvalidToken, (await _auth.RefreshAsync(token, Ct)).Failure);
     }
