@@ -1,6 +1,5 @@
 # Migrations mobile_* (db/migrations). Roda UMA vez por release, ANTES de trocar a imagem da API, com a conta de DEPLOY
-# (DDL em mobile_*), nunca com a conta mobile_api de execução. Aplicar com: kubectl apply -f migrate-job.yaml
-# (troque MOBILE_API_IMAGE_TAG pelo SHA) e acompanhar: kubectl -n comercial-prod logs job/mobile-api-migrate
+# (DDL em mobile_*), nunca com a conta mobile_api de execução. Quem aplica é o instalar-prod.sh (cria e apaga a conta).
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -12,7 +11,6 @@ spec:
   template:
     spec:
       restartPolicy: Never
-      imagePullSecrets: [{ name: ghcr-pull-mobile }]
       securityContext: { runAsNonRoot: true, runAsUser: 1654, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: migrate

@@ -36,7 +36,7 @@
       "env": {
         "EXPO_PUBLIC_APP_ENV": "vps",
         "EXPO_PUBLIC_API_URL": "https://api.infinitsolucoesweb.com.br/api",
-        "EXPO_PUBLIC_ALLOWED_SERVER_HOSTS": "comercial.infinitsolucoesweb.com.br"
+        "EXPO_PUBLIC_ALLOWED_SERVER_HOSTS": "infinitsolucoesweb.com.br,comercial.infinitsolucoesweb.com.br"
       }
     },
     "staging": {
