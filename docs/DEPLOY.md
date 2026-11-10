@@ -93,6 +93,7 @@ Setup único (o repositório não guarda nenhum segredo):
 
 ## 6. App (Play Store)
 - Produção: `EXPO_PUBLIC_APP_ENV=vps EXPO_PUBLIC_API_URL=https://api.infinitsolucoesweb.com.br/api EXPO_PUBLIC_ALLOWED_SERVER_HOSTS=infinitsolucoesweb.com.br,comercial.infinitsolucoesweb.com.br GOOGLE_SERVICES_JSON=./secrets/google-services.json npx eas-cli build --platform android --profile production` (AAB; a assinatura fica com o EAS). O pacote `br.com.infinitsolucoesweb.comercial` passa a ser definitivo depois da primeira publicação.
+- **App de teste ao lado do de produção:** os perfis `staging` (push em `dev`, workflow `release-android`) e `dev-vps` usam `APP_VARIANT=dev` → pacote `br.com.infinitsolucoesweb.comercial.dev`, nome "Infinit Comercial DEV", API e QR de dev. Sai como APK com link de instalação no expo.dev (não vai ao Play). Primeira vez: `cd mobile && npx eas-cli credentials -p android` (perfil `staging`) para o EAS gerar o keystore do pacote `.dev`. Push no DEV: cadastrar o app `.dev` no Firebase e criar no EAS (environment production) a variável de arquivo `GOOGLE_SERVICES_JSON_DEV`; sem ela o DEV funciona sem push.
 - Testadores/dev: perfil `preview` (também flavor vps, nunca HTTP) com `EXPO_PUBLIC_API_URL=https://api.dev.infinitsolucoesweb.com.br/api` e `EXPO_PUBLIC_ALLOWED_SERVER_HOSTS=dev.infinitsolucoesweb.com.br`.
 - Push em produção: ligado (`Push__Enabled=true`), mesmo projeto EAS/Firebase do dev.
 
