@@ -96,7 +96,14 @@ K create secret generic mobile-api-migrate-env --from-literal=ConnectionStrings_
 unset DEPLOY_PW
 K delete job mobile-api-migrate --ignore-not-found >/dev/null
 sed "s/MOBILE_API_IMAGE_TAG/$IMG/" "$AQUI/migrate-job.yaml" | K apply -f - >/dev/null
-if ! K wait --for=condition=complete job/mobile-api-migrate --timeout=300s >/dev/null 2>&1; then
+# Espera concluir OU falhar (kubectl wait só espera uma condição: com falha ficaria parado até o timeout).
+FIM=""
+for _ in $(seq 1 150); do
+  FIM=$(K get job mobile-api-migrate -o jsonpath='{.status.succeeded}/{.status.failed}' 2>/dev/null || true)
+  case "$FIM" in 1/*|*/1) break ;; esac
+  sleep 2
+done
+if [ "${FIM%%/*}" != 1 ]; then
   K logs job/mobile-api-migrate --tail=40 || true
   echo "ERRO: migrations falharam (log acima). A API em execução não foi trocada."; exit 1
 fi
