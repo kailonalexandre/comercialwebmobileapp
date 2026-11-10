@@ -26,6 +26,7 @@
         "buildType": "apk"
       },
       "env": {
+        "APP_VARIANT": "dev",
         "EXPO_PUBLIC_APP_ENV": "vps",
         "EXPO_PUBLIC_API_URL": "https://api.dev.infinitsolucoesweb.com.br/api",
         "EXPO_PUBLIC_ALLOWED_SERVER_HOSTS": "dev.infinitsolucoesweb.com.br"
@@ -41,8 +42,12 @@
     },
     "staging": {
       "environment": "production",
-      "autoIncrement": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
+        "APP_VARIANT": "dev",
         "EXPO_PUBLIC_APP_ENV": "vps",
         "EXPO_PUBLIC_API_URL": "https://api.dev.infinitsolucoesweb.com.br/api",
         "EXPO_PUBLIC_ALLOWED_SERVER_HOSTS": "dev.infinitsolucoesweb.com.br"
@@ -53,12 +58,6 @@
     "production": {
       "android": {
         "track": "internal",
-        "releaseStatus": "completed"
-      }
-    },
-    "staging": {
-      "android": {
-        "track": "alpha",
         "releaseStatus": "completed"
       }
     }
