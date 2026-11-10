@@ -11,12 +11,15 @@
 #
 # Rode no nó prod-01 com um usuário que tenha kubectl no cluster e sudo (para o mysql do host).
 # kubectl só com sudo? KUBECTL='sudo k3s kubectl' bash instalar-prod.sh ...
+# CD (GitHub Actions, push em main): sudo -n env DEPLOY_AUTO=1 bash instalar-prod.sh <SHA>  (roda como root, sem pergunta).
 set -euo pipefail
 
 NS=comercial-prod
 DOMINIO=api.infinitsolucoesweb.com.br
 IMAGEM=ghcr.io/kailonalexandre/comercialweb-mobile-api
 AQUI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Como root (CD via sudo) o kubectl do k3s já enxerga o cluster; manual, o operador passa KUBECTL.
+[ -z "${KUBECTL:-}" ] && [ "$(id -u)" = 0 ] && command -v k3s >/dev/null && KUBECTL="k3s kubectl"
 KC() { ${KUBECTL:-kubectl} "$@"; }
 K() { KC -n "$NS" "$@"; }
 
@@ -60,7 +63,9 @@ cat <<TXT
   - Job mobile-api-migrate e, depois dele, Deployment/Service/PVC/IngressRoute/Middlewares/Certificate da API ($IMAGEM:$IMG)
   Nada mais. Não toca no Traefik, no ComercialWeb nem em outros namespaces.
 TXT
-read -r -p "Digite SIM para continuar: " R; [ "$R" = SIM ] || { echo "Cancelado. Nada foi alterado."; exit 0; }
+# DEPLOY_AUTO=1 (só o CD, já aprovado no environment `production` do GitHub) pula a confirmação; sem TTY e sem a variável,
+# o `read` falha e nada é alterado.
+[ "${DEPLOY_AUTO:-}" = 1 ] || { read -r -p "Digite SIM para continuar: " R; [ "$R" = SIM ] || { echo "Cancelado. Nada foi alterado."; exit 0; }; }
 
 echo; echo "== 3. Instalando =="
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT

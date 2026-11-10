@@ -68,6 +68,22 @@ Setup único (você faz, o repositório não guarda nenhum segredo):
 4. **Risco a ter em mente:** o script vem do próprio commit e `mobile-deploy` é dono dele, então quem faz merge em `dev` (ou controla essa chave) executa código como root na VPS. Mantenha `dev` protegida (PR obrigatório) e a chave só como secret do environment.
 5. **Diagnóstico:** `sudo journalctl -u ssh --since "30 min ago"` na VPS mostra por que o sshd recusou o runner. `Invalid user x@y` quer dizer que `DEV_SSH_HOST` está com `usuario@` na frente.
 
+### CD da produção (push em `main`, com aprovação)
+O job `deploy-prod` de `.github/workflows/backend-image.yml` roda depois de a imagem da `main` ser publicada e **espera a aprovação** de um revisor no environment `production`. Aprovado, copia `deploy/k8s/prod/` para `~/mobile-api-deploy/` no prod-01 e executa `sudo -n env DEPLOY_AUTO=1 bash instalar-prod.sh <SHA>` (o mesmo script do deploy manual: verificações, migrations com conta temporária, apply, rollout e conferências; falha antes do rollout não troca a API). Só dispara quando `backend/**` muda; mudança só em `deploy/` vai no próximo deploy (ou manual, com o SHA da última imagem).
+
+Setup único (o repositório não guarda nenhum segredo):
+1. **prod-01:** usuário **`mobile-deploy`** exclusivo deste CD (não reutilize `deploy`, `kailon` nem o usuário do CD do ComercialWeb). Sem senha, sem grupo `docker`; o script roda como root só via esta regra de `sudo`:
+   ```bash
+   sudo adduser --disabled-password --gecos "" mobile-deploy
+   sudo install -d -m 700 -o mobile-deploy -g mobile-deploy /home/mobile-deploy/.ssh
+   echo 'mobile-deploy ALL=(root) NOPASSWD: /usr/bin/env DEPLOY_AUTO=1 bash /home/mobile-deploy/mobile-api-deploy/instalar-prod.sh *' | sudo tee /etc/sudoers.d/mobile-deploy >/dev/null
+   sudo chmod 440 /etc/sudoers.d/mobile-deploy && sudo visudo -cf /etc/sudoers.d/mobile-deploy
+   ```
+2. **Chave:** `ssh-keygen -t ed25519 -f prod_deploy_key -N "" -C github-mobile-cd-prod`; a pública vai para `/home/mobile-deploy/.ssh/authorized_keys` (dono `mobile-deploy`, `chmod 600`); a privada vira o secret e depois é apagada (`shred -u`). Teste antes: `ssh -i prod_deploy_key mobile-deploy@179.199.129.130 true`.
+3. **GitHub → Settings → Environments → `production`:** revisor obrigatório, branch só `main`; secrets `PROD_SSH_KEY` (privada), `PROD_SSH_USER` (`mobile-deploy`), `PROD_SSH_HOST` (`179.199.129.130`, **sem** `usuario@`) e `PROD_SSH_KNOWN_HOSTS` (`ssh-keyscan -t ed25519 179.199.129.130`, conferida com `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` no servidor).
+4. **Risco:** o script vem do commit e roda como root no nó de produção; quem faz merge em `main` e aprova o environment executa código como root lá. Mantenha `main` protegida (PR obrigatório) e o revisor do environment diferente de quem só faz merge, quando possível.
+5. **Rollback:** `sudo k3s kubectl -n comercial-prod rollout undo deploy/mobile-api` (migrations só adicionam).
+
 ## 5. Conferir
 1. **Saúde:** `curl -s -o /dev/null -w "%{http_code}\n" https://<dominio-da-api>/health` → `200`.
 2. **IP do cliente (prod):** `ssh prod-ro logs traefik --tail 3` deve mostrar IPs públicos na primeira coluna (não `10.42.x.x`).
@@ -77,6 +93,7 @@ Setup único (você faz, o repositório não guarda nenhum segredo):
 
 ## 6. App (Play Store)
 - Produção: `EXPO_PUBLIC_APP_ENV=vps EXPO_PUBLIC_API_URL=https://api.infinitsolucoesweb.com.br/api EXPO_PUBLIC_ALLOWED_SERVER_HOSTS=infinitsolucoesweb.com.br,comercial.infinitsolucoesweb.com.br GOOGLE_SERVICES_JSON=./secrets/google-services.json npx eas-cli build --platform android --profile production` (AAB; a assinatura fica com o EAS). O pacote `br.com.infinitsolucoesweb.comercial` passa a ser definitivo depois da primeira publicação.
+- **App de teste ao lado do de produção:** os perfis `staging` (push em `dev`, workflow `release-android`) e `dev-vps` usam `APP_VARIANT=dev` → pacote `br.com.infinitsolucoesweb.comercial.dev`, nome "Infinit Comercial DEV", API e QR de dev. Sai como APK com link de instalação no expo.dev (não vai ao Play). Primeira vez: `cd mobile && npx eas-cli credentials -p android` (perfil `staging`) para o EAS gerar o keystore do pacote `.dev`. Push no DEV: cadastrar o app `.dev` no Firebase e criar no EAS (environment production) a variável de arquivo `GOOGLE_SERVICES_JSON_DEV`; sem ela o DEV funciona sem push.
 - Testadores/dev: perfil `preview` (também flavor vps, nunca HTTP) com `EXPO_PUBLIC_API_URL=https://api.dev.infinitsolucoesweb.com.br/api` e `EXPO_PUBLIC_ALLOWED_SERVER_HOSTS=dev.infinitsolucoesweb.com.br`.
 - Push em produção: ligado (`Push__Enabled=true`), mesmo projeto EAS/Firebase do dev.
 

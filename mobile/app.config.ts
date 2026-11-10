@@ -9,15 +9,23 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   if (local && ['production', 'preview'].includes(process.env.EAS_BUILD_PROFILE ?? '')) {
     throw new Error('EXPO_PUBLIC_APP_ENV=local não é permitido nos perfis de build production e preview.');
   }
-  // Push (opcional): o arquivo do Firebase e o id do projeto EAS entram por variável, nunca versionados.
-  const googleServicesFile = process.env.GOOGLE_SERVICES_JSON;
+  // APP_VARIANT=dev (perfis de teste): outro pacote e outro nome, para conviver no mesmo celular com o app de produção.
+  const dev = process.env.APP_VARIANT === 'dev';
+  const suffix = dev ? '.dev' : '';
+  const androidPackage = `${config.android?.package}${suffix}`;
+  // Push (opcional): o arquivo do Firebase e o id do projeto EAS entram por variável, nunca versionados. O Gradle recusa
+  // um google-services.json sem o pacote do build, por isso o DEV usa o seu (GOOGLE_SERVICES_JSON_DEV, com o app `.dev`
+  // cadastrado no Firebase); sem ele o DEV sai sem push.
+  const googleServicesFile = dev ? process.env.GOOGLE_SERVICES_JSON_DEV : process.env.GOOGLE_SERVICES_JSON;
   const projectId = process.env.EAS_PROJECT_ID ?? config.extra?.eas?.projectId;
   return {
     ...(config as ExpoConfig),
+    name: dev ? `${config.name} DEV` : config.name!,
     ...(projectId && { extra: { ...config.extra, eas: { ...config.extra?.eas, projectId } } }),
-    android: { ...config.android, ...(googleServicesFile && { googleServicesFile }) },
+    android: { ...config.android, package: androidPackage, ...(googleServicesFile && { googleServicesFile }) },
     ios: {
       ...config.ios,
+      bundleIdentifier: `${config.ios?.bundleIdentifier}${suffix}`,
       infoPlist: {
         ...config.ios?.infoPlist,
         ...(local && { NSAppTransportSecurity: { NSAllowsLocalNetworking: true } }),

@@ -6,6 +6,7 @@ import { Fragment, type ReactNode } from 'react';
 import { View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 
+import { UpdatePrompt } from '@/features/app-update/update-prompt';
 import { SessionProvider, useSession } from '@/features/auth/session-context';
 import { UpdateRequiredScreen } from '@/features/auth/update-required-screen';
 import { ConditionalDraftProvider } from '@/features/conditional/conditional-draft';
@@ -117,6 +118,7 @@ export default function RootLayout() {
               <PriceTablesProvider>
                 <SessionScopedDraft>
                   <PushBridge />
+                  <UpdatePrompt />
                   <QuickCustomerSync />
                   <SaleQueueSync />
                   <BagQueueSync />
