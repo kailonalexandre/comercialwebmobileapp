@@ -11,7 +11,8 @@ spec:
   template:
     spec:
       restartPolicy: Never
-      securityContext: { runAsNonRoot: true, runAsUser: 1654, seccompProfile: { type: RuntimeDefault } }
+      # fsGroup: o secret do JWT é montado 0440 root:<fsGroup>; sem ele o UID 1654 não lê /jwt/jwt.pem (igual ao Deployment).
+      securityContext: { runAsNonRoot: true, runAsUser: 1654, fsGroup: 1654, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: migrate
           image: ghcr.io/kailonalexandre/comercialweb-mobile-api:MOBILE_API_IMAGE_TAG
