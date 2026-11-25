@@ -1,5 +1,5 @@
 import { searchProducts } from '@/features/catalog/product-cache-model';
-import { fetchProductsRemote, type Product } from '@/features/catalog/products-api';
+import { fetchProductsRemote, type Product, type ProductFilters } from '@/features/catalog/products-api';
 import { deleteScopedFiles, getActiveBusinessId, scopedFile } from '@/infrastructure/business-scope';
 
 // Cópia local dos produtos, uma por tabela de preço (o preço do app é o da tabela da operação). Baixada com o app
@@ -33,9 +33,9 @@ async function read(table: string): Promise<Stored | null> {
   return null;
 }
 
-export async function searchProductsOffline(table: string, search: string, page: number, pageSize: number) {
+export async function searchProductsOffline(table: string, search: string, page: number, pageSize: number, filters?: ProductFilters) {
   const stored = await read(table);
-  return stored ? searchProducts(stored.items, search, page, pageSize) : null;
+  return stored ? searchProducts(stored.items, search, page, pageSize, filters) : null;
 }
 
 async function refreshTable(table: string, force: boolean) {

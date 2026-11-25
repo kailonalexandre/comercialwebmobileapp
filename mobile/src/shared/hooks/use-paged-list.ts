@@ -4,8 +4,8 @@ export type Paged<T> = { items: T[]; page: number; pageSize: number; total: numb
 
 export type PageFetcher<T> = (page: number, search: string) => Promise<Paged<T>>;
 
-type Loaded<T> = { items: T[]; total: number; pageSize: number };
-type Cursor = { search: string; page: number };
+type Loaded<T> = { items: T[]; total: number; pageSize: number; filterKey?: string };
+type Cursor = { search: string; page: number; filterKey?: string };
 
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -14,13 +14,13 @@ const SEARCH_DEBOUNCE_MS = 300;
  * Mudar a busca volta à página 1 (esperando o usuário parar de digitar); trocar de página mantém os itens
  * atuais na tela até a nova página chegar.
  */
-export function usePagedList<T>(fetchPage: PageFetcher<T>, search: string) {
+export function usePagedList<T>(fetchPage: PageFetcher<T>, search: string, filterKey?: string) {
   const [loaded, setLoaded] = useState<Loaded<T> | null>(null);
-  const [failure, setFailure] = useState<{ error: unknown } | null>(null);
+  const [failure, setFailure] = useState<{ error: unknown; filterKey?: string } | null>(null);
   // A página pertence a uma busca: outra busca é, por definição, página 1.
-  const [cursor, setCursor] = useState<Cursor>({ search, page: 1 });
+  const [cursor, setCursor] = useState<Cursor>({ search, page: 1, filterKey });
   const [attempt, setAttempt] = useState(0);
-  const page = cursor.search === search ? cursor.page : 1;
+  const page = cursor.search === search && cursor.filterKey === filterKey ? cursor.page : 1;
 
   useEffect(() => {
     let active = true;
@@ -29,10 +29,10 @@ export function usePagedList<T>(fetchPage: PageFetcher<T>, search: string) {
         fetchPage(page, search)
           .then((r) => {
             if (!active) return;
-            setLoaded({ items: r.items, total: r.total, pageSize: r.pageSize });
+            setLoaded({ items: r.items, total: r.total, pageSize: r.pageSize, filterKey });
             setFailure(null);
           })
-          .catch((error: unknown) => active && setFailure({ error }));
+          .catch((error: unknown) => active && setFailure({ error, filterKey }));
       },
       search === '' || page > 1 ? 0 : SEARCH_DEBOUNCE_MS,
     );
@@ -40,9 +40,9 @@ export function usePagedList<T>(fetchPage: PageFetcher<T>, search: string) {
       active = false;
       clearTimeout(timer);
     };
-  }, [fetchPage, search, page, attempt]);
+  }, [fetchPage, search, page, attempt, filterKey]);
 
-  const goTo = useCallback((next: number) => setCursor({ search, page: next }), [search]);
+  const goTo = useCallback((next: number) => setCursor({ search, page: next, filterKey }), [search, filterKey]);
 
   const reload = useCallback(() => {
     setFailure(null);
@@ -55,13 +55,15 @@ export function usePagedList<T>(fetchPage: PageFetcher<T>, search: string) {
     [],
   );
 
-  const total = loaded?.total ?? 0;
-  const pageSize = loaded?.pageSize ?? 1;
+  const visible = loaded?.filterKey === filterKey ? loaded : null;
+  const currentFailure = failure?.filterKey === filterKey ? failure : null;
+  const total = visible?.total ?? 0;
+  const pageSize = visible?.pageSize ?? 1;
   return {
-    items: loaded?.items ?? [],
-    status: loaded ? ('ready' as const) : failure ? ('error' as const) : ('loading' as const),
-    failed: failure !== null,
-    error: failure?.error ?? null,
+    items: visible?.items ?? [],
+    status: visible ? ('ready' as const) : currentFailure ? ('error' as const) : ('loading' as const),
+    failed: currentFailure !== null,
+    error: currentFailure?.error ?? null,
     page,
     total,
     totalPages: Math.max(1, Math.ceil(total / pageSize)),

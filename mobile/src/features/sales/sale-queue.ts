@@ -1,7 +1,7 @@
 import { File, Paths } from 'expo-file-system';
 import { useSyncExternalStore } from 'react';
 
-import { loadQueue, serverIdOf } from '@/features/customers/quick-customer-queue';
+import { loadQueue, pendingCustomerError, serverIdOf } from '@/features/customers/quick-customer-queue';
 import { sendConditional } from '@/features/conditional/conditional-api';
 import { sendPdvSale } from '@/features/pdv/pdv-api';
 import type { Draft } from '@/features/presale/draft-model';
@@ -134,6 +134,8 @@ export async function submitSale(kind: SaleKind, draft: Draft, key: string, sess
   const businessId = getActiveBusinessId() ?? sessionBusinessId;
   // O cadastro do cliente pode ter subido enquanto a venda era montada: usa o id real na hora.
   const pending = draft.customer?.pendingId;
+  const customerError = pending ? pendingCustomerError(pending) : undefined;
+  if (customerError) return { kind: 'rejected', message: `Cadastro do cliente recusado: ${customerError}` };
   const realId = pending ? serverIdOf(pending) : undefined;
   if (pending && realId !== undefined && draft.customer) draft = { ...draft, customer: { id: realId, name: draft.customer.name } };
   // Mesma chave = mesmo pedido: reenviar ou tocar duas vezes nunca cria segunda entrada.

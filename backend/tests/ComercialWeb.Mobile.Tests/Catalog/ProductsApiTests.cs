@@ -30,6 +30,12 @@ public sealed class CatalogFixture : ApiFixture
           (103, 10, 4, 'Produto excluído', NULL, NULL, NULL, 1.00, 2.00, 1, NOW()),
           (200, 20, 1, 'Produto da empresa B', NULL, NULL, NULL, 1.00, 9.99, 1, NULL);
         INSERT INTO product_variations (business_id, product_id, reference, barcode) VALUES (10, 101, 'REF-XYZ', NULL);
+        INSERT INTO product_groups (id, business_id, name) VALUES (1, 10, 'Grupo 1'), (2, 20, 'Grupo de outra empresa');
+        UPDATE products SET group_id = 1 WHERE id = 100;
+        INSERT INTO storage_locations (id, business_id, name, type, parent_id) VALUES
+          (10, 10, 'A', 'unit', NULL), (11, 10, 'Depósito A', 'storage', 10), (20, 10, 'B', 'unit', NULL), (21, 10, 'Depósito B', 'storage', 20);
+        INSERT INTO stock_balances (business_id, product_id, storage_location_id, quantity_milli) VALUES
+          (10, 100, 11, 2500), (10, 101, 11, 9000), (10, 101, 21, 8000);
         """, new { hash = PasswordHash });
 }
 
@@ -37,7 +43,8 @@ public sealed class ProductsApiTests(CatalogFixture api) : IClassFixture<Catalog
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private sealed record Item(long Id, long Code, string Name, long SalePriceCents, bool IsActive);
+    private sealed record Item(long Id, long Code, string Name, long SalePriceCents, bool IsActive, long? StockMilli);
+    private sealed record GroupDto(List<ProductGroup> Groups);
     private sealed record PageDto(List<Item> Items, int Page, int PageSize, long Total);
 
     private static async Task<PageDto> List(HttpClient client, string query = "")
@@ -63,6 +70,22 @@ public sealed class ProductsApiTests(CatalogFixture api) : IClassFixture<Catalog
         Assert.Equal([101, 100], page.Items.Select(i => i.Id)); // ordem por nome: "Calça" antes de "Camiseta"
         Assert.Equal(2, page.Total);
         Assert.Equal(5990, page.Items.Single(i => i.Id == 100).SalePriceCents);
+    }
+
+    [Fact]
+    public async Task Grupos_e_saldo_respeitam_empresa_unidade_e_variacoes()
+    {
+        TestDatabase.RequireMySql();
+        var client = await api.SignedInAsync("ana");
+        var groups = await client.GetFromJsonAsync<GroupDto>("/api/v1/products/groups", Ct);
+        Assert.Equal([new ProductGroup(1, "Grupo 1")], groups!.Groups);
+
+        var result = await List(client, "?inStock=true&groupId=1");
+        Assert.Equal(1, result.Total);
+        var product = Assert.Single(result.Items);
+        Assert.Equal(100, product.Id);
+        Assert.Equal(2500, product.StockMilli);
+        Assert.Equal([100], (await List(client, "?inStock=true")).Items.Select(i => i.Id));
     }
 
     [Fact]

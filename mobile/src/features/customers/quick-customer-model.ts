@@ -5,6 +5,7 @@ export type QuickCustomerInput = {
   personKind: PersonKind;
   name: string;
   tradeName: string;
+  stateRegistration?: string;
   document: string;
   phone: string;
   email: string;
@@ -42,7 +43,7 @@ export function maskDocument(s: string, kind: PersonKind): string {
 
 export const maskZip = (s: string) => digits(s).slice(0, 8).replace(/^(\d{5})(\d)/, '$1-$2');
 
-export type QuickErrors = Partial<Record<'name' | 'phone' | 'document' | 'email', string>>;
+export type QuickErrors = Partial<Record<'name' | 'phone' | 'document' | 'email' | 'zip' | 'notes', string>>;
 
 // Validação só de formato (rápida e offline); CPF/CNPJ e unicidade são decididos pelo ComercialWeb.
 export function validateQuick(i: QuickCustomerInput): QuickErrors {
@@ -71,7 +72,9 @@ export function toRequest(i: QuickCustomerInput) {
   const filled = Object.values(address).some((v) => v !== undefined);
   const complete = !!(address.zip && address.street && address.number && address.district && address.city && address.state);
   const partial = [i.street, i.number, i.complement, i.district, i.city, i.state, i.zip].map((v) => v.trim()).filter(Boolean).join(', ');
-  const notes = [clean(i.notes), filled && !complete ? `Endereço informado no app: ${partial}` : undefined].filter(Boolean).join('\n');
+  const registration = i.personKind === 'company' ? clean(i.stateRegistration ?? '') : undefined;
+  const notes = [registration ? `Inscrição estadual: ${registration}` : undefined,
+    filled && !complete ? `Endereço informado no app: ${partial}` : undefined, clean(i.notes)].filter(Boolean).join('\n');
   return {
     personKind: i.personKind,
     name: i.name.trim(),
