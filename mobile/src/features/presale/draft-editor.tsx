@@ -8,7 +8,7 @@ import { PriceTablePicker } from '@/features/pricing/price-table-picker';
 import { usePriceTables } from '@/features/pricing/price-tables';
 import type { DraftValue } from '@/features/presale/draft-context';
 import { DiscountField } from '@/features/presale/discount-field';
-import { estimateCents, MAX_OBSERVATION, newestFirst, priceOf, removeItem, setPrice, setQuantity } from '@/features/presale/draft-model';
+import { estimateCents, MAX_OBSERVATION, newestFirst, orderObservation, priceOf, removeItem, setPrice, setQuantity } from '@/features/presale/draft-model';
 import { ItemPrice } from '@/features/presale/item-price';
 import { QuantityStepper } from '@/features/presale/quantity-stepper';
 import { Button } from '@/shared/components/button';
@@ -24,8 +24,8 @@ export type DraftMode = 'presale' | 'pdv' | 'conditional';
 // Cliente, itens e observação: igual na pré-venda, no PDV e no condicional. `mode` diz a qual rascunho os seletores
 // respondem. `addProducts`: botão próprio da tela (PDV), logo abaixo do cliente; sem ele, o padrão fica depois dos itens.
 // `canChangePrice`: só o PDV, para quem tem pdv.change-price (a API e o ComercialWeb conferem de novo).
-export function DraftEditor({ store, mode, locked, integerQuantity = false, canDiscount = true, addProducts, canChangePrice = false }: {
-  store: DraftValue; mode: DraftMode; locked: boolean; integerQuantity?: boolean; canDiscount?: boolean; addProducts?: ReactNode; canChangePrice?: boolean;
+export function DraftEditor({ store, mode, locked, integerQuantity = false, canDiscount = true, addProducts, canChangePrice = false, payment }: {
+  store: DraftValue; mode: DraftMode; locked: boolean; integerQuantity?: boolean; canDiscount?: boolean; addProducts?: ReactNode; canChangePrice?: boolean; payment?: ReactNode;
 }) {
   const styles = useStyles();
   const { colors } = useTheme();
@@ -33,7 +33,9 @@ export function DraftEditor({ store, mode, locked, integerQuantity = false, canD
   const { tables, selected, select, label } = usePriceTables();
   const [switching, setSwitching] = useState(false);
   // Condicional exige cliente identificado: não existe "Consumidor final" nele.
-  const emptyCustomer = mode === 'conditional' ? 'Selecione o cliente' : 'Consumidor final';
+  const order = mode === 'presale';
+  const emptyCustomer = order ? 'Escolher cliente' : mode === 'conditional' ? 'Selecione o cliente' : 'Consumidor final';
+  const observationLimit = MAX_OBSERVATION - (draft.orderPayment ? orderObservation({ ...draft, observation: '' }).length + 1 : 0);
 
   // Operação nova (carrinho vazio) começa na tabela que o usuário vem usando.
   useEffect(() => {
@@ -82,33 +84,36 @@ export function DraftEditor({ store, mode, locked, integerQuantity = false, canD
         accessibilityLabel={`Cliente: ${draft.customer?.name ?? emptyCustomer}. Alterar`}
         disabled={locked}
         onPress={() => router.push({ pathname: '/selecionar-cliente', params: { mode } })}
-        style={[styles.card, styles.between]}
+        style={[styles.card, styles.between, order && styles.orderCustomer]}
       >
+        {order && <View style={styles.customerIcon}><Icon name="person-outline" size={24} color={colors.primary} /></View>}
         <View style={styles.flex}>
           <Text variant="caption" color="textMuted">
             Cliente
           </Text>
           <Text variant="label" color={draft.customer ? 'text' : mode === 'conditional' ? 'danger' : 'text'}>{draft.customer?.name ?? emptyCustomer}</Text>
         </View>
-        {!locked && <Icon name="chevron-forward" size={20} color={colors.textMuted} />}
+        {!locked && (order
+          ? <Text variant="label" color="primary">{draft.customer ? 'Alterar' : 'Escolher'}</Text>
+          : <Icon name="chevron-forward" size={20} color={colors.textMuted} />)}
       </Pressable>
 
       {addProducts}
 
-      {/* Empresa com uma tabela só: o seletor some, e o cartão vazio também. */}
-      {(tables.length > 1 || mode === 'presale') && (
+      {!order && tables.length > 1 && (
         <View style={styles.card}>
           <PriceTablePicker value={draft.priceTable} onChange={changeTable} disabled={locked || switching} />
-          {mode === 'presale' && (
-            <Text variant="caption" color="textMuted">
-              Tabela: {label(draft.priceTable)} · Itens: {draft.items.length} · Total estimado: {formatCents(estimateCents(draft.items, draft.saleDiscount))}
-            </Text>
-          )}
         </View>
       )}
 
-      <Text variant="heading">Itens</Text>
-      {draft.items.length === 0 && <Text color="textMuted">Nenhum item. Adicione ao menos um produto.</Text>}
+      {(!order || draft.items.length > 0) && <Text variant="heading">{order ? 'Carrinho' : 'Itens'}</Text>}
+      {draft.items.length === 0 && (order ? (
+        <View style={styles.emptyCart}>
+          <View style={styles.cartIcon}><Icon name="cart-outline" size={26} color={colors.textMuted} /></View>
+          <Text variant="label">Carrinho vazio</Text>
+          <Text variant="caption" color="textMuted" style={styles.emptyHint}>Toque em &quot;Buscar produto&quot; para adicionar itens.</Text>
+        </View>
+      ) : <Text color="textMuted">Nenhum item. Adicione ao menos um produto.</Text>)}
       {newestFirst(draft.items).map((item) => (
         <View key={item.productId} style={styles.card}>
           <View style={styles.between}>
@@ -170,14 +175,20 @@ export function DraftEditor({ store, mode, locked, integerQuantity = false, canD
         <Button label="Adicionar produto" variant="outline" icon="add" onPress={() => router.push({ pathname: '/selecionar-produto', params: { mode } })} />
       )}
 
+      {payment}
       <TextField
         label="Observação"
-        placeholder="Opcional"
+        placeholder={order ? 'Opcional — ex.: entregar na segunda' : 'Opcional'}
         value={draft.observation}
-        onChangeText={(observation) => setDraft((d) => ({ ...d, observation: observation.slice(0, MAX_OBSERVATION) }))}
+        onChangeText={(observation) => setDraft((d) => ({ ...d, observation: observation.slice(0, observationLimit) }))}
         editable={!locked}
+        error={order && orderObservation(draft).length > MAX_OBSERVATION ? `Reduza a observação para até ${observationLimit} caracteres.` : undefined}
         multiline
       />
+
+      {order && tables.length > 1 && (
+        <PriceTablePicker value={draft.priceTable} onChange={changeTable} disabled={locked || switching} />
+      )}
 
       {canDiscount && draft.items.length > 0 && (
         <View style={styles.card}>
@@ -197,6 +208,11 @@ export function DraftEditor({ store, mode, locked, integerQuantity = false, canD
 
 const useStyles = makeStyles((colors) => ({
   card: { gap: spacing.sm, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.background, ...shadow.card },
+  orderCustomer: { padding: spacing.lg, minHeight: 76 },
+  customerIcon: { width: 44, height: 44, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
+  cartIcon: { width: 52, height: 52, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
+  emptyCart: { borderWidth: 1, borderStyle: 'dashed', borderColor: colors.border, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingHorizontal: spacing.xl, paddingVertical: spacing.lg, minHeight: 152 },
+  emptyHint: { textAlign: 'center', fontSize: 13 },
   between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
   flex: { flex: 1 },
   remove: { width: touchTarget, height: touchTarget, alignItems: 'center', justifyContent: 'center', marginRight: -spacing.sm },

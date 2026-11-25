@@ -18,3 +18,13 @@ describe('searchProducts', () => {
     expect(searchProducts(all, '', 2, 2)).toMatchObject({ total: 3, items: [{ id: 3 }] });
   });
 });
+
+test('filtros de grupo e estoque são aplicados antes da paginação offline', () => {
+  const base = { id: 1, code: 1, name: 'Produto', sku: null, barcode: null, salePriceCents: 100, priceCents: 100, isActive: true };
+  const available = { ...base, id: 3, groupId: 1, stockMilli: 1 };
+  const items = [
+    { ...base, groupId: 1, stockMilli: 0 }, { ...base, id: 2, groupId: 2, stockMilli: 1 }, available,
+  ];
+  expect(searchProducts(items, '', 1, 1, { groupId: 1, inStock: true }))
+    .toEqual({ items: [available], page: 1, pageSize: 1, total: 1 });
+});

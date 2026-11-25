@@ -4,6 +4,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { CodeScanner } from '@/shared/components/code-scanner';
 import { Icon } from '@/shared/components/icon';
+import { OrderHeader } from '@/shared/components/order-ui';
 import { Pager } from '@/shared/components/pager';
 import { StateView } from '@/shared/components/state-view';
 import { Text } from '@/shared/components/text';
@@ -35,17 +36,24 @@ type Props<T> = {
   tabScreen?: boolean;
   // Mostra na busca o botão de leitura de código de barras pela câmera.
   scanBarcode?: boolean;
+  orderLayout?: boolean;
+  grid?: boolean;
+  searchAction?: ReactElement;
+  listControls?: (total: number) => ReactElement;
+  footer?: ReactElement;
+  filterKey?: string;
 };
 
 const BARCODES = ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'itf14'] as const;
 
 // Tela de lista padrão: busca, paginação por rolagem, puxar para atualizar e estados de carga/erro/vazio.
-export function ListScreen<T>({ title, subtitle, searchPlaceholder, emptyMessage, fetchPage, keyOf, renderRow, onBack, header, filters, tabScreen, scanBarcode, action, sectionOf }: Props<T>) {
+export function ListScreen<T>({ title, subtitle, searchPlaceholder, emptyMessage, fetchPage, keyOf, renderRow, onBack, header, filters, tabScreen, scanBarcode, action, sectionOf, orderLayout, grid, searchAction, listControls, footer, filterKey }: Props<T>) {
   const styles = useStyles();
   const { colors } = useTheme();
   const [search, setSearch] = useState('');
   const [scanning, setScanning] = useState(false);
-  const list = usePagedList(fetchPage, search.trim());
+  const [searchFocused, setSearchFocused] = useState(false);
+  const list = usePagedList(fetchPage, search.trim(), filterKey);
   const scroller = useRef<FlatList<T>>(null);
   const insets = useSafeAreaInsets();
 
@@ -69,9 +77,40 @@ export function ListScreen<T>({ title, subtitle, searchPlaceholder, emptyMessage
     );
   }
 
+  const searchField = (
+    <View style={styles.searchRow}>
+      <View style={styles.flex}>
+        <TextField
+          icon="search-outline"
+          placeholder={searchPlaceholder}
+          value={search}
+          onChangeText={setSearch}
+          autoCorrect={false}
+          returnKeyType="search"
+          numberOfLines={orderLayout ? 1 : undefined}
+          style={orderLayout && styles.orderSearchInput}
+          onFocus={() => setSearchFocused(true)}
+          onBlur={() => setSearchFocused(false)}
+          trailing={
+            scanBarcode && (!orderLayout || searchFocused || search !== '') ? (
+              <Pressable accessibilityRole="button" accessibilityLabel="Ler código de barras" onPress={() => setScanning(true)} hitSlop={spacing.sm}>
+                <Icon name="barcode-outline" size={24} color={colors.primary} />
+              </Pressable>
+            ) : undefined
+          }
+        />
+      </View>
+      {searchAction}
+    </View>
+  );
+
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
+      {orderLayout && <OrderHeader title={title} subtitle={subtitle} onBack={onBack} action={action} />}
       <FlatList
+        key={grid ? 'grid' : 'list'}
+        numColumns={grid ? 2 : 1}
+        columnWrapperStyle={grid ? styles.gridRow : undefined}
         ref={scroller}
         showsVerticalScrollIndicator={false}
         data={list.items}
@@ -80,7 +119,7 @@ export function ListScreen<T>({ title, subtitle, searchPlaceholder, emptyMessage
           const section = sectionOf?.(item);
           const newSection = section !== undefined && (index === 0 || sectionOf?.(list.items[index - 1] as T) !== section);
           return (
-            <View>
+            <View style={grid && styles.gridCell}>
               {newSection && (
                 <Text variant="mono" color="textMuted" style={styles.section}>
                   {section}
@@ -93,12 +132,12 @@ export function ListScreen<T>({ title, subtitle, searchPlaceholder, emptyMessage
         refreshing={false}
         onRefresh={list.reload}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, orderLayout && styles.orderContent, orderLayout && { paddingBottom: footer ? spacing.lg : spacing.lg + insets.bottom }]}
         ItemSeparatorComponent={Separator}
         ListHeaderComponent={
           <View style={styles.headerBlock}>
             {header}
-            <View style={styles.titleRow}>
+            {!orderLayout && <View style={styles.titleRow}>
               {onBack && (
                 <Pressable accessibilityRole="button" accessibilityLabel="Voltar" onPress={onBack} style={styles.back}>
                   <Icon name="chevron-back" size={26} color={colors.text} />
@@ -109,23 +148,10 @@ export function ListScreen<T>({ title, subtitle, searchPlaceholder, emptyMessage
                 {subtitle && <Text color="textMuted">{subtitle}</Text>}
               </View>
               {action}
-            </View>
-            <TextField
-              icon="search-outline"
-              placeholder={searchPlaceholder}
-              value={search}
-              onChangeText={setSearch}
-              autoCorrect={false}
-              returnKeyType="search"
-              trailing={
-                scanBarcode ? (
-                  <Pressable accessibilityRole="button" accessibilityLabel="Ler código de barras" onPress={() => setScanning(true)} hitSlop={spacing.sm}>
-                    <Icon name="barcode-outline" size={24} color={colors.primary} />
-                  </Pressable>
-                ) : undefined
-              }
-            />
+            </View>}
+            {searchField}
             {filters}
+            {listControls?.(list.total)}
           </View>
         }
         ListEmptyComponent={
@@ -138,7 +164,11 @@ export function ListScreen<T>({ title, subtitle, searchPlaceholder, emptyMessage
           )
         }
       />
-      <Pager page={list.page} totalPages={list.totalPages} total={list.total} failed={list.failed && list.items.length > 0} bottomGap={tabScreen ? spacing.xl : insets.bottom} onPage={goTo} onRetry={list.reload} />
+      {(!orderLayout || list.totalPages > 1 || (list.failed && list.items.length > 0)) && (
+        <Pager page={list.page} totalPages={list.totalPages} total={list.total} failed={list.failed && list.items.length > 0}
+          bottomGap={footer ? 0 : tabScreen ? spacing.xl : insets.bottom} onPage={goTo} onRetry={list.reload} />
+      )}
+      {footer}
     </SafeAreaView>
   );
 }
@@ -152,6 +182,11 @@ const useStyles = makeStyles((colors) => ({
   section: { marginTop: spacing.md, marginBottom: spacing.sm },
   root: { flex: 1, backgroundColor: colors.page },
   content: { ...layout.content, padding: spacing.lg, paddingBottom: spacing.xxl * 2, flexGrow: 1 },
+  orderContent: { paddingTop: spacing.sm },
+  orderSearchInput: { fontSize: 13, paddingHorizontal: 0 },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  gridRow: { gap: spacing.sm },
+  gridCell: { flexBasis: '49%', flexShrink: 1, alignSelf: 'stretch' },
   headerBlock: { gap: spacing.md, marginBottom: spacing.md },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   flex: { flex: 1 },

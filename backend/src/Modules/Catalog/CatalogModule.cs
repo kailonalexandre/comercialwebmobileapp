@@ -1,5 +1,7 @@
 using System.Security.Claims;
 using System.Net;
+using System.Text;
+using ComercialWeb.Mobile.Identity.Tenancy;
 using ComercialWeb.Mobile.Customers;
 using ComercialWeb.Mobile.Identity;
 using ComercialWeb.Mobile.Identity.Application;
@@ -57,12 +59,14 @@ public static class CatalogModule
                 : Results.Problem(statusCode: StatusCodes.Status503ServiceUnavailable);
         });
 
-        products.MapGet("/", async (ClaimsPrincipal user, ProductQueries queries, PriceWebClient prices, CancellationToken ct,
-            string? search, bool? includeInactive, int? page, int? pageSize, string? priceTable) =>
+        products.MapGet("/", async (ClaimsPrincipal user, ProductQueries queries, PriceWebClient prices, OperationUnits units, IConfiguration config, CancellationToken ct,
+            string? search, bool? includeInactive, int? page, int? pageSize, string? priceTable, long? groupId, bool? inStock) =>
         {
             if (!Paging.TryCreate(page, pageSize, search, out var paging) || !PriceTables.IsValidKey(priceTable)) return Paging.Invalid();
             var ids = SessionIds.From(user)!;
-            var result = await queries.SearchAsync(ids.BusinessId, search, includeInactive ?? false, paging, ct);
+            var unit = await units.CurrentAsync(ids.UserId, ids.BusinessId, ct);
+            var result = await queries.SearchAsync(ids.BusinessId, search, includeInactive ?? false, paging, ct, unit?.Id, groupId, inStock == true);
+            result = result with { Items = [.. result.Items.Select(p => p with { ImageUrl = ImageUrl(config, ids.BusinessId, p.ImagePath) })] };
             if (PriceTables.IsDefault(priceTable))
                 return Results.Ok(result with { Items = [.. result.Items.Select(p => p with { PriceCents = p.SalePriceCents })] });
 
@@ -75,11 +79,16 @@ public static class CatalogModule
             });
         }).RequirePermission(ViewProducts);
 
-        products.MapGet("/{id:long}", async (long id, ClaimsPrincipal user, ProductQueries queries, PriceWebClient prices, CancellationToken ct) =>
+        products.MapGet("/groups", async (ClaimsPrincipal user, ProductQueries queries, CancellationToken ct) =>
+            Results.Ok(new { groups = await queries.GroupsAsync(SessionIds.From(user)!.BusinessId, ct) }))
+            .RequirePermission(ViewProducts);
+
+        products.MapGet("/{id:long}", async (long id, ClaimsPrincipal user, ProductQueries queries, PriceWebClient prices, IConfiguration config, CancellationToken ct) =>
         {
             var ids = SessionIds.From(user)!;
             var product = await queries.FindAsync(ids.BusinessId, id, ct);
             if (product is null) return Results.Problem(statusCode: StatusCodes.Status404NotFound);
+            product = product with { ImageUrl = ImageUrl(config, ids.BusinessId, product.ImagePath) };
             var all = await prices.PricesAsync(ids.UserId, ids.BusinessId, [id], ct);
             return Results.Ok(all is not null && all.TryGetValue(id, out var byTable) ? product with { Prices = byTable } : product);
         }).RequirePermission(ViewProducts);
@@ -142,5 +151,17 @@ public static class CatalogModule
         }).RequirePermission(ViewProducts);
 
         return app;
+    }
+
+    private static string? ImageUrl(IConfiguration config, long businessId, string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !path.StartsWith("companies/", StringComparison.Ordinal)
+            || !path.Contains("/products/", StringComparison.Ordinal)
+            || !Uri.TryCreate(config["ComercialWeb:BaseUrl"], UriKind.Absolute, out var web)
+            || web.Scheme is not ("https" or "http"))
+            return null;
+
+        var key = Uri.EscapeDataString(Convert.ToBase64String(Encoding.UTF8.GetBytes(path)));
+        return new Uri(web, $"/imagens-catalogo/{businessId}/{key}").AbsoluteUri;
     }
 }
