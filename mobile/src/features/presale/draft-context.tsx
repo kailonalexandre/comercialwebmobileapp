@@ -34,10 +34,11 @@ export type DraftValue = {
  * A chave nasce uma vez por pedido e só troca em reset(): toda retentativa usa a mesma.
  */
 export function createDraftStore(kind: SaleKind) {
+  const initialDraft = kind === 'presale' ? { ...emptyDraft, orderPayment: { type: 'DINHEIRO' } } : emptyDraft;
   const DraftContext = createContext<DraftValue | null>(null);
 
   function DraftProvider({ children }: { children: ReactNode }) {
-    const [draft, setDraftState] = useState<Draft>(emptyDraft);
+    const [draft, setDraftState] = useState<Draft>(initialDraft);
     const [phase, setPhase] = useState<Phase>({ name: 'editing' });
     const [key, setKey] = useState(() => randomUUID());
     const businessId = useSession().profile?.businessId;
@@ -69,7 +70,7 @@ export function createDraftStore(kind: SaleKind) {
     }, [draft, key, businessId]);
 
     const reset = useCallback(() => {
-      setDraftState(emptyDraft);
+      setDraftState(initialDraft);
       setPhase({ name: 'editing' });
       setKey(randomUUID());
     }, []);

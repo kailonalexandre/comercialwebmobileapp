@@ -69,6 +69,19 @@ CREATE TABLE model_has_permissions (
     business_id BIGINT UNSIGNED NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE product_groups (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    business_id BIGINT UNSIGNED NOT NULL,
+    name VARCHAR(80) NOT NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE units (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    business_id BIGINT UNSIGNED NOT NULL,
+    name VARCHAR(80) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE products (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     business_id BIGINT UNSIGNED NOT NULL,
@@ -79,6 +92,9 @@ CREATE TABLE products (
     description TEXT NULL,
     cost_price DECIMAL(15,2) NOT NULL,
     sale_price DECIMAL(15,2) NOT NULL,
+    group_id BIGINT UNSIGNED NULL,
+    unit_id BIGINT UNSIGNED NULL,
+    image_path VARCHAR(255) NULL,
     minimum_quantity DECIMAL(15,3) NOT NULL DEFAULT 0,
     is_active TINYINT(1) NOT NULL DEFAULT 1,
     deleted_at TIMESTAMP NULL
@@ -134,6 +150,7 @@ CREATE TABLE storage_locations (
     business_id BIGINT UNSIGNED NOT NULL,
     type VARCHAR(255) NOT NULL,
     name VARCHAR(255) NOT NULL,
+    parent_id BIGINT UNSIGNED NULL,
     primary_marker TINYINT UNSIGNED NULL,
     is_active TINYINT(1) NOT NULL DEFAULT 1
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -192,6 +209,8 @@ CREATE TABLE stock_balances (
     business_id BIGINT UNSIGNED NOT NULL,
     product_id BIGINT UNSIGNED NOT NULL,
     storage_location_id BIGINT UNSIGNED NOT NULL,
+    product_variation_id BIGINT UNSIGNED NULL,
+    variation_key BIGINT UNSIGNED NULL,
     quantity_milli BIGINT NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

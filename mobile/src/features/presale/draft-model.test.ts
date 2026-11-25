@@ -143,3 +143,15 @@ test('preço alterado vale na estimativa e vai ao servidor; igual ao da tabela n
   expect(items[0]!.customPriceCents).toBeUndefined();
   expect(toRequest({ ...emptyDraft, items }).items[0]).toEqual({ productId: 1, quantity: 1 });
 });
+
+test('preferência de pagamento da pré-venda segue na observação e conta no limite do servidor', () => {
+  const draft = {
+    ...emptyDraft,
+    items: [{ ...camiseta, quantity: 1 }],
+    observation: 'Entregar na segunda',
+    orderPayment: { type: 'BOLETO BANCÁRIO', term: '30 DIAS' },
+  };
+  expect(toRequest(draft).observation).toBe('Entregar na segunda\nPagamento previsto: BOLETO BANCÁRIO · 30 DIAS');
+  expect(canSend(draft)).toBe(true);
+  expect(canSend({ ...draft, observation: 'x'.repeat(1000) })).toBe(false);
+});

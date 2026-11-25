@@ -1,3 +1,4 @@
+import { searchProducts } from '@/features/catalog/product-cache-model';
 import { toProductRequest, type QuickProductInput } from '@/features/catalog/quick-product-model';
 import { pricesOffline, searchProductsOffline } from '@/features/catalog/product-cache';
 import { DEFAULT_TABLE } from '@/features/pricing/price-table-model';
@@ -6,30 +7,40 @@ import { ApiError } from '@/infrastructure/api/client';
 import type { Paged } from '@/shared/hooks/use-paged-list';
 
 // salePriceCents = preço do cadastro (varejo). priceCents = preço na tabela pedida (null = produto sem preço nela).
-export type Product = { id: number; code: number; name: string; sku: string | null; barcode: string | null; salePriceCents: number; isActive: boolean; priceCents: number | null };
+export type Product = { id: number; code: number; name: string; sku: string | null; barcode: string | null; salePriceCents: number; isActive: boolean; priceCents: number | null; unit?: string | null; groupId?: number | null; stockMilli?: number | null; imageUrl?: string | null };
+export type ProductFilters = { groupId?: number; inStock?: boolean };
+export type ProductGroup = { id: number; name: string };
 
 // Sem conexão a lista vem da cópia local (product-cache); outros erros seguem para a tela.
-export async function fetchProducts(page: number, search: string, priceTable: string = DEFAULT_TABLE): Promise<Paged<Product>> {
+export async function fetchProducts(page: number, search: string, priceTable: string = DEFAULT_TABLE, filters?: ProductFilters): Promise<Paged<Product>> {
   try {
-    return await fetchProductsRemote(page, search, priceTable, 20);
+    return await fetchProductsRemote(page, search, priceTable, 20, filters);
   } catch (e) {
     if (e instanceof ApiError && (e.kind === 'network' || e.kind === 'timeout')) {
-      const local = await searchProductsOffline(priceTable, search, page, 20);
+      const local = await searchProductsOffline(priceTable, search, page, 20, filters);
       if (local) return local;
     }
     throw e;
   }
 }
 
-export async function fetchProductsRemote(page: number, search: string, priceTable: string, pageSize: number): Promise<Paged<Product>> {
+export async function fetchProductsRemote(page: number, search: string, priceTable: string, pageSize: number, filters?: ProductFilters): Promise<Paged<Product>> {
   if (!api) {
     if (!__DEV__) throw new Error('API não configurada.');
-    return { items: [{ id: 1, code: 1, name: 'Camiseta básica', sku: 'CAM-01', barcode: null, salePriceCents: 4_990, isActive: true, priceCents: priceTable === 'atacado' ? 3_990 : 4_990 }], page: 1, pageSize: 20, total: 1 };
+    const sample = { id: 1, code: 1, name: 'Camiseta básica', sku: 'CAM-01', barcode: null, salePriceCents: 4_990, isActive: true, priceCents: priceTable === 'atacado' ? 3_990 : 4_990, groupId: 1, unit: 'UND', stockMilli: 12_500 };
+    return searchProducts([sample], search, page, pageSize, filters);
   }
   const query = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
   if (search) query.set('search', search);
   query.set('priceTable', priceTable);
+  if (filters?.groupId !== undefined) query.set('groupId', String(filters.groupId));
+  if (filters?.inStock) query.set('inStock', 'true');
   return api.request<Paged<Product>>(`/v1/products?${query.toString()}`);
+}
+
+export async function fetchProductGroups(): Promise<ProductGroup[]> {
+  if (!api) return __DEV__ ? [{ id: 1, name: 'Vestuário' }] : [];
+  return (await api.request<{ groups: ProductGroup[] }>('/v1/products/groups')).groups;
 }
 
 export type ProductStock = { productId: number; unitId: number | null; totalMilli: number };

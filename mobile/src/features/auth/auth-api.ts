@@ -79,7 +79,7 @@ const devProfile: Profile = {
   userName: 'Administrador',
   businessId: 0,
   businessName: 'Empresa Demonstração',
-  permissions: ['products.view', 'people.view', 'sales.view', 'sales.create', 'pdv.access', 'pdv.discount'],
+  permissions: ['products.view', 'people.view', 'people.create', 'sales.view', 'sales.create', 'pdv.access', 'pdv.discount'],
 };
 
 // Troca o código do QR (uso único, 2 min) pela sessão da API. O código não é guardado.

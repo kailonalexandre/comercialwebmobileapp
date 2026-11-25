@@ -87,6 +87,7 @@ export async function pendingCustomerAccounts(): Promise<string[]> {
 export const clearUnowned = () => entries.some((e) => e.accountId === undefined) && set(entries.filter((e) => e.accountId !== undefined));
 // Id do servidor de um cadastro já sincronizado (undefined = ainda na fila ou recusado).
 export const serverIdOf = (id: string) => entries.find((e) => e.id === id)?.serverId;
+export const pendingCustomerError = (id: string) => entries.find((e) => e.id === id && e.status === 'error')?.error;
 
 export const discardEntry = (id: string) => set(entries.filter((e) => e.id !== id));
 export const retryEntry = (id: string) => update(id, { status: 'pending', error: undefined });

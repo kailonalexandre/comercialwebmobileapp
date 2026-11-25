@@ -45,3 +45,19 @@ test('falha na primeira carga vira erro e reload tenta de novo; falha depois man
   expect(result.current.items).toEqual([1]);
   expect(result.current.status).toBe('ready');
 });
+
+test('trocar o filtro volta à primeira página e esconde resultados do filtro anterior', async () => {
+  const filtered = jest.fn<Promise<Paged<number>>, [number, string]>().mockImplementation(() => new Promise(() => undefined));
+  const { result, rerender } = await renderHook(
+    ({ stock }: { stock: boolean }) => usePagedList(stock ? filtered : pages, '', stock ? 'estoque' : 'todos'),
+    { initialProps: { stock: false } },
+  );
+  await waitFor(() => expect(result.current.status).toBe('ready'));
+  await act(async () => result.current.goTo(2));
+  await waitFor(() => expect(result.current.items).toEqual([3, 4]));
+
+  await rerender({ stock: true });
+  expect(result.current.items).toEqual([]);
+  expect(result.current.status).toBe('loading');
+  await waitFor(() => expect(filtered).toHaveBeenCalledWith(1, ''));
+});

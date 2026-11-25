@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using System.Text.Json.Serialization;
 using ComercialWeb.Mobile.Common;
 using Dapper;
 using MySqlConnector;
@@ -7,20 +8,23 @@ namespace ComercialWeb.Mobile.Catalog;
 
 /// <param name="SalePriceCents">Preço de venda do cadastro (varejo).</param>
 /// <param name="PriceCents">Preço na tabela pedida; null = produto sem preço nessa tabela.</param>
-public sealed record ProductListItem(long Id, long Code, string Name, string? Sku, string? Barcode, long SalePriceCents, bool IsActive, long? PriceCents = null)
+public sealed record ProductListItem(long Id, long Code, string Name, string? Sku, string? Barcode, long SalePriceCents, bool IsActive,
+    string? Unit, long? GroupId, long? StockMilli, [property: JsonIgnore] string? ImagePath, long? PriceCents = null, string? ImageUrl = null)
 {
-    // Dapper materializa pelo construtor que casa com as colunas do SELECT (sem o preço da tabela).
-    public ProductListItem(long id, long code, string name, string? sku, string? barcode, long salePriceCents, bool isActive)
-        : this(id, code, name, sku, barcode, salePriceCents, isActive, null) { }
+    public ProductListItem(long id, long code, string name, string? sku, string? barcode, long salePriceCents, bool isActive,
+        string? unit, long? groupId, long? stockMilli, string? imagePath)
+        : this(id, code, name, sku, barcode, salePriceCents, isActive, unit, groupId, stockMilli, imagePath, null, null) { }
 }
 
-/// <param name="Prices">Preço por tabela, como o ComercialWeb calcula; null quando ele não respondeu (o app mostra só o varejo).</param>
 public sealed record ProductDetail(long Id, long Code, string Name, string? Sku, string? Barcode, long SalePriceCents, bool IsActive, string? Description,
-    IReadOnlyDictionary<string, long>? Prices = null)
+    string? Unit, [property: JsonIgnore] string? ImagePath, IReadOnlyDictionary<string, long>? Prices = null, string? ImageUrl = null)
 {
-    public ProductDetail(long id, long code, string name, string? sku, string? barcode, long salePriceCents, bool isActive, string? description)
-        : this(id, code, name, sku, barcode, salePriceCents, isActive, description, null) { }
+    public ProductDetail(long id, long code, string name, string? sku, string? barcode, long salePriceCents, bool isActive,
+        string? description, string? unit, string? imagePath)
+        : this(id, code, name, sku, barcode, salePriceCents, isActive, description, unit, imagePath, null, null) { }
 }
+
+public sealed record ProductGroup(long Id, string Name);
 
 /// <summary>
 /// Consulta de produtos da empresa da sessão (somente leitura nas tabelas do ComercialWeb).
@@ -31,6 +35,19 @@ public sealed partial class ProductQueries(MySqlDataSource db)
     private const string Columns = """
         CAST(p.id AS SIGNED) AS Id, CAST(p.code AS SIGNED) AS Code, p.name AS Name, p.sku AS Sku, p.barcode AS Barcode,
         CAST(ROUND(p.sale_price * 100) AS SIGNED) AS SalePriceCents, p.is_active AS IsActive
+        """;
+
+    private const string UnitJoin = "LEFT JOIN units u ON u.id = p.unit_id AND u.business_id = p.business_id";
+
+    // Mesma agregação por endereço e variação usada na listagem web.
+    private const string Stock = """
+        SELECT CAST(COALESCE(SUM(sb.quantity_milli), 0) AS SIGNED)
+        FROM stock_balances sb
+        JOIN storage_locations sl ON sl.id = sb.storage_location_id AND sl.business_id = sb.business_id
+        WHERE sb.business_id = p.business_id AND sb.product_id = p.id AND sl.type = 'storage' AND sl.parent_id = @unitId
+          AND (sb.product_variation_id IS NOT NULL
+               OR EXISTS (SELECT 1 FROM product_variations pv WHERE pv.product_id = p.id AND pv.id = sb.variation_key)
+               OR NOT EXISTS (SELECT 1 FROM product_variations pv WHERE pv.product_id = p.id))
         """;
 
     // Mesmos campos de ProductIdentifierSearch da web + código numérico exato.
@@ -45,13 +62,15 @@ public sealed partial class ProductQueries(MySqlDataSource db)
         )
         """;
 
-    public async Task<PagedResult<ProductListItem>> SearchAsync(long businessId, string? search, bool includeInactive, Paging paging, CancellationToken ct)
+    public async Task<PagedResult<ProductListItem>> SearchAsync(long businessId, string? search, bool includeInactive, Paging paging, CancellationToken ct, long? unitId = null, long? groupId = null, bool inStock = false)
     {
         var term = SqlText.NormalizeSearch(search);
         var args = new
         {
             businessId,
             includeInactive,
+            unitId,
+            groupId,
             term,
             like = term is null ? null : SqlText.ContainsPattern(term),
             variants = term is null ? [""] : IdentifierVariants(term),
@@ -59,16 +78,23 @@ public sealed partial class ProductQueries(MySqlDataSource db)
             offset = paging.Offset,
             pageSize = paging.PageSize,
         };
-        const string where = $"""
-            FROM products p
+        var where = $"""
+            FROM products p {UnitJoin}
             WHERE p.business_id = @businessId AND p.deleted_at IS NULL AND (@includeInactive OR p.is_active = 1)
+              AND (@groupId IS NULL OR p.group_id = @groupId)
             {SearchFilter}
+            {(inStock ? $"AND ({Stock}) > 0" : "")}
             """;
 
         await using var conn = await db.OpenConnectionAsync(ct);
         var total = await conn.ExecuteScalarAsync<long>(new CommandDefinition($"SELECT COUNT(*) {where}", args, cancellationToken: ct));
         var items = total == 0 ? [] : (await conn.QueryAsync<ProductListItem>(new CommandDefinition(
-            $"SELECT {Columns} {where} ORDER BY p.name, p.id LIMIT @pageSize OFFSET @offset", args, cancellationToken: ct))).AsList();
+            $"""
+            SELECT {Columns}, u.name AS Unit, CAST(p.group_id AS SIGNED) AS GroupId,
+                   CASE WHEN @unitId IS NULL THEN NULL ELSE ({Stock}) END AS StockMilli, p.image_path AS ImagePath
+            {where}
+            ORDER BY p.name, p.id LIMIT @pageSize OFFSET @offset
+            """, args, cancellationToken: ct))).AsList();
         return new PagedResult<ProductListItem>(items, paging.Page, paging.PageSize, total);
     }
 
@@ -77,8 +103,16 @@ public sealed partial class ProductQueries(MySqlDataSource db)
     {
         await using var conn = await db.OpenConnectionAsync(ct);
         return await conn.QuerySingleOrDefaultAsync<ProductDetail>(new CommandDefinition(
-            $"SELECT {Columns}, p.description AS Description FROM products p WHERE p.id = @id AND p.business_id = @businessId AND p.deleted_at IS NULL",
+            $"SELECT {Columns}, p.description AS Description, u.name AS Unit, p.image_path AS ImagePath FROM products p {UnitJoin} WHERE p.id = @id AND p.business_id = @businessId AND p.deleted_at IS NULL",
             new { id, businessId }, cancellationToken: ct));
+    }
+
+    public async Task<IReadOnlyList<ProductGroup>> GroupsAsync(long businessId, CancellationToken ct)
+    {
+        await using var conn = await db.OpenConnectionAsync(ct);
+        return (await conn.QueryAsync<ProductGroup>(new CommandDefinition(
+            "SELECT CAST(id AS SIGNED) AS Id, name AS Name FROM product_groups WHERE business_id = @businessId AND is_active = 1 ORDER BY name, id",
+            new { businessId }, cancellationToken: ct))).AsList();
     }
 
     // Espelha ProductBarcodeRepository::identifierVariants: UPC-A (12 dígitos) e EAN-13 com zero à esquerda.

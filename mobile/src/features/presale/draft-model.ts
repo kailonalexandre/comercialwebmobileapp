@@ -23,6 +23,7 @@ export type Draft = {
   items: DraftItem[];
   payments: PaymentLine[];
   saleDiscount?: Discount;
+  orderPayment?: { type: string; term?: string };
 };
 
 export const emptyDraft: Draft = { priceTable: 'varejo', customer: null, observation: '', items: [], payments: [] };
@@ -31,6 +32,13 @@ export const emptyDraft: Draft = { priceTable: 'varejo', customer: null, observa
 export const MAX_ITEMS = 200;
 export const MAX_QUANTITY = 99_999;
 export const MAX_OBSERVATION = 1000;
+
+// A pré-venda tem observação, mas não recebe pagamento. Guarda a preferência para o fechamento.
+export function orderObservation(draft: Draft): string {
+  const payment = draft.orderPayment;
+  const preference = payment ? `Pagamento previsto: ${[payment.type, payment.term].filter(Boolean).join(' · ')}` : '';
+  return [draft.observation.trim(), preference].filter(Boolean).join('\n');
+}
 
 // "2,5" -> 2.5. Aceita vírgula ou ponto; até 3 casas; > 0 e <= MAX_QUANTITY. Inválido = null.
 export function parseQuantity(text: string): number | null {
@@ -122,7 +130,7 @@ export function toRequest(draft: Draft) {
   return {
     priceTable: draft.priceTable,
     customerId: draft.customer && !draft.customer.pendingId ? draft.customer.id : null,
-    observation: draft.observation.trim() || null,
+    observation: orderObservation(draft) || null,
     items: draft.items.map((i) => ({
       productId: i.productId, quantity: i.quantity, ...discountFields(i.discount),
       ...(i.customPriceCents !== undefined ? { unitPriceCents: i.customPriceCents } : {}),
@@ -132,7 +140,7 @@ export function toRequest(draft: Draft) {
 }
 
 export const canSend = (draft: Draft) =>
-  draft.items.length > 0 && draft.items.length <= MAX_ITEMS && draft.observation.length <= MAX_OBSERVATION;
+  draft.items.length > 0 && draft.items.length <= MAX_ITEMS && orderObservation(draft).length <= MAX_OBSERVATION;
 
 export const MAX_PAYMENTS = 8;
 
